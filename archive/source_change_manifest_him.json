@@ -1,0 +1,45 @@
+{
+  "source_archive": "E:\\mjlab\\unitree_rl_mjlab.zip",
+  "reference": {
+    "url": "https://github.com/InternRobotics/HIMLoco",
+    "commit": "ef289acaa62795009363b7b819c9186690630441"
+  },
+  "original_files_checked": 370,
+  "modified": [
+    "scripts/sim2sim.py",
+    "src/tasks/velocity/config/lgdog1/__init__.py"
+  ],
+  "new_code": [
+    "src/tasks/velocity/config/lgdog1/blind_mdp.py",
+    "src/tasks/velocity/config/lgdog1/blind_terrain_env_cfg.py",
+    "src/tasks/velocity/config/lgdog1/him_env_cfg.py",
+    "src/tasks/velocity/rl/him.py",
+    "src/tasks/velocity/rl/him_estimator.py",
+    "src/policy_history.py",
+    "scripts/check_lgdog_terrain_v4.py",
+    "scripts/check_lgdog_him.py",
+    "tests/test_lgdog_blind_mdp.py",
+    "tests/test_lgdog_him.py"
+  ],
+  "checks": [
+    "All original src/scripts files compared by SHA256",
+    "LgDog robot assets and constants unchanged",
+    "AST parse of all 12 cumulative Python files",
+    "git apply --check against original files",
+    "Applied patch contents equal current source"
+  ],
+  "code_sha256": {
+    "src/tasks/velocity/config/lgdog1/__init__.py": "c0a1398094e0bde2b6ef068f90c665e3ca63ef8b1ddf5ddefb2cea97134705fd",
+    "src/tasks/velocity/config/lgdog1/blind_mdp.py": "f179727d0efaf953544c173208d131dcb86690a177ad338d029877a8fb232dac",
+    "src/tasks/velocity/config/lgdog1/blind_terrain_env_cfg.py": "d913aa2b118d1e59276f4a4a481d4398a4f25285041f200c0c26020472f8b274",
+    "src/tasks/velocity/config/lgdog1/him_env_cfg.py": "6e047d644111d4b0688aa32cdbafede5380a20d2d1867c7914103a1d963caed0",
+    "src/tasks/velocity/rl/him.py": "30e2204aa2c85b041031050e45580a73d09c80374a493be757d07b1949d14d98",
+    "src/tasks/velocity/rl/him_estimator.py": "d12f71f1fa1ec7957d54a30325c942418e0a4b2d813eb6e8c2b2d7a3db32f9ab",
+    "src/policy_history.py": "94dfed7fe58149483df7388a019c3183795c387eb0f53ba7e821f85f67ff54d9",
+    "scripts/sim2sim.py": "70e41e0590df5785475ef29908799bcc3ef978d10b0b2f48267da269c4a61641",
+    "scripts/check_lgdog_terrain_v4.py": "f62b4d450ecb06e69e90f38a337690e0f5ea16814c92e6e8567162a3ff5971d9",
+    "scripts/check_lgdog_him.py": "d28228a236e0e3344c8d3cfa53360cd6744af5bd6c2093f654f1b0ca33c97b42",
+    "tests/test_lgdog_blind_mdp.py": "935fcbda8dd35dc8124a2a8c7d88e54bcccc9cd2dd35590e663f0eae1a4c2bf9",
+    "tests/test_lgdog_him.py": "d720b07010d86444c7cafbacda7ad8ebac59d551c334c9f98d626685bb5c71ce"
+  }
+}

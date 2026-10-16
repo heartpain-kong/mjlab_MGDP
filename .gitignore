@@ -1,5 +1,15 @@
 *.egg-info
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
 .idea
+.vscode/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
 outputs
 logs
 wandb

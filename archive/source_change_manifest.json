@@ -1,0 +1,12 @@
+{
+  "source_archive": "E:\\mjlab\\unitree_rl_mjlab.zip",
+  "original_files_checked": 370,
+  "modified": [
+    "src/tasks/velocity/config/lgdog1/__init__.py"
+  ],
+  "new": [
+    "src/tasks/velocity/config/lgdog1/blind_mdp.py",
+    "src/tasks/velocity/config/lgdog1/blind_terrain_env_cfg.py",
+    "scripts/check_lgdog_terrain_v4.py"
+  ]
+}

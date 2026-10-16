@@ -1,0 +1,90 @@
+"""One entry for the local browser workbench and common LgDog commands."""
+
+import argparse
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+
+from src.dashboard.catalog import TASKS
+from src.dashboard.commands import build_command, discover_models, display_command
+
+ROOT = Path(__file__).resolve().parent
+
+
+def main():
+  for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+      stream.reconfigure(encoding="utf-8")
+  parser = argparse.ArgumentParser(description="LgDog 工作台：python lgdog.py（打开浏览器）")
+  parser.add_argument("--python", default=sys.executable, help="实际运行训练/回放的 Python，默认当前解释器")
+  sub = parser.add_subparsers(dest="mode")
+  ui = sub.add_parser("ui", help="启动本地浏览器控制面板（默认操作）")
+  ui.add_argument("--port", type=int, default=8765)
+  ui.add_argument("--no-browser", action="store_true")
+  sub.add_parser("tasks", help="查看短任务名，无需加载训练依赖")
+  models = sub.add_parser("models", help="列出任务的模型")
+  models.add_argument("task", nargs="?", default="standard")
+  for mode in ("train", "play", "sim", "rewards", "curves"):
+    child = sub.add_parser(mode)
+    child.add_argument("task", nargs="?", default="standard", help="standard/him/terrain/gentle/blind/flat/rough")
+    child.add_argument("--dry-run", action="store_true", help="仅显示命令，不执行")
+    if mode in {"train", "play"}:
+      child.add_argument("--envs", type=int, default=1024 if mode == "train" else 4)
+      child.add_argument("--checkpoint", default="")
+    if mode == "train":
+      child.add_argument("--iterations", type=int, default=16000)
+      child.add_argument("--seed", type=int, default=42)
+      child.add_argument("--run-name", default="")
+      child.add_argument("--resume", action="store_true")
+    if mode == "play":
+      child.add_argument("--viewer", choices=("viser", "native"), default="viser")
+    if mode == "sim":
+      child.add_argument("--onnx", default="")
+      child.add_argument("--map", default="flat")
+      child.add_argument("--vx", type=float, default=0.4)
+      child.add_argument("--vy", type=float, default=0.0)
+      child.add_argument("--wz", type=float, default=0.0)
+      child.add_argument("--spawn-y", type=float, default=0.0)
+      child.add_argument("--duration", type=float, default=20)
+      child.add_argument("--headless", action="store_true")
+      child.add_argument("--keyboard", action="store_true")
+    if mode == "rewards":
+      child.add_argument("--term", default="")
+    if mode == "curves":
+      child.add_argument("--port", type=int, default=6006)
+  args = parser.parse_args()
+  python = shutil.which(args.python) or str(Path(args.python).expanduser().resolve())
+  if not Path(python).is_file():
+    parser.error(f"Python 不存在：{python}")
+  try:
+    if args.mode in (None, "ui"):
+      from src.dashboard.server import serve
+      serve(ROOT, python, port=getattr(args, "port", 8765), open_browser=not getattr(args, "no_browser", False))
+      return 0
+    if args.mode == "tasks":
+      for alias, task in TASKS.items():
+        print(f"{alias:10} {task['id']}\n           {task['description']}")
+      return 0
+    if args.mode == "models":
+      print(json.dumps(discover_models(ROOT, args.task), ensure_ascii=False, indent=2))
+      return 0
+    options = vars(args).copy()
+    if args.mode == "sim":
+      options["show_viewer"] = not args.headless
+    argv = build_command(ROOT, python, options)
+    print(display_command(argv), flush=True)
+    if args.dry_run:
+      return 0
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONPATH"] = str(ROOT) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    return subprocess.call(argv, cwd=ROOT, env=env, shell=False)
+  except (ValueError, OSError) as error:
+    parser.error(str(error))
+
+
+if __name__ == "__main__":
+  raise SystemExit(main())

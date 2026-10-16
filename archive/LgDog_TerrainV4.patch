@@ -1,0 +1,506 @@
+--- a/src/tasks/velocity/config/lgdog1/__init__.py
++++ b/src/tasks/velocity/config/lgdog1/__init__.py
+@@ -6,6 +6,15 @@
+   lgdog1_rough_env_cfg,
+ )
+ from .rl_cfg import lgdog1_ppo_runner_cfg
++from .blind_terrain_env_cfg import lgdog1_blind_terrain_env_cfg
++
++register_mjlab_task(
++  task_id="LgDog1-Rough-Blind-TerrainV4",
++  env_cfg=lgdog1_blind_terrain_env_cfg(),
++  play_env_cfg=lgdog1_blind_terrain_env_cfg(play=True),
++  rl_cfg=lgdog1_ppo_runner_cfg(experiment_name="lgdog1_velocity_blind_terrain_v4"),
++  runner_cls=VelocityOnPolicyRunner,
++)
+ 
+ register_mjlab_task(
+   task_id="LgDog1-Rough",
+--- /dev/null
++++ b/src/tasks/velocity/config/lgdog1/blind_mdp.py
+@@ -0,0 +1,143 @@
++"""LgDog blind-terrain training terms; no terrain data enters the actor."""
++
++from __future__ import annotations
++
++import math
++
++import torch
++
++
++def clearance_cost(clearance, speed_xy, contact, valid, active, target_height):
++  """Swing-only clearance cost; invalid ray hits contribute zero, never NaN."""
++  usable = valid & ~contact & active[:, None]
++  error = torch.where(usable, clearance - target_height, 0.0)
++  return (error.abs() * speed_xy).sum(dim=1)
++
++
++def foot_clearance_relative(env, sensor_names):
++  """Vertical foot-site clearance, using one terrain-only ray per foot."""
++  heights, valid = [], []
++  for name in sensor_names:
++    data = env.scene[name].data
++    height = data.pos_w[:, 2] - data.hit_pos_w[:, 0, 2]
++    hit = (data.distances[:, 0] >= 0) & torch.isfinite(height)
++    heights.append(torch.where(hit, height, 0.0))
++    valid.append(hit)
++  return torch.stack(heights, dim=1), torch.stack(valid, dim=1)
++
++
++def feet_clearance_terrain(
++  env, sensor_names, asset_cfg, target_height=0.10,
++  sensor_name="feet_ground_contact", command_name="twist", command_threshold=0.1,
++):
++  clearance, valid = foot_clearance_relative(env, sensor_names)
++  robot = env.scene[asset_cfg.name]
++  speed = robot.data.site_lin_vel_w[:, asset_cfg.site_ids, :2].norm(dim=-1)
++  contact = env.scene[sensor_name].data.found > 0
++  command = env.command_manager.get_command(command_name)
++  active = command[:, :2].norm(dim=-1) + command[:, 2].abs() > command_threshold
++  env.extras["log"]["Metrics/foot_clearance_ray_valid"] = valid.float().mean()
++  return clearance_cost(clearance, speed, contact, valid, active, target_height)
++
++
++def relative_foot_height(env, sensor_names):
++  """Critic-only foot height; replace absolute world elevation."""
++  return foot_clearance_relative(env, sensor_names)[0]
++
++
++def commanded_distance(env, command_name="twist"):
++  command = env.command_manager.get_command(command_name)
++  speed = command[:, :2].norm(dim=-1)
++  return torch.where(speed > 0.1, speed * env.step_dt, 0.0)
++
++
++def tracking_progress(env, command_name="twist"):
++  """Travel along each step's command, capped at requested distance.
++
++  Sideways drift, walking backwards and overspeed cannot earn extra progress.
++  Both vectors use the body frame, matching the existing tracking reward.
++  """
++  command = env.command_manager.get_command(command_name)[:, :2]
++  speed = command.norm(dim=-1)
++  velocity = env.scene["robot"].data.root_link_lin_vel_b[:, :2]
++  along = (velocity * command).sum(dim=-1) / speed.clamp_min(1e-6)
++  along = torch.minimum(along.clamp_min(0.0), speed)
++  return torch.where(speed > 0.1, along * env.step_dt, 0.0)
++
++
++def velocity_error_xy(env, command_name="twist"):
++  command = env.command_manager.get_command(command_name)
++  return (command[:, :2] - env.scene["robot"].data.root_link_lin_vel_b[:, :2]).norm(dim=-1)
++
++
++def world_distance(env):
++  return env.scene["robot"].data.root_link_lin_vel_w[:, :2].norm(dim=-1) * env.step_dt
++
++
++def outside_spawn_platform(env, radius=1.75):
++  """Seconds spent beyond the central 3 m stair platform plus 0.25 m margin."""
++  xy = env.scene["robot"].data.root_link_pos_w[:, :2] - env.scene.env_origins[:, :2]
++  return (xy.abs().amax(dim=1) > radius).float() * env.step_dt
++
++
++def terrain_decisions(expected, progress, exposure, elapsed, failed, episode_s):
++  """Episode-level hysteresis, independent of the last resampled command."""
++  eligible = expected >= 1.0
++  ratio = progress / expected.clamp_min(1e-6)
++  up = (eligible & ~failed & (elapsed >= 0.9 * episode_s)
++        & (ratio >= 0.75) & (progress >= 2.0) & (exposure >= 1.0))
++  down = eligible & (failed | (ratio < 0.35)) & ~up
++  return up, down, ratio
++
++
++def terrain_levels_tracking(env, env_ids):
++  """Read completed-episode sums BEFORE mjlab 1.2 MetricsManager.reset()."""
++  sums = env.metrics_manager._episode_sums
++  expected = sums["commanded_distance"][env_ids]
++  progress = sums["tracking_progress"][env_ids]
++  exposure = sums["outside_spawn_platform"][env_ids]
++  failed = env.termination_manager.terminated[env_ids]
++  elapsed = env.episode_length_buf[env_ids] * env.step_dt
++  up, down, ratio = terrain_decisions(
++    expected, progress, exposure, elapsed, failed, env.max_episode_length_s
++  )
++  terrain = env.scene.terrain
++  terrain.update_env_origins(env_ids, up, down)
++  eligible = expected >= 1.0
++  count = eligible.sum().clamp_min(1)
++  completed = elapsed > 0
++  return {
++    "level_mean": terrain.terrain_levels.float().mean(),
++    "promote_fraction": up.float().sum() / count,
++    "demote_fraction": down.float().sum() / count,
++    "tracking_ratio": torch.where(eligible, ratio, 0.0).sum() / count,
++    "reset_batch_failure_fraction": (failed & completed).float().sum() / completed.sum().clamp_min(1),
++    "episode_commanded_m": expected.mean(),
++    "episode_progress_m": progress.mean(),
++  }
++
++
++class sustained_leg_contact:
++  """Allow brief light leg scrapes; terminate sustained or severe impacts.
++
++  Counter tracks the same geom across CONTROL steps. Force history still catches
++  a severe impact during any physics substep. Trunk contact is a separate term.
++  """
++
++  def __init__(self, cfg, env):
++    self.count = None
++    self.steps = max(1, math.ceil(cfg.params.get("duration_s", 0.1) / env.step_dt))
++
++  def reset(self, env_ids=None):
++    if self.count is not None:
++      self.count[slice(None) if env_ids is None else env_ids] = 0
++
++  def __call__(self, env, sensor_name, force_threshold=10.0,
++               severe_threshold=80.0, duration_s=0.1):
++    data = env.scene[sensor_name].data
++    # The configured sensor has history_length=4, one control interval.
++    force = data.force_history.norm(dim=-1).amax(dim=-1)
++    if self.count is None:
++      self.count = torch.zeros_like(force, dtype=torch.long)
++    self.count = torch.where(force > force_threshold, self.count + 1, 0)
++    return ((self.count >= self.steps) | (force > severe_threshold)).any(dim=1)
+--- /dev/null
++++ b/src/tasks/velocity/config/lgdog1/blind_terrain_env_cfg.py
+@@ -0,0 +1,101 @@
++"""Experimental LgDog blind terrain task with the existing 47 -> 12 interface."""
++
++from copy import deepcopy
++from dataclasses import dataclass
++
++from mjlab.managers import TerminationTermCfg
++from mjlab.managers.curriculum_manager import CurriculumTermCfg
++from mjlab.managers.metrics_manager import MetricsTermCfg
++from mjlab.sensor import ContactMatch, ContactSensorCfg, GridPatternCfg, ObjRef, RayCastSensorCfg
++from mjlab.tasks.velocity import mdp
++
++from . import blind_mdp
++from .env_cfgs import FOOT_GEOMS, FOOT_SITES, lgdog1_rough_env_cfg
++
++
++@dataclass
++class ElevatedFootRayPatternCfg(GridPatternCfg):
++  """Start rays above the foot so small penetration does not cause a miss."""
++
++  start_height: float = 0.5
++
++  def generate_rays(self, mj_model, device):
++    offsets, directions = super().generate_rays(mj_model, device)
++    offsets[:, 2] += self.start_height
++    return offsets, directions
++
++
++def lgdog1_blind_terrain_env_cfg(play: bool = False):
++  cfg = deepcopy(lgdog1_rough_env_cfg(
++    play=play, use_height_scan=True, gentle_terrain=True
++  ))
++  # Asymmetric PPO: terrain is privileged training data, never an actor input.
++  cfg.observations["actor"].terms.pop("height_scan")
++  for sensor in cfg.scene.sensors:
++    if sensor.name == "terrain_scan":
++      # LgDog visual meshes are group 1; collisions are group 3. Terrain is 0.
++      sensor.include_geom_groups = (0,)
++      sensor.debug_vis = False
++
++  foot_rays = tuple(
++    RayCastSensorCfg(
++      name=f"{site}_ground_ray",
++      frame=ObjRef(type="site", name=site, entity="robot"),
++      pattern=ElevatedFootRayPatternCfg(size=(0.0, 0.0), resolution=0.1),
++      ray_alignment="world", include_geom_groups=(0,), max_distance=3.0,
++    )
++    for site in FOOT_SITES
++  )
++  ray_names = tuple(sensor.name for sensor in foot_rays)
++  trunk = ContactSensorCfg(
++    name="trunk_ground_contact",
++    primary=ContactMatch(mode="geom", pattern="trunk_collision", entity="robot"),
++    secondary=ContactMatch(mode="body", pattern="terrain"),
++    fields=("found", "force"), reduce="netforce", num_slots=1, history_length=4,
++  )
++  legs = ContactSensorCfg(
++    name="legs_ground_contact",
++    primary=ContactMatch(mode="geom", pattern=r".*_collision\d*$", entity="robot",
++                         exclude=(*FOOT_GEOMS, "trunk_collision")),
++    secondary=ContactMatch(mode="body", pattern="terrain"),
++    fields=("found", "force"), reduce="netforce", num_slots=1, history_length=4,
++  )
++  cfg.scene.sensors = tuple(
++    sensor for sensor in cfg.scene.sensors if sensor.name != "nonfoot_ground_touch"
++  ) + (*foot_rays, trunk, legs)
++  cfg.terminations["illegal_contact"] = TerminationTermCfg(
++    func=mdp.illegal_contact,
++    params={"sensor_name": trunk.name, "force_threshold": 10.0},
++  )
++  cfg.terminations["sustained_leg_contact"] = TerminationTermCfg(
++    func=blind_mdp.sustained_leg_contact,
++    params={"sensor_name": legs.name, "force_threshold": 10.0,
++            "severe_threshold": 80.0, "duration_s": 0.1},
++  )
++  cfg.rewards["leg_contact_force"].params["sensor_name"] = legs.name
++  clearance = cfg.rewards["foot_clearance"]
++  clearance.func = blind_mdp.feet_clearance_terrain
++  clearance.params.update(sensor_names=ray_names, target_height=0.10)
++  foot_height = cfg.observations["critic"].terms["foot_height"]
++  foot_height.func = blind_mdp.relative_foot_height
++  foot_height.params = {"sensor_names": ray_names}
++
++  cfg.metrics.update({
++    "traveled_distance": MetricsTermCfg(func=blind_mdp.world_distance),
++    "commanded_distance": MetricsTermCfg(func=blind_mdp.commanded_distance),
++    "tracking_progress": MetricsTermCfg(func=blind_mdp.tracking_progress),
++    "outside_spawn_platform": MetricsTermCfg(func=blind_mdp.outside_spawn_platform),
++    "velocity_error_xy_mps": MetricsTermCfg(func=blind_mdp.velocity_error_xy),
++  })
++  # Keep speed modest while testing terrain fixes; enlarge only after evaluation.
++  twist = cfg.commands["twist"]
++  twist.ranges.lin_vel_x = (-0.4, 0.8)
++  twist.ranges.lin_vel_y = (-0.3, 0.3)
++  twist.ranges.ang_vel_z = (-0.6, 0.6)
++  if not play:
++    cfg.scene.terrain.max_init_terrain_level = 1
++    cfg.curriculum.pop("command_vel", None)
++    cfg.curriculum["terrain_levels"] = CurriculumTermCfg(
++      func=blind_mdp.terrain_levels_tracking,
++    )
++  return cfg
+--- /dev/null
++++ b/scripts/check_lgdog_terrain_v4.py
+@@ -0,0 +1,99 @@
++"""Validate LgDog task isolation, model contract and CPU ray geometry.
++
++Run in the project's mjlab 1.2 environment:
++  python scripts/check_lgdog_terrain_v4.py
++Optional GPU manager smoke test:
++  python scripts/check_lgdog_terrain_v4.py --device cuda:0
++"""
++
++import argparse
++from copy import deepcopy
++from pathlib import Path
++import sys
++
++sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
++
++import mujoco
++import numpy as np
++import torch
++
++import src.tasks  # noqa: F401
++from mjlab.entity import Entity
++from mjlab.tasks.registry import load_env_cfg
++from src.tasks.velocity.config.lgdog1.blind_terrain_env_cfg import lgdog1_blind_terrain_env_cfg
++
++
++def main():
++  parser = argparse.ArgumentParser(description=__doc__)
++  parser.add_argument("--device", default=None)
++  args = parser.parse_args()
++  old = load_env_cfg("LgDog1-Rough-Blind-Gentle")
++  before = deepcopy(old.scene.terrain.terrain_generator)
++  cfg = lgdog1_blind_terrain_env_cfg()
++  lgdog1_blind_terrain_env_cfg(play=True)
++  assert old.scene.terrain.terrain_generator == before, "Task config contamination"
++  actor = cfg.observations["actor"]
++  assert actor == old.observations["actor"], "Deployable actor contract changed"
++  assert cfg.actions == old.actions
++  assert cfg.scene.entities["robot"] == old.scene.entities["robot"]
++  assert cfg.decimation == old.decimation == 4
++  assert cfg.sim.mujoco.timestep == old.sim.mujoco.timestep == .005
++  assert "height_scan" in cfg.observations["critic"].terms
++  assert "height_scan" not in actor.terms
++  for sensor in cfg.scene.sensors:
++    if sensor.name.endswith("_ground_ray"):
++      origins, directions = sensor.pattern.generate_rays(None, "cpu")
++      torch.testing.assert_close(origins, torch.tensor([[0., 0., .5]]))
++      torch.testing.assert_close(directions, torch.tensor([[0., 0., -1.]]))
++      assert sensor.include_geom_groups == (0,)
++  robot = Entity(cfg.scene.entities["robot"])
++  model = robot.spec.compile()
++  assert model.nu == 12
++  assert len(robot.joint_names) == 12
++  action_ids, action_names = robot.find_joints_by_actuator_names((".*",))
++  assert tuple(action_names) == robot.joint_names
++  print("PASS: actor config unchanged (47 inputs), 12 actions in natural joint order")
++  print("PASS: task isolation, 50 Hz control, terrain-only foot ray patterns")
++  print("Joint order:", action_names)
++  print("Model mass (kg):", float(model.body_mass.sum()))
++  print("Actuator force limits:", model.actuator_forcerange.tolist())
++
++  # MuJoCo's actual ray API: robot visuals must not occlude terrain (group 0).
++  spec = robot.spec
++  terrain = spec.worldbody.add_body(name="test_terrain")
++  terrain.add_geom(name="raised_floor", type=mujoco.mjtGeom.mjGEOM_PLANE,
++                   size=(0, 0, .01), pos=(0, 0, .2), group=0)
++  model = spec.compile()
++  data = mujoco.MjData(model)
++  mujoco.mj_forward(model, data)
++  geom_id = np.array([-1], dtype=np.int32)
++  distance = mujoco.mj_ray(model, data, np.array([0., 0., .8]),
++    np.array([0., 0., -1.]), np.array([1, 0, 0, 0, 0, 0], dtype=np.uint8),
++    True, -1, geom_id)
++  assert abs(distance - .6) < 1e-6
++  print("PASS: native MuJoCo ray hits raised terrain while excluding robot meshes")
++
++  if args.device:
++    from mjlab.envs import ManagerBasedRlEnv
++    cfg.scene.num_envs = 2
++    cfg.scene.terrain.terrain_generator.num_rows = 2
++    cfg.scene.terrain.terrain_generator.num_cols = 20
++    env = ManagerBasedRlEnv(cfg=cfg, device=args.device)
++    try:
++      obs, _ = env.reset()
++      assert obs["actor"].shape == (2, 47)
++      assert obs["critic"].shape == (2, 261)
++      for _ in range(10):
++        obs, reward, terminated, truncated, extras = env.step(
++          torch.zeros((2, 12), device=args.device)
++        )
++        assert all(torch.isfinite(value).all() for value in obs.values())
++        assert torch.isfinite(reward).all()
++      env.reset(env_ids=torch.tensor([0], device=args.device))
++      print("PASS: live managers, raycasts, reset, 10 control steps, finite outputs")
++    finally:
++      env.close()
++
++
++if __name__ == "__main__":
++  main()
+--- /dev/null
++++ b/tests/test_lgdog_blind_mdp.py
+@@ -0,0 +1,133 @@
++"""CPU regression tests. Run: python -m unittest discover -s tests -v"""
++
++import importlib.util
++from pathlib import Path
++from types import SimpleNamespace as NS
++import unittest
++
++import torch
++
++
++# Load tensor terms directly, without importing the GPU task registry.
++PATH = Path(__file__).resolve().parents[1] / "src/tasks/velocity/config/lgdog1/blind_mdp.py"
++SPEC = importlib.util.spec_from_file_location("lgdog_blind_mdp_test", PATH)
++mdp = importlib.util.module_from_spec(SPEC)
++SPEC.loader.exec_module(mdp)
++
++
++def ray_env(foot_z, ground_z, distance):
++  return NS(scene={"foot": NS(data=NS(
++    pos_w=torch.tensor([[0., 0., foot_z]]),
++    hit_pos_w=torch.tensor([[[0., 0., ground_z]]]),
++    distances=torch.tensor([[distance]]),
++  ))})
++
++
++class ClearanceTests(unittest.TestCase):
++  def test_world_translation_invariance(self):
++    flat, _ = mdp.foot_clearance_relative(ray_env(.15, 0., .65), ["foot"])
++    raised, _ = mdp.foot_clearance_relative(ray_env(1.15, 1., .65), ["foot"])
++    torch.testing.assert_close(flat, raised)
++
++  def test_stair_height_is_subtracted(self):
++    h, valid = mdp.foot_clearance_relative(ray_env(.25, .20, .55), ["foot"])
++    self.assertAlmostEqual(h.item(), .05)
++    self.assertTrue(valid.item())
++
++  def test_ray_miss_and_nan_are_masked(self):
++    h, valid = mdp.foot_clearance_relative(ray_env(.25, float("nan"), -1.), ["foot"])
++    result = mdp.clearance_cost(h, torch.ones_like(h), torch.zeros_like(valid),
++                                valid, torch.tensor([True]), .1)
++    self.assertEqual(result.item(), 0.)
++
++  def test_stance_and_standing_are_not_penalized(self):
++    h = torch.zeros(2, 2)
++    cost = mdp.clearance_cost(h, torch.ones_like(h),
++      torch.tensor([[True, False], [False, False]]), torch.ones_like(h, dtype=torch.bool),
++      torch.tensor([True, False]), .1)
++    torch.testing.assert_close(cost, torch.tensor([.1, 0.]))
++
++
++class CurriculumTests(unittest.TestCase):
++  def test_success_failure_hysteresis_and_zero_command(self):
++    expected = torch.tensor([5., 5., 5., 0., 5., 5.])
++    progress = torch.tensor([4.5, 1., 2.5, 8., 5., 5.])
++    exposure = torch.tensor([2., 2., 2., 2., 0., 2.])
++    elapsed = torch.full((6,), 20.)
++    failed = torch.tensor([False, False, False, False, False, True])
++    up, down, _ = mdp.terrain_decisions(expected, progress, exposure, elapsed, failed, 20.)
++    self.assertEqual(up.tolist(), [True, False, False, False, False, False])
++    self.assertEqual(down.tolist(), [False, True, False, False, False, True])
++
++  def test_short_episode_cannot_promote(self):
++    up, _, _ = mdp.terrain_decisions(torch.tensor([3.]), torch.tensor([3.]),
++      torch.tensor([2.]), torch.tensor([5.]), torch.tensor([False]), 20.)
++    self.assertFalse(up.item())
++
++  def test_progress_ignores_drift_backwards_and_overspeed(self):
++    command = torch.tensor([[1., 0., 0.]] * 4)
++    env = NS(step_dt=.02, scene={"robot": NS(data=NS(
++      root_link_lin_vel_b=torch.tensor([[0., 1., 0.], [-1., 0., 0.], [3., 0., 0.], [.5, 0., 0.]])))},
++      command_manager=NS(get_command=lambda _: command))
++    torch.testing.assert_close(mdp.tracking_progress(env), torch.tensor([0., 0., .02, .01]))
++
++  def test_command_resampling_integrates_each_segment(self):
++    command = torch.tensor([[1., 0., 0.]])
++    env = NS(step_dt=1., command_manager=NS(get_command=lambda _: command),
++      scene={"robot": NS(data=NS(root_link_lin_vel_b=torch.tensor([[1., 0., 0.]])))})
++    expected = mdp.commanded_distance(env)
++    progress = mdp.tracking_progress(env)
++    command[:] = torch.tensor([[0., 1., 0.]])
++    env.scene["robot"].data.root_link_lin_vel_b[:] = torch.tensor([[0., 1., 0.]])
++    expected += mdp.commanded_distance(env)
++    progress += mdp.tracking_progress(env)
++    command.zero_()  # final standing command must not erase previous demand
++    expected += mdp.commanded_distance(env)
++    self.assertEqual(expected.item(), 2.)
++    self.assertEqual(progress.item(), 2.)
++
++  def test_reset_uses_completed_sums_and_only_selected_envs(self):
++    selected = []
++    terrain = NS(terrain_levels=torch.tensor([1, 2]),
++      update_env_origins=lambda ids, up, down: selected.append((ids.tolist(), up.tolist(), down.tolist())))
++    env = NS(metrics_manager=NS(_episode_sums={
++      "commanded_distance": torch.tensor([5., 0.]), "tracking_progress": torch.tensor([5., 0.]),
++      "outside_spawn_platform": torch.tensor([2., 0.])}),
++      termination_manager=NS(terminated=torch.tensor([False, False])),
++      episode_length_buf=torch.tensor([1000, 0]), step_dt=.02, max_episode_length_s=20.,
++      scene=NS(terrain=terrain))
++    result = mdp.terrain_levels_tracking(env, torch.tensor([0]))
++    self.assertEqual(selected, [([0], [True], [False])])
++    self.assertEqual(result["episode_progress_m"].item(), 5.)
++    self.assertEqual(env.metrics_manager._episode_sums["tracking_progress"][0].item(), 5.)
++
++
++class ContactTests(unittest.TestCase):
++  def setUp(self):
++    self.force = torch.zeros(2, 2, 4, 3)
++    self.env = NS(step_dt=.02, scene={"legs": NS(data=NS(force_history=self.force))})
++    self.term = mdp.sustained_leg_contact(NS(params={"duration_s": .1}), self.env)
++
++  def test_brief_scrape_recovers(self):
++    self.force[0, 0, :, 2] = 15.
++    self.assertFalse(self.term(self.env, "legs")[0].item())
++    self.force.zero_()
++    self.assertFalse(self.term(self.env, "legs")[0].item())
++    self.assertEqual(self.term.count[0, 0].item(), 0)
++
++  def test_persistent_contact_and_partial_reset(self):
++    self.force[:, 0, :, 2] = 15.
++    for _ in range(4):
++      self.assertFalse(self.term(self.env, "legs").any().item())
++    self.assertTrue(self.term(self.env, "legs").all().item())
++    self.term.reset(torch.tensor([0]))
++    self.assertEqual(self.term.count[0].sum().item(), 0)
++    self.assertEqual(self.term.count[1, 0].item(), 5)
++
++  def test_severe_substep_hit_terminates_immediately(self):
++    self.force[0, 1, 2, 0] = 81.
++    self.assertEqual(self.term(self.env, "legs").tolist(), [True, False])
++
++
++if __name__ == "__main__":
++  unittest.main()

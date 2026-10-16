@@ -1,0 +1,601 @@
+<?xml version="1.0" ?>
+<robot name="LgDog1" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- ==================================================================
+       ⚠️ 碰撞几何约定（照 go1.urdf）：全部用【图元】，不用网格。
+       box 1（躯干 AABB）+ cylinder 16（hip×4 + thigh×8 + calf×4）+ sphere 4（足端）
+       为什么不能用网格（本仓库实测到的两个后果）：
+         1) PhysX 会把网格碰撞体膨胀约 8.6mm —— 曾把 12mm 的足端球整个罩住，
+            导致足端接触力恒为 0、feet_air_time 等 4 个奖励静默失效；
+         2) 凸包 ≠ 真实外形 —— 躯干凸包与大腿凸包在零位就相交，自碰撞力把机器人顶翻。
+       图元半径取自各网格沿轴径向剖面的中位半径（代表典型表面距离），
+       大腿按锥形用了两段（髋端粗 0.052、膝端细 0.019~0.028）。
+       实测：膝/髋/躯干图元在正常行走范围（各关节±0.45 rad）内从不低于足端球，
+       不会抢走足端的地面接触。
+       ================================================================== -->
+
+  <!-- ==================================================================
+       关节 <limit> 在这里是「关节侧（输出侧）」数值，直接决定训练时的
+       torque_limits（硬裁剪）与 dof_vel_limits（软限位惩罚），见
+       legged_gym/envs/base/legged_robot.py:504 / 1189。
+
+       ── 两条换算链（速度与力矩各自独立）────────────────────────────
+       [1] 供电电压：电机的空载转速 ∝ 电压，原按 48V 给的 37.7 rad/s
+           是 48V 下的值，实机 24V → 电机转速 37.7/2 = 18.85 rad/s。
+           力矩不受影响：峰值力矩由电流上限决定（Kt·I_max），与电压无关
+           （只是高转速下电压余量变小、可用力矩下降，这里按常数上限建模）。
+       [2] 减速箱：calf 带 1:2 减速比，输出力矩 ×2、输出转速 ÷2。
+       ⇒ 合成结果（本文件里的最终值）：
+           hip / thigh（直驱）：effort 10 Nm，velocity 18.85 rad/s
+           calf      （1:2）  ：effort 20 Nm，velocity  9.425 rad/s
+
+       注意 <limit lower/upper>（角度范围）不参与任何换算，永远是关节侧数值：
+       它是按腿的实际姿态目视标定的，而减速箱位于电机与关节之间，
+       关节能摆多少与后面挂几比几的减速箱无关。故 calf 仍为 ±0.7
+       （对应电机侧 ±1.4，该数填在驱动器/编码器的限位里，不进本文件）。
+       ================================================================== -->
+
+  <material name="black">
+    <color rgba="0.0 0.0 0.0 1.0"/>
+  </material>
+  <material name="blue">
+    <color rgba="0.0 0.0 0.8 1.0"/>
+  </material>
+  <material name="green">
+    <color rgba="0.0 0.8 0.0 1.0"/>
+  </material>
+  <material name="grey">
+    <color rgba="0.2 0.2 0.2 1.0"/>
+  </material>
+  <material name="light_grey">
+    <color rgba="0.84705882 0.84705882 0.84705882 1.0"/>
+  </material>
+  <material name="silver">
+    <color rgba="0.913725490196 0.913725490196 0.847058823529 1.0"/>
+  </material>
+  <material name="orange">
+    <color rgba="1.0 0.423529411765 0.0392156862745 1.0"/>
+  </material>
+  <material name="brown">
+    <color rgba="0.870588235294 0.811764705882 0.764705882353 1.0"/>
+  </material>
+  <material name="red">
+    <color rgba="0.8 0.0 0.0 1.0"/>
+  </material>
+  <material name="white">
+    <color rgba="1.0 1.0 1.0 1.0"/>
+  </material>
+
+
+  <link name="base_link">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="../meshes/base_link.STL" scale="1 1 1"/>
+      </geometry>
+      <material name="white"/>
+    </visual>
+    <!-- 碰撞代理：躯干是接近长方体的壳，取网格 AABB（六个极值面精确，
+         只在两腿之间的凹腔处过填——自碰撞是关的，无影响）。
+         换网格碰撞的原因见文件头注释。 -->
+    <collision>
+      <origin rpy="0 0 0" xyz="-0.2020 0.0000 0.0023"/>
+      <geometry>
+        <box size="0.4040 0.2660 0.1141"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin rpy="0 0 0" xyz="-0.21 0.003 0.004"/>
+      <mass value="3.487"/>
+      <inertia ixx="0.019" ixy="0" ixz="0" iyy="0.075" iyz="0" izz="0.09"/>
+    </inertial>
+  </link>
+
+  <link name="FL_hip">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="../meshes/FL_hip.STL" scale="1 1 1"/>
+      </geometry>
+      <material name="white"/>
+    </visual>
+    <collision>
+      <origin rpy="0 1.570796 0" xyz="+0.047971 0 0"/>
+      <geometry>
+        <cylinder radius="0.0230" length="0.0886"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.05265 -0.004 -0.0003443"/>
+      <mass value="0.445"/>
+      <inertia ixx="0.0002132" ixy="0.0000108" ixz="0.0000001" iyy="0.0003801" iyz="0" izz="0.0002938"/>
+    </inertial>
+  </link>
+
+  <link name="FL_thigh">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="../meshes/FL_thigh.STL" scale="1 1 1"/>
+      </geometry>
+      <material name="white"/>
+    </visual>
+    <collision>
+      <origin rpy="0 -2.069089 0" xyz="-0.036567 +0.017090 -0.019895"/>
+      <geometry>
+        <cylinder radius="0.0518" length="0.090"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin rpy="0 -2.069089 0" xyz="-0.121889 +0.017090 -0.066318"/>
+      <geometry>
+        <cylinder radius="0.0194" length="0.120"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin rpy="0 0 0" xyz="-0.0272593 0.0546815 -0.012194"/>
+      <mass value="0.974"/>
+      <inertia ixx="0.0015537" ixy="0.0006015" ixz="-0.0010189" iyy="0.0034659" iyz="0.0002914" izz="0.0031496"/>
+    </inertial>
+  </link>
+
+  <link name="FL_calf">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="../meshes/FL_calf.STL" scale="1 1 1"/>
+      </geometry>
+      <material name="white"/>
+    </visual>
+    <!-- 小腿碰撞体：胶囊（URDF 用 cylinder 表达，Isaac 侧 replace_cylinder_with_capsule=True
+         会转成胶囊；MuJoCo 侧转换脚本也输出 capsule，两边形状一致）。
+         轴向 = 膝轴→足端球心；r=0.035、长 0.19，末端圆头正好接上足端球。
+         尺寸取自小腿网格实测截面半径（膝端 0.026 → 踝端 0.045，取 0.035 折中，误差 ≤9mm）。
+         r=0.025 < 网格沿轴最小截面半径 0.026 → 胶囊内切于真实小腿，绝不会产生
+         真机上不存在的碰撞。零位站姿下胶囊最低点比足端球底高 28.9mm。
+         ⚠️ 必须用图元而不是网格：PhysX 会把网格碰撞体膨胀约 8.6mm，之前正是它把
+            12mm 的足端球整个罩住、导致足端接触力恒为 0。
+         注：腿折到极端角度（|小腿相对竖直| > 40°）时小腿本来就会触地——真实网格
+            在同一角度也低 2.6mm，这是真实行为，由 collision 奖励惩罚。 -->
+    <collision>
+      <origin rpy="0.00023 2.414226 0" xyz="0.063166 -0.000022 -0.070958"/>
+      <geometry>
+        <cylinder radius="0.025" length="0.19"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.1171227 -0.0000169 -0.1083104"/>
+      <mass value="0.213"/>
+      <inertia ixx="0.0007557" ixy="0.0000001" ixz="0.0006437" iyy="0.0013644" iyz="0" izz="0.0006473"/>
+    </inertial>
+  </link>
+
+  <link name="FR_hip">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="../meshes/FR_hip.STL" scale="1 1 1"/>
+      </geometry>
+      <material name="light_grey"/>
+    </visual>
+    <collision>
+      <origin rpy="0 1.570796 0" xyz="+0.050321 0 0"/>
+      <geometry>
+        <cylinder radius="0.0230" length="0.0886"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.055 0.004 -0.0003443"/>
+      <mass value="0.445"/>
+      <inertia ixx="0.0002132" ixy="-0.0000108" ixz="-0.0000001" iyy="0.0003801" iyz="0" izz="0.0002938"/>
+    </inertial>
+  </link>
+
+  <link name="FR_thigh">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="../meshes/FR_thigh.STL" scale="1 1 1"/>
+      </geometry>
+      <material name="white"/>
+    </visual>
+    <collision>
+      <origin rpy="0 -2.069089 0" xyz="-0.036567 -0.017090 -0.019895"/>
+      <geometry>
+        <cylinder radius="0.0520" length="0.090"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin rpy="0 -2.069089 0" xyz="-0.121889 -0.017090 -0.066318"/>
+      <geometry>
+        <cylinder radius="0.0195" length="0.120"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin rpy="0 0 0" xyz="-0.0272643 -0.0546799 -0.012196"/>
+      <mass value="0.974"/>
+      <inertia ixx="0.0015537" ixy="-0.0006017" ixz="-0.0010193" iyy="0.0034669" iyz="-0.0002914" izz="0.0031506"/>
+    </inertial>
+  </link>
+
+  <link name="FR_calf">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="../meshes/FR_calf.STL" scale="1 1 1"/>
+      </geometry>
+      <material name="white"/>
+    </visual>
+    <collision>
+      <origin rpy="0.00023 2.414226 0" xyz="0.063166 -0.000022 -0.070958"/>
+      <geometry>
+        <cylinder radius="0.025" length="0.19"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.1171227 -0.0000169 -0.1083104"/>
+      <mass value="0.213"/>
+      <inertia ixx="0.0007557" ixy="0.0000001" ixz="0.0006437" iyy="0.0013644" iyz="0" izz="0.0006473"/>
+    </inertial>
+  </link>
+
+  <link name="RL_hip">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="../meshes/RL_hip.STL" scale="1 1 1"/>
+      </geometry>
+      <material name="white"/>
+    </visual>
+    <collision>
+      <origin rpy="0 1.570796 0" xyz="-0.046321 0 0"/>
+      <geometry>
+        <cylinder radius="0.0230" length="0.0886"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin rpy="0 0 0" xyz="-0.051 -0.004 -0.0003443"/>
+      <mass value="0.445"/>
+      <inertia ixx="0.0002132" ixy="-0.0000108" ixz="0.0000001" iyy="0.0003801" iyz="0" izz="0.0002938"/>
+    </inertial>
+  </link>
+
+  <link name="RL_thigh">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="../meshes/RL_thigh.STL" scale="1 1 1"/>
+      </geometry>
+      <material name="white"/>
+    </visual>
+    <collision>
+      <origin rpy="0 -2.069089 0" xyz="-0.036567 +0.017090 -0.019895"/>
+      <geometry>
+        <cylinder radius="0.0533" length="0.090"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin rpy="0 -2.069089 0" xyz="-0.121889 +0.017090 -0.066318"/>
+      <geometry>
+        <cylinder radius="0.0279" length="0.120"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin rpy="0 0 0" xyz="-0.0294439 0.0544466 -0.012067"/>
+      <mass value="0.974"/>
+      <inertia ixx="0.0015678" ixy="0.0006241" ixz="-0.0010071" iyy="0.003614" iyz="0.0002794" izz="0.0033063"/>
+    </inertial>
+  </link>
+
+  <link name="RL_calf">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="../meshes/RL_calf.STL" scale="1 1 1"/>
+      </geometry>
+      <material name="white"/>
+    </visual>
+    <collision>
+      <origin rpy="0.00023 2.414226 0" xyz="0.063166 -0.000022 -0.070958"/>
+      <geometry>
+        <cylinder radius="0.025" length="0.19"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.116141 -0.0000168 -0.1074025"/>
+      <mass value="0.213"/>
+      <inertia ixx="0.0007704" ixy="0.0000001" ixz="0.0006608" iyy="0.0013981" iyz="0" izz="0.0006663"/>
+    </inertial>
+  </link>
+
+  <link name="RR_hip">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="../meshes/RR_hip.STL" scale="1 1 1"/>
+      </geometry>
+      <material name="light_grey"/>
+    </visual>
+    <collision>
+      <origin rpy="0 1.570796 0" xyz="-0.046321 0 0"/>
+      <geometry>
+        <cylinder radius="0.0230" length="0.0886"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin rpy="0 0 0" xyz="-0.051 0.004 -0.0003443"/>
+      <mass value="0.445"/>
+      <inertia ixx="0.0002132" ixy="0.0000108" ixz="-0.0000001" iyy="0.0003801" iyz="0" izz="0.0002938"/>
+    </inertial>
+  </link>
+
+  <link name="RR_thigh">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="../meshes/RR_thigh.STL" scale="1 1 1"/>
+      </geometry>
+      <material name="white"/>
+    </visual>
+    <collision>
+      <origin rpy="0 -2.069089 0" xyz="-0.036567 -0.017090 -0.019895"/>
+      <geometry>
+        <cylinder radius="0.0520" length="0.090"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin rpy="0 -2.069089 0" xyz="-0.121889 -0.017090 -0.066318"/>
+      <geometry>
+        <cylinder radius="0.0195" length="0.120"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin rpy="0 0 0" xyz="-0.0272643 -0.0546799 -0.012196"/>
+      <mass value="0.974"/>
+      <inertia ixx="0.0015537" ixy="-0.0006017" ixz="-0.0010193" iyy="0.0034669" iyz="-0.0002914" izz="0.0031506"/>
+    </inertial>
+  </link>
+
+  <link name="RR_calf">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="../meshes/RR_calf.STL" scale="1 1 1"/>
+      </geometry>
+      <material name="white"/>
+    </visual>
+    <collision>
+      <origin rpy="0.00023 2.414226 0" xyz="0.063166 -0.000022 -0.070958"/>
+      <geometry>
+        <cylinder radius="0.025" length="0.19"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.1171227 -0.0000169 -0.1083104"/>
+      <mass value="0.213"/>
+      <inertia ixx="0.0007557" ixy="0.0000001" ixz="0.0006437" iyy="0.0013644" iyz="0" izz="0.0006473"/>
+    </inertial>
+  </link>
+
+
+  <joint name="FL_hip_joint" type="revolute">
+    <origin rpy="0 0 0" xyz="-0.00565 0.07 -0.0056557"/>
+    <parent link="base_link"/>
+    <child link="FL_hip"/>
+    <axis xyz="1 0 0"/>
+    <dynamics damping="0" friction="0"/>
+    <limit effort="10" lower="-1.2" upper="1.2" velocity="18.85"/>
+  </joint>
+
+  <joint name="FL_thigh_joint" type="revolute">
+    <origin rpy="0 0 0" xyz="0.05515 0.014 0"/>
+    <parent link="FL_hip"/>
+    <child link="FL_thigh"/>
+    <axis xyz="0 1 0"/>
+    <dynamics damping="0" friction="0"/>
+    <limit effort="10" lower="-1.5" upper="1.5" velocity="18.85"/>
+  </joint>
+
+  <joint name="FL_calf_joint" type="revolute">
+    <origin rpy="0 0 0" xyz="-0.1668959 0.078 -0.0908061"/>
+    <parent link="FL_thigh"/>
+    <child link="FL_calf"/>
+    <axis xyz="0 1 0"/>
+    <dynamics damping="0" friction="0"/>
+    <limit effort="20" lower="-0.85" upper="0.85" velocity="9.425"/>
+  </joint>
+
+  <!-- ==================================================================
+       足端：独立 link + 固定关节（照 go1.urdf 的 FL_foot 约定）
+       为什么必须有：legged_gym 用 body 名做子串匹配找脚
+         feet_names = [s for s in body_names if cfg.asset.foot_name in s]
+       URDF 里没有名字含 "foot" 的 link 时，feet_indices 为空，
+       feet_air_time / feet_stumble / foot_clearance / feet_contact_forces
+       四个奖励会静默变成 0（不报错，但完全失效）。
+       dont_collapse="true" 必须保留：legged_gym 的 collapse_fixed_joints=True
+       否则会把这个 link 合并回 calf，名字就没了。
+       球心 = 小腿网格最低点上方 r，使球底与网格最低点重合 → 站立高度不变。
+       r=0.012 取自实测足端接触斑半径（最低 2mm 内贴地点半径 0.0106）。
+       ================================================================== -->
+  <joint name="FL_foot_fixed" type="fixed" dont_collapse="true">
+    <origin rpy="0 0 0" xyz="0.156168 -0.000054 -0.175433"/>
+    <parent link="FL_calf"/>
+    <child link="FL_foot"/>
+  </joint>
+  <link name="FL_foot">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <sphere radius="0.012"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <sphere radius="0.012"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.01"/>
+      <inertia ixx="5.76e-07" ixy="0.0" ixz="0.0" iyy="5.76e-07" iyz="0.0" izz="5.76e-07"/>
+    </inertial>
+  </link>
+
+  <joint name="FR_hip_joint" type="revolute">
+    <origin rpy="0 0 0" xyz="-0.008 -0.07 -0.0056557"/>
+    <parent link="base_link"/>
+    <child link="FR_hip"/>
+    <axis xyz="1 0 0"/>
+    <dynamics damping="0" friction="0"/>
+    <limit effort="10" lower="-1.2" upper="1.2" velocity="18.85"/>
+  </joint>
+
+  <joint name="FR_thigh_joint" type="revolute">
+    <origin rpy="0 0 0" xyz="0.0575 -0.014 0"/>
+    <parent link="FR_hip"/>
+    <child link="FR_thigh"/>
+    <axis xyz="0 1 0"/>
+    <dynamics damping="0" friction="0"/>
+    <limit effort="10" lower="-1.5" upper="1.5" velocity="18.85"/>
+  </joint>
+
+  <joint name="FR_calf_joint" type="revolute">
+    <origin rpy="0 0 0" xyz="-0.1668959 -0.078 -0.0908061"/>
+    <parent link="FR_thigh"/>
+    <child link="FR_calf"/>
+    <axis xyz="0 1 0"/>
+    <dynamics damping="0" friction="0"/>
+    <limit effort="20" lower="-0.85" upper="0.85" velocity="9.425"/>
+  </joint>
+
+  <joint name="FR_foot_fixed" type="fixed" dont_collapse="true">
+    <origin rpy="0 0 0" xyz="0.156168 -0.000054 -0.175433"/>
+    <parent link="FR_calf"/>
+    <child link="FR_foot"/>
+  </joint>
+  <link name="FR_foot">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <sphere radius="0.012"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <sphere radius="0.012"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.01"/>
+      <inertia ixx="5.76e-07" ixy="0.0" ixz="0.0" iyy="5.76e-07" iyz="0.0" izz="5.76e-07"/>
+    </inertial>
+  </link>
+
+  <joint name="RL_hip_joint" type="revolute">
+    <origin rpy="0 0 0" xyz="-0.404 0.07 -0.0056557"/>
+    <parent link="base_link"/>
+    <child link="RL_hip"/>
+    <axis xyz="1 0 0"/>
+    <dynamics damping="0" friction="0"/>
+    <limit effort="10" lower="-1.2" upper="1.2" velocity="18.85"/>
+  </joint>
+
+  <joint name="RL_thigh_joint" type="revolute">
+    <origin rpy="0 0 0" xyz="-0.0535 0.014 0"/>
+    <parent link="RL_hip"/>
+    <child link="RL_thigh"/>
+    <axis xyz="0 1 0"/>
+    <dynamics damping="0" friction="0"/>
+    <limit effort="10" lower="-1.5" upper="1.5" velocity="18.85"/>
+  </joint>
+
+  <joint name="RL_calf_joint" type="revolute">
+    <origin rpy="0 0 0" xyz="-0.1668959 0.078 -0.0908061"/>
+    <parent link="RL_thigh"/>
+    <child link="RL_calf"/>
+    <axis xyz="0 1 0"/>
+    <dynamics damping="0" friction="0"/>
+    <limit effort="20" lower="-0.85" upper="0.85" velocity="9.425"/>
+  </joint>
+
+  <joint name="RL_foot_fixed" type="fixed" dont_collapse="true">
+    <origin rpy="0 0 0" xyz="0.156168 -0.000054 -0.175433"/>
+    <parent link="RL_calf"/>
+    <child link="RL_foot"/>
+  </joint>
+  <link name="RL_foot">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <sphere radius="0.012"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <sphere radius="0.012"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.01"/>
+      <inertia ixx="5.76e-07" ixy="0.0" ixz="0.0" iyy="5.76e-07" iyz="0.0" izz="5.76e-07"/>
+    </inertial>
+  </link>
+
+  <joint name="RR_hip_joint" type="revolute">
+    <origin rpy="0 0 0" xyz="-0.404 -0.07 -0.0056557"/>
+    <parent link="base_link"/>
+    <child link="RR_hip"/>
+    <axis xyz="1 0 0"/>
+    <dynamics damping="0" friction="0"/>
+    <limit effort="10" lower="-1.2" upper="1.2" velocity="18.85"/>
+  </joint>
+
+  <joint name="RR_thigh_joint" type="revolute">
+    <origin rpy="0 0 0" xyz="-0.0535 -0.014 0"/>
+    <parent link="RR_hip"/>
+    <child link="RR_thigh"/>
+    <axis xyz="0 1 0"/>
+    <dynamics damping="0" friction="0"/>
+    <limit effort="10" lower="-1.5" upper="1.5" velocity="18.85"/>
+  </joint>
+
+  <joint name="RR_calf_joint" type="revolute">
+    <origin rpy="0 0 0" xyz="-0.1668959 -0.078 -0.0908061"/>
+    <parent link="RR_thigh"/>
+    <child link="RR_calf"/>
+    <axis xyz="0 1 0"/>
+    <dynamics damping="0" friction="0"/>
+    <limit effort="20" lower="-0.85" upper="0.85" velocity="9.425"/>
+  </joint>
+
+  <joint name="RR_foot_fixed" type="fixed" dont_collapse="true">
+    <origin rpy="0 0 0" xyz="0.156168 -0.000054 -0.175433"/>
+    <parent link="RR_calf"/>
+    <child link="RR_foot"/>
+  </joint>
+  <link name="RR_foot">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <sphere radius="0.012"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <sphere radius="0.012"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.01"/>
+      <inertia ixx="5.76e-07" ixy="0.0" ixz="0.0" iyy="5.76e-07" iyz="0.0" izz="5.76e-07"/>
+    </inertial>
+  </link>
+
+</robot>

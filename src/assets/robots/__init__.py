@@ -2,6 +2,13 @@ from .unitree_go2.go2_constants import (
   get_go2_robot_cfg as get_go2_robot_cfg,
 )
 
+from .lgdog1.lgdog1_constants import (
+  LGDOG1_ACTION_SCALE as LGDOG1_ACTION_SCALE,
+)
+from .lgdog1.lgdog1_constants import (
+  get_lgdog1_robot_cfg as get_lgdog1_robot_cfg,
+)
+
 from .unitree_a2.a2_constants import (
   get_a2_robot_cfg as get_a2_robot_cfg,
 )

@@ -1,0 +1,81 @@
+{
+  "train_lgdog1_4096_1014_1956.log": {
+    "last_iteration": "4926/5300",
+    "window": 100,
+    "metrics": {
+      "Mean reward": 52.1614,
+      "Mean episode length": 992.1799,
+      "Mean value loss": 0.01159,
+      "Episode_Reward/action_rate_l2": -0.20419,
+      "Episode_Termination/illegal_contact": 0.0675,
+      "Episode_Termination/time_out": 4.11
+    }
+  },
+  "train_lgdog1_blind_16000_1015_1037.log": {
+    "last_iteration": "7301/16000",
+    "window": 100,
+    "metrics": {
+      "Mean reward": 22.475,
+      "Mean episode length": 714.0612,
+      "Mean value loss": 0.16953,
+      "Curriculum/terrain_levels": 0.00081,
+      "Episode_Reward/action_rate_l2": -0.51185,
+      "Episode_Termination/illegal_contact": 1.12375,
+      "Episode_Termination/time_out": 1.935
+    }
+  },
+  "train_lgdog1_blind_v2_1015_1547.log": {
+    "last_iteration": "11545/16000",
+    "window": 100,
+    "metrics": {
+      "Mean reward": 32.1801,
+      "Mean episode length": 796.1482,
+      "Mean value loss": 0.16449,
+      "Curriculum/terrain_levels": 0.0,
+      "Episode_Reward/action_rate_l2": -0.50482,
+      "Episode_Termination/illegal_contact": 0.72,
+      "Episode_Termination/time_out": 2.05583
+    }
+  },
+  "train_lgdog1_blind_v3_1015_2254.log": {
+    "last_iteration": "15999/16000",
+    "window": 100,
+    "metrics": {
+      "Mean reward": 14.8343,
+      "Mean episode length": 705.4281,
+      "Mean value loss": 322.10104,
+      "Curriculum/terrain_levels": 0.11337,
+      "Episode_Reward/action_rate_l2": -1.14457,
+      "Episode_Metrics/traveled_distance": 0.00319,
+      "Episode_Termination/illegal_contact": 1.12333,
+      "Episode_Termination/time_out": 1.93333
+    }
+  },
+  "train_lgdog1_gentle_1016_1228.log": {
+    "last_iteration": "2777/16000",
+    "window": 100,
+    "metrics": {
+      "Mean reward": 29.3416,
+      "Mean episode length": 765.0165,
+      "Mean value loss": 0.22754,
+      "Curriculum/terrain_levels": 5.87002,
+      "Episode_Reward/action_rate_l2": -0.65397,
+      "Episode_Metrics/traveled_distance": 0.00563,
+      "Episode_Termination/illegal_contact": 1.1025,
+      "Episode_Termination/time_out": 1.755
+    }
+  },
+  "train_lgdog1_rough_16000_1014_2250.log": {
+    "last_iteration": "15999/16000",
+    "window": 100,
+    "metrics": {
+      "Mean reward": 25.8495,
+      "Mean episode length": 811.051,
+      "Mean value loss": 0.04769,
+      "Curriculum/terrain_levels": 0.0,
+      "Episode_Reward/action_rate_l2": -0.31526,
+      "Episode_Termination/illegal_contact": 0.4075,
+      "Episode_Termination/time_out": 1.33584
+    }
+  }
+}

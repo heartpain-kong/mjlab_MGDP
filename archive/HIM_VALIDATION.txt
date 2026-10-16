@@ -1,0 +1,42 @@
+LgDog HIM validation — 2026-10-16
+
+Source: user's E:\mjlab\unitree_rl_mjlab.zip, plus local TerrainV4 changes.
+Reference: InternRobotics/HIMLoco ef289acaa62795009363b7b819c9186690630441.
+Implementation: HIM-inspired adaptation; not an exact upstream reproduction.
+
+Isolated environment: E:\mjlab\work\lgdog_validation
+Python 3.12.14, torch 2.14.1+cpu, mjlab 1.2.0, rsl-rl-lib 5.0.1,
+MuJoCo/mujoco-warp 3.5.0, warp-lang 1.12.0, ONNX Runtime 1.31.0.
+
+PASS: 23 unit tests (12 existing TerrainV4 + 11 HIM tests).
+PASS: CPU actual environment actor [4,6,47], critic [4,261], target [4,47],
+      velocity labels [4,3]; frame-major oldest-to-newest history and partial reset.
+PASS: actor excludes privileged inputs; PPO gradients/optimizer exclude estimator.
+PASS: terminal and timeout done flags exclude reset observations from identification;
+      all-terminal batches skip identification without corrupting estimator parameters.
+PASS: 4 environments, 12 rollout steps, 2 PPO/HIM iterations on CPU, with actual
+      encoder weight changes, finite losses and checkpoint/ONNX export.
+PASS: ONNX full checker; real ONNX Runtime vs PyTorch parity on zero and random
+      inputs, including trained observation normalization; output [1,12].
+PASS: real runner resume plus unit-test verification of auxiliary optimizer moments.
+PASS: new task CLI argument parsing.
+PASS: 10 native CPU MuJoCo sim2sim control steps with HIM [1,282] input.
+PASS: 10 native CPU MuJoCo sim2sim control steps with old TerrainV4 [1,47] input.
+
+Logs/artifacts (smoke only):
+E:\mjlab\work\lgdog_him_tests.log
+E:\mjlab\work\lgdog_him_smoke.log
+E:\mjlab\work\lgdog_him_sim2sim.log
+E:\mjlab\work\lgdog_him_old47_compat.log
+E:\mjlab\work\lgdog_him_smoke\policy.onnx
+
+NOT VERIFIED: GPU execution, long-run convergence, terrain success rates,
+multi-seed comparison, or actual LgDog hardware deployment.
+Only single-device PPO without symmetry/RND is supported in this experiment.
+Smoke weights are not delivered as trained walking policies.
+
+PASS: TerrainV4 native MuJoCo/config regression after HIM registration.
+PASS: SHA256 comparison of 370 original src/scripts files; only task
+      registration and sim2sim modified; LgDog assets/constants unchanged.
+PASS: 12 cumulative Python files parse; git apply --check and actual patch
+      application against original archive files reproduce current source.

@@ -143,6 +143,11 @@ def make_velocity_env_cfg() -> ManagerBasedRlEnvCfg:
     "mean_action_acc": MetricsTermCfg(
       func=mdp.mean_action_acc,
     ),
+    # ★ 本回合累计走过的路程（米）—— 供 terrain_levels_vel 判定升降级用。
+    #   必须用路径长度而不是净位移，原因见 mdp/metrics.py 的说明。
+    "traveled_distance": MetricsTermCfg(
+      func=mdp.traveled_distance,
+    ),
   }
 
   ##
@@ -256,27 +261,33 @@ def make_velocity_env_cfg() -> ManagerBasedRlEnvCfg:
 
   ##
   # Rewards
+  #
+  # ★ 这里是【所有机器人共用】的默认权重。只想改某一个机器人 →
+  #   去 src/tasks/velocity/config/<robot>/env_cfgs.py 里覆盖，别改这里。
+  # ★ 实际每步奖励 = 函数返回值 × weight × dt(0.02s)，所以 -200 其实≈每步 -4.0。
+  # ★ 奖励函数本体的实现在 src/tasks/velocity/mdp/rewards.py（不是 mjlab 包里那份）。
   ##
 
   rewards = {
+    # ── 任务目标（越大越好，权重为正）────────────────────────────────
     "track_linear_velocity": RewardTermCfg(
       func=mdp.track_linear_velocity,
-      weight=1.0,
+      weight=2.0,  # ★线速度跟踪：越接近指令 vx/vy 分越高 exp(-err²/std²)，vz 按 2 倍罚
       params={"command_name": "twist", "std": math.sqrt(0.25)},
     ),
     "track_angular_velocity": RewardTermCfg(
       func=mdp.track_angular_velocity,
-      weight=1.0,
+      weight=1.0,  # ★角速度/朝向跟踪：朝向控制的任务算朝向误差，否则算 yaw 角速度误差
       params={"command_name": "twist", "std": math.sqrt(0.5)},
     ),
     "body_orientation_l2": RewardTermCfg(
       func=mdp.body_orientation_l2,
-      weight=-1.0,
+      weight=-1.0,  # 机身保持水平（罚 roll/pitch 偏离竖直）
       params={"asset_cfg": SceneEntityCfg("robot", body_names=())},  # Set per-robot.
     ),
     "pose": RewardTermCfg(
       func=mdp.variable_posture,
-      weight=1.0,
+      weight=1.5,  # 姿态：按"站立/行走/奔跑"三档 std 约束 12 关节偏离默认站姿（std 越小越严）
       params={
         "asset_cfg": SceneEntityCfg("robot", joint_names=".*"),
         "command_name": "twist",
@@ -287,23 +298,9 @@ def make_velocity_env_cfg() -> ManagerBasedRlEnvCfg:
         "running_threshold": 1.5,
       },
     ),
-    "body_ang_vel": RewardTermCfg(
-      func=mdp.body_angular_velocity_penalty,
-      weight=-0.05,  # Override per-robot
-      params={"asset_cfg": SceneEntityCfg("robot", body_names=())},  # Set per-robot.
-    ),
-    "angular_momentum": RewardTermCfg(
-      func=mdp.angular_momentum_penalty,
-      weight=-0.025,  # Override per-robot
-      params={"sensor_name": "robot/root_angmom"},
-    ),
-    "is_terminated": RewardTermCfg(func=mdp.is_terminated, weight=-200.0),
-    "joint_acc_l2": RewardTermCfg(func=mdp.joint_acc_l2, weight=-2.5e-7),
-    "joint_pos_limits": RewardTermCfg(func=mdp.joint_pos_limits, weight=-10.0),
-    "action_rate_l2": RewardTermCfg(func=mdp.action_rate_l2, weight=-0.05),
     "foot_gait": RewardTermCfg(
       func=mdp.feet_gait,
-      weight=0.5,
+      weight=0.5,  # 步态相位奖励：按 0.6s 周期的相位钟检查四足触地是否符合 offset（trot=对角同相）
       params={
         "period": 0.6,
         "offset": [0.0, 0.5],
@@ -313,11 +310,37 @@ def make_velocity_env_cfg() -> ManagerBasedRlEnvCfg:
         "sensor_name": "feet_ground_contact",
       }
     ),
+
+    # ── 平滑/省力（罚项，权重为负）──────────────────────────────────
+    "body_ang_vel": RewardTermCfg(
+      func=mdp.body_angular_velocity_penalty,
+      weight=-0.05,  # 罚机身角速度（防晃）
+      params={"asset_cfg": SceneEntityCfg("robot", body_names=())},  # Set per-robot.
+    ),
+    "angular_momentum": RewardTermCfg(
+      func=mdp.angular_momentum_penalty,
+      weight=-0.025,  # 罚全身角动量（鼓励自然摆腿、别甩身子）
+      params={"sensor_name": "robot/root_angmom"},
+    ),
+    "joint_acc_l2": RewardTermCfg(
+      func=mdp.joint_acc_l2,
+      weight=-2.5e-7,  # 罚关节加速度平方和（防抖、防冲击）
+    ),
+    "joint_pos_limits": RewardTermCfg(
+      func=mdp.joint_pos_limits,
+      weight=-10.0,  # 罚关节超出【软限位】的幅度（软限位 = 硬限位 × soft_joint_pos_limit_factor）
+    ),
+    "action_rate_l2": RewardTermCfg(
+      func=mdp.action_rate_l2,
+      weight=-0.05,  # 罚动作变化率平方和（让策略输出平滑、别一步一个样）
+    ),
+
+    # ── 足端行为 ────────────────────────────────────────────────────
     "foot_clearance": RewardTermCfg(
       func=mdp.feet_clearance,
-      weight=-1.0,
+      weight=-1.0,  # 罚摆动足离地高度偏离 target_height=0.10m（按足速加权，走得越快要求越严）
       params={
-        "target_height": 0.10,
+        "target_height": 0.20,
         "command_name": "twist",
         "command_threshold": 0.1,
         "asset_cfg": SceneEntityCfg("robot", site_names=()),  # Set per-robot.
@@ -325,7 +348,7 @@ def make_velocity_env_cfg() -> ManagerBasedRlEnvCfg:
     ),
     "foot_slip": RewardTermCfg(
       func=mdp.feet_slip,
-      weight=-0.25,
+      weight=-0.25,  # 罚支撑足打滑（触地时还有 xy 速度）
       params={
         "sensor_name": "feet_ground_contact",
         "command_name": "twist",
@@ -335,21 +358,62 @@ def make_velocity_env_cfg() -> ManagerBasedRlEnvCfg:
     ),
     "soft_landing": RewardTermCfg(
       func=mdp.soft_landing,
-      weight=-1e-3,
+      weight=-1e-3,  # 罚落地冲击力（鼓励轻落脚，保护真机）
       params={
         "sensor_name": "feet_ground_contact",
         "command_name": "twist",
         "command_threshold": 0.1,
       },
     ),
+    # ── 地形专用（默认 weight=0.0 = 不生效，避免影响现有的平地任务）──
+    #   要训崎岖地形就在对应任务的 env_cfgs.py 里把它调成负值，例如：
+    #       cfg.rewards["feet_stumble"].weight = -0.5
+    #   说明见 src/tasks/velocity/mdp/rewards.py 的 feet_stumble()。
+    "feet_stumble": RewardTermCfg(
+      func=mdp.feet_stumble,
+      weight=-0.5,  # ← 0 = 关。地形训练建议 -0.5 起步（mjlab 会再乘 dt=0.02）
+      params={
+        "sensor_name": "feet_ground_contact",
+        "command_name": "twist",
+        "command_threshold": 0.1,
+        "horizontal_ratio": 4.0,
+      },
+    ),
+    "feet_air_time": RewardTermCfg(
+      func=mdp.feet_air_time,
+      weight=0.2,  # ← 0 = 关。地形训练可开：奖励摆动腿在空中待够时间（迈得开才过得去台阶）
+      params={
+        "sensor_name": "feet_ground_contact",
+        "threshold": 0.4,
+        "command_name": "twist",
+        "command_threshold": 0.1,
+      },
+    ),
+    # 罚腿部（大腿/小腿/髋，不含足端）撞地形 —— 过台阶时小腿磕在台阶棱上。
+    # 与 illegal_contact 终止的区别：那是 10N 直接终止（0/1 信号），这条给连续梯度。
+    "leg_contact_force": RewardTermCfg(
+      func=mdp.leg_contact_force,
+      weight=0.0,  # ← 0 = 关。地形训练建议 -1.0 起步
+      params={
+        "sensor_name": "nonfoot_ground_touch",
+        "command_name": "twist",
+        "command_threshold": 0.1,
+      },
+    ),
     "stand_still": RewardTermCfg(
       func=mdp.stand_still,
-      weight=-1.0,
+      weight=-1.0,  # 零指令时别乱动（罚关节偏离默认站姿；有指令时该门控会关掉）
       params={
         "command_name": "twist",
         "command_threshold": 0.1,
         "asset_cfg": SceneEntityCfg("robot", joint_names=".*"),
       },
+    ),
+
+    # ── 终止惩罚 ────────────────────────────────────────────────────
+    "is_terminated": RewardTermCfg(
+      func=mdp.is_terminated,
+      weight=-200.0,  # 摔倒等【非超时】终止罚一次；×dt(0.02) ⇒ 实际约每步 -4.0
     ),
   }
 

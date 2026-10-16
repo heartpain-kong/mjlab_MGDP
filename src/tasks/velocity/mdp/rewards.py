@@ -294,6 +294,98 @@ def feet_slip(
   return cost
 
 
+def feet_stumble(
+  env: ManagerBasedRlEnv,
+  sensor_name: str,
+  command_name: str | None = None,
+  command_threshold: float = 0.1,
+  horizontal_ratio: float = 4.0,
+  log_metric: bool = True,
+) -> torch.Tensor:
+  """罚【摆动足撞到竖直面】—— 上楼梯时脚磕在台阶立面上。
+
+  ★ 为什么地形训练需要它
+    地形生成器里 **40% 是台阶**（正金字塔 20% 上楼梯 + 倒金字塔 20% 下楼梯，
+    单级最高 10 cm），另有斜坡 / 随机起伏 / 波浪。平地训练不需要这条，但上台阶
+    最常见的失败就是**脚踢到台阶立面被磕住** —— 这时策略只拿到"往前推不动"的
+    模糊信号，很难自己学明白。
+
+  判据（与 legged_gym 的 `_reward_feet_stumble` 同源）：
+      水平接触力 > horizontal_ratio × 竖直接触力   ⇒  判定为"撞立面"而非"踩地面"
+    正常踩地时接触力几乎全是竖直的（水平分量 ≈ 摩擦力，很小）；撞立面时相反。
+
+  与 legged_gym 版的差别：那边返回 `any(...)` 的 0/1 布尔，这里返回**连续的超出量**
+  `max(水平力 − ratio×竖直力, 0)`，梯度更平滑、撞得越狠罚越多。
+
+  ⚠️ 权重换算：mjlab 的奖励会乘 dt(0.02)。legged_gym 里 `feet_stumble = -0.1` 是
+  不乘 dt 的一次性惩罚，等效到 mjlab 约 weight ≈ -0.1/0.02 = -5.0 的量级。
+  建议先用 -0.5 起步（约 -0.01/控制步），再按 TensorBoard 的
+  `Episode_Reward/feet_stumble` 调。
+  """
+  contact_sensor: ContactSensor = env.scene[sensor_name]
+  sensor_data = contact_sensor.data
+  assert sensor_data.force is not None
+  # reduce="netforce" ⇒ 力是【全局坐标系】，shape [B, N, 3]
+  forces = sensor_data.force
+  f_horizontal = torch.norm(forces[:, :, :2], dim=-1)  # 水平分量
+  f_vertical = torch.abs(forces[:, :, 2])  # 竖直分量
+  stumble = torch.clamp(f_horizontal - horizontal_ratio * f_vertical, min=0.0)
+  cost = torch.max(stumble, dim=1)[0]  # 该环境里最严重的那只脚
+
+  if log_metric:
+    env.extras["log"]["Metrics/feet_stumble_mean"] = torch.mean(cost)
+
+  if command_name is not None:
+    command = env.command_manager.get_command(command_name)
+    if command is not None:
+      total_command = torch.norm(command[:, :2], dim=1) + torch.abs(command[:, 2])
+      cost = cost * (total_command > command_threshold).float()
+  return cost
+
+
+def leg_contact_force(
+  env: ManagerBasedRlEnv,
+  sensor_name: str,
+  command_name: str | None = None,
+  command_threshold: float = 0.1,
+  log_metric: bool = True,
+) -> torch.Tensor:
+  """罚【腿部（大腿/小腿/髋）撞到地形】—— 过台阶时的另一个典型失败。
+
+  ★ 为什么地形训练需要它
+    过台阶有两大失败模式，各管一头：
+      · 脚磕台阶立面          → `feet_stumble`（已加）
+      · **大腿/小腿撞台阶**    → 本条
+    平地上腿不会碰地，所以平地任务用不上；上台阶时小腿很容易磕在台阶棱上，
+    只靠 `illegal_contact`（10 N 直接终止）给不了梯度 —— 终止是 0/1 信号，
+    碰一下和撞飞了 penalty 一样。这里给连续的力惩罚，让策略在【终止之前】
+    就学到"腿别去蹭台阶"。
+
+  数据源：`nonfoot_ground_touch` 传感器（`reduce="none"`，排除足端的那组碰撞体，
+  force shape [B, N_geom, 3]，全局坐标系）。取所有非足端 geom 里最大的接触力。
+
+  ⚠️ 权重换算：mjlab 会乘 dt(0.02)。legged_gym 的 `collision = -0.05`
+  （罚 thigh/calf/base 接触力²）不乘 dt，等效量级约 weight ≈ -2.5。
+  建议 -1.0 起步（原始值约 10~60 N → -0.2~-1.2 × 0.02 ≈ -0.004~-0.024/控制步）。
+  """
+  contact_sensor: ContactSensor = env.scene[sensor_name]
+  data = contact_sensor.data
+  assert data.force is not None
+  forces = data.force  # [B, N_geom, 3]，全局坐标系
+  force_mag = torch.norm(forces, dim=-1)  # [B, N_geom]
+  cost = torch.max(force_mag, dim=1)[0]  # 该环境里撞得最狠的那个 geom
+
+  if log_metric:
+    env.extras["log"]["Metrics/leg_contact_force_max"] = torch.mean(cost)
+
+  if command_name is not None:
+    command = env.command_manager.get_command(command_name)
+    if command is not None:
+      total_command = torch.norm(command[:, :2], dim=1) + torch.abs(command[:, 2])
+      cost = cost * (total_command > command_threshold).float()
+  return cost
+
+
 def soft_landing(
   env: ManagerBasedRlEnv,
   sensor_name: str,

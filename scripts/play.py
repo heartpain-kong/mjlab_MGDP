@@ -13,7 +13,7 @@ from mjlab.envs import ManagerBasedRlEnv
 from mjlab.rl import MjlabOnPolicyRunner, RslRlVecEnvWrapper
 from mjlab.tasks.registry import list_tasks, load_env_cfg, load_rl_cfg, load_runner_cls
 from mjlab.tasks.tracking.mdp import MotionCommandCfg
-from mjlab.utils.os import get_wandb_checkpoint_path
+from mjlab.utils.os import get_checkpoint_path
 from mjlab.utils.torch import configure_torch_backends
 from mjlab.utils.wrappers import VideoRecorder
 from mjlab.viewer import NativeMujocoViewer, ViserPlayViewer
@@ -23,6 +23,11 @@ from mjlab.viewer import NativeMujocoViewer, ViserPlayViewer
 class PlayConfig:
   agent: Literal["zero", "random", "trained"] = "trained"
   checkpoint_file: str | None = None
+  """显式指定 checkpoint。不给则自动取【最新 run 的最新 model_*.pt】（方便训练中随时看）。"""
+  load_run: str = ".*"
+  """只在不给 checkpoint_file 时生效：run 目录名的正则（按名字排序取最后一个）。"""
+  load_checkpoint: str = "model_.*.pt"
+  """只在不给 checkpoint_file 时生效：checkpoint 文件名的正则。"""
   motion_file: str | None = None
   num_envs: int | None = None
   device: str | None = None
@@ -75,12 +80,12 @@ def run_play(task_id: str, cfg: PlayConfig):
       print(f"[INFO]: Using local motion file: {cfg.motion_file}")
       motion_cmd.motion_file = cfg.motion_file
     elif DUMMY_MODE:
-      if not cfg.registry_name:
-        raise ValueError(
-          "Tracking tasks require either:\n"
-          "  --motion-file /path/to/motion.npz (local file)\n"
-          "  --registry-name your-org/motions/motion-name (download from WandB)"
-        )
+      # 原本这里检查 cfg.registry_name（已随 W&B 逻辑一并删除，引用会 AttributeError）。
+      raise ValueError(
+        "跟踪类任务用 dummy agent 时必须给本地动作文件：\n"
+        "  --motion-file /path/to/motion.npz\n"
+        "（本项目已移除 W&B registry 下载逻辑，--registry-name 不可用）"
+      )
   log_dir: Path | None = None
   resume_path: Path | None = None
   if TRAINED_MODE:
@@ -91,20 +96,61 @@ def run_play(task_id: str, cfg: PlayConfig):
         raise FileNotFoundError(f"Checkpoint file not found: {resume_path}")
       print(f"[INFO]: Loading checkpoint: {resume_path.name}")
     else:
-      if cfg.wandb_run_path is None:
-        raise ValueError(
-          "`wandb_run_path` is required when `checkpoint_file` is not provided."
+      # ★ 不给 --checkpoint_file 时，自动取【最新 run 的最新 checkpoint】。
+      #   这正是「训练过程中随时 play 看当前策略」需要的 —— 训练每 save_interval
+      #   存一个 model_N.pt，重跑一次 play 就能看到最新进度。
+      #   本项目移除了 W&B，原版这里是走 get_wandb_checkpoint_path，我们改用本地的
+      #   get_checkpoint_path（run 目录按名字排序=按时间戳，checkpoint 有补零排序，
+      #   所以取到的一定是时间上最新的那个）。
+      if not log_root_path.exists():
+        raise FileNotFoundError(
+          f"找不到日志目录 {log_root_path}（任务 {task_id} 还没训练过？）"
+          f"\n  也可以直接指定：--checkpoint_file=<某个 model_*.pt>"
         )
-      resume_path, was_cached = get_wandb_checkpoint_path(
-        log_root_path, Path(cfg.wandb_run_path)
+      # ★ 从最新 run 往回找，取【第一个真的有 checkpoint 的 run】。
+      #   为什么不能直接用 get_checkpoint_path：它只认最新那个 run，而刚启动的
+      #   run 目录会先建出来、checkpoint 要等第一次 save 才有（新建训练要等 100+ 轮），
+      #   这期间 play 会失败。训练中随时看进度不该被这个窗口期卡住。
+      import re as _re
+
+      candidates = sorted(
+        (
+          d.name
+          for d in log_root_path.iterdir()
+          if d.is_dir() and _re.match(cfg.load_run, d.name)
+        ),
+        reverse=True,  # run 名以时间戳开头，倒序 = 最新的在前
       )
-      # Extract run_id and checkpoint name from path for display.
-      run_id = resume_path.parent.name
-      checkpoint_name = resume_path.name
-      cached_str = "cached" if was_cached else "downloaded"
-      print(
-        f"[INFO]: Loading checkpoint: {checkpoint_name} (run: {run_id}, {cached_str})"
+      skipped: list[str] = []
+      for name in candidates:
+        try:
+          resume_path = get_checkpoint_path(
+            log_root_path, _re.escape(name), cfg.load_checkpoint
+          )
+          break
+        except ValueError:
+          skipped.append(name)
+      else:
+        raise ValueError(
+          f"在 {log_root_path} 下没有找到任何匹配 {cfg.load_checkpoint!r} 的 checkpoint。\n"
+          f"  该任务已有的 run：\n"
+          + "\n".join(f"    {r}" for r in sorted(candidates))
+        )
+      msg = (
+        f"[INFO]: 未指定 --checkpoint_file，自动选用最新 checkpoint：\n"
+        f"        run        {resume_path.parent.name}\n"
+        f"        checkpoint {resume_path.name}\n"
       )
+      if skipped:
+        msg += (
+          f"        （已跳过 {len(skipped)} 个尚无 checkpoint 的更新 run："
+          f"{', '.join(skipped)}）\n"
+        )
+      msg += (
+        "        （想看别的：--checkpoint_file=<路径>，"
+        "或用 --load-run/--load-checkpoint 过滤）"
+      )
+      print(msg)
     log_dir = resume_path.parent
 
   if cfg.num_envs is not None:
@@ -154,9 +200,29 @@ def run_play(task_id: str, cfg: PlayConfig):
   else:
     runner_cls = load_runner_cls(task_id) or MjlabOnPolicyRunner
     runner = runner_cls(env, asdict(agent_cfg), device=device)
-    runner.load(
-      str(resume_path), load_cfg={"actor": True}, strict=True, map_location=device
-    )
+    try:
+      runner.load(
+        str(resume_path), load_cfg={"actor": True}, strict=True, map_location=device
+      )
+    except (RuntimeError, ValueError) as e:
+      # ★ 自动选 checkpoint 时最容易踩的坑：不同任务共用一个 experiment_name。
+      #   例如 LgDog1-Flat 和 LgDog1-Rough 都是 `lgdog1_velocity`，自动取「最新 run」
+      #   会拿到另一个任务的权重（观测 234 维 vs 47 维），报一堆看不懂的 size mismatch。
+      hint = ""
+      if cfg.checkpoint_file is None:
+        hint = (
+          f"\n\n  ★ 这个 checkpoint 是自动选的：\n"
+          f"      run {resume_path.parent.name} / {resume_path.name}\n"
+          f"    任务 {task_id} 的 experiment_name 是 {agent_cfg.experiment_name!r}，"
+          f"该目录下可能有别的任务的 run。\n"
+          f"    请用 --load-run=<正则> 指定正确的 run，或直接 --checkpoint_file=<路径>。\n"
+          f"    目录里的 run：\n"
+          + "\n".join(
+            f"      {d.name}" for d in sorted(resume_path.parent.parent.iterdir())
+            if d.is_dir()
+          )
+        )
+      raise type(e)(f"{e}{hint}") from None
     policy = runner.get_inference_policy(device=device)
 
   # Handle "auto" viewer selection.
