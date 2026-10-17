@@ -10,6 +10,8 @@ __pycache__/
 !.env.example
 *.pem
 *.key
+*.bak
+*.tmp
 outputs
 logs
 wandb

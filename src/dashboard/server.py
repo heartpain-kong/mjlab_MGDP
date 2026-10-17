@@ -11,6 +11,7 @@ import webbrowser
 from .catalog import TASKS, resolve_task
 from .commands import build_command, discover_models, display_command
 from .jobs import JobManager
+from .reward_editor import read_rewards, save_rewards
 
 WEB = Path(__file__).parent / "web"
 DOCUMENTS = {
@@ -71,6 +72,9 @@ def create_server(root, python, host="127.0.0.1", port=8765):
                             "jobs": jobs.list(), "documents": [{"id": key, "label": value[0]} for key, value in DOCUMENTS.items()]})
         if parsed.path == "/api/models":
           return self.send({"models": discover_models(root, query.get("task", ["standard"])[0])})
+        if parsed.path == "/api/rewards":
+          alias, task = resolve_task(query.get("task", ["standard"])[0])
+          return self.send({"task": alias, **read_rewards(root, task["profile"])})
         if parsed.path == "/api/log":
           return self.send({"text": jobs.tail(query.get("id", [""])[0])})
         if parsed.path == "/api/document":
@@ -103,6 +107,10 @@ def create_server(root, python, host="127.0.0.1", port=8765):
             return self.send({"command": display_command(argv), "argv": argv})
           alias, _ = resolve_task(data.get("task", "standard"))
           return self.send({"job": jobs.launch(argv, data.get("mode", "train"), alias)})
+        if self.path == "/api/rewards/save":
+          alias, task = resolve_task(data.get("task", "standard"))
+          result = save_rewards(root, task["profile"], data.get("changes"))
+          return self.send({"task": alias, **result})
         if self.path == "/api/stop":
           return self.send({"job": jobs.stop(str(data.get("id", "")))})
         return self.send({"error": "操作不存在"}, 404)

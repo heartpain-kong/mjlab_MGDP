@@ -83,6 +83,17 @@ REWARD_PROFILES = {
 }
 
 
+# 面板保存的方案级覆盖。公共 COMMON_WEIGHTS 保持为基线，调参时只影响当前 profile。
+# 由本地浏览器工作台维护，不需要导入 mjlab。
+# BEGIN LGDOG DASHBOARD OVERRIDES
+DASHBOARD_REWARD_OVERRIDES = {'flat': {'weights': {}, 'params': {}},
+ 'rough': {'weights': {}, 'params': {}},
+ 'terrain_v4': {'weights': {}, 'params': {}},
+ 'him': {'weights': {}, 'params': {}},
+ 'him_standard': {'weights': {}, 'params': {}}}
+# END LGDOG DASHBOARD OVERRIDES
+
+
 def make_lgdog_rewards(profile, *, base_body, foot_sites, terrain_ray_names=()):
   """Build independent, complete RewardTermCfg objects for one LgDog task.
 
@@ -92,6 +103,9 @@ def make_lgdog_rewards(profile, *, base_body, foot_sites, terrain_ray_names=()):
   if profile not in REWARD_PROFILES:
     raise ValueError(f"Unknown LgDog reward profile {profile!r}; choose {tuple(REWARD_PROFILES)}")
   settings = deepcopy(REWARD_PROFILES[profile])
+  dashboard = deepcopy(DASHBOARD_REWARD_OVERRIDES.get(profile, {}))
+  settings["weights"].update(dashboard.get("weights", {}))
+  settings["params"].update(dashboard.get("params", {}))
   unknown = (settings["weights"].keys() | settings["params"].keys()) - COMMON_WEIGHTS.keys()
   if unknown:
     raise ValueError(f"Unknown reward names in {profile!r}: {sorted(unknown)}")
