@@ -16,6 +16,24 @@ BEGIN = "# BEGIN LGDOG DASHBOARD OVERRIDES"
 END = "# END LGDOG DASHBOARD OVERRIDES"
 NUMBER_LIMIT = 10000.0
 
+IMPLEMENTATIONS = {
+  "track_linear_velocity": ("src/tasks/velocity/mdp/rewards.py", "track_linear_velocity"),
+  "track_angular_velocity": ("src/tasks/velocity/mdp/rewards.py", "track_angular_velocity"),
+  "body_orientation_l2": ("src/tasks/velocity/mdp/rewards.py", "body_orientation_l2"),
+  "pose": ("src/tasks/velocity/mdp/rewards.py", "variable_posture"),
+  "foot_gait": ("src/tasks/velocity/mdp/rewards.py", "feet_gait"),
+  "body_ang_vel": ("src/tasks/velocity/mdp/rewards.py", "body_angular_velocity_penalty"),
+  "angular_momentum": ("src/tasks/velocity/mdp/rewards.py", "angular_momentum_penalty"),
+  "foot_clearance": ("src/tasks/velocity/mdp/rewards.py", "feet_clearance"),
+  "foot_slip": ("src/tasks/velocity/mdp/rewards.py", "feet_slip"),
+  "soft_landing": ("src/tasks/velocity/mdp/rewards.py", "soft_landing"),
+  "feet_stumble": ("src/tasks/velocity/mdp/rewards.py", "feet_stumble"),
+  "feet_air_time": ("src/tasks/velocity/mdp/rewards.py", "feet_air_time"),
+  "leg_contact_force": ("src/tasks/velocity/mdp/rewards.py", "leg_contact_force"),
+  "stand_still": ("src/tasks/velocity/mdp/rewards.py", "stand_still"),
+}
+INHERITED = {"joint_acc_l2", "joint_pos_limits", "action_rate_l2", "is_terminated"}
+
 
 def _literal_assignment(tree, name):
   for node in tree.body:
@@ -55,6 +73,34 @@ def read_rewards(root, profile):
     "rewards": [{"name": name, "weight": weights[name], "enabled": weights[name] != 0,
                  "params": params.get(name, {})} for name in common],
   }
+
+
+def reward_detail(root, profile, name):
+  path, source, common, profiles, _ = _load(root)
+  if name not in common:
+    raise ValueError(f"未知 reward: {name}")
+  if profile not in profiles:
+    raise ValueError(f"未知 reward profile: {profile}")
+  if name == "foot_clearance" and profile in {"terrain_v4", "him", "him_standard"}:
+    relative = Path("src/tasks/velocity/config/lgdog1/blind_mdp.py")
+    function = "feet_clearance_terrain"
+  elif name in IMPLEMENTATIONS:
+    relative, function = IMPLEMENTATIONS[name]
+  elif name in INHERITED:
+    return {"name": name, "title": f"{name} 的实现", "source": "mjlab.envs.mdp（已安装依赖）", "line": None,
+            "binding": f"reward_cfg.py: mdp.{name}", "text": "这个 reward 由 mjlab 的基础环境包提供，当前工程通过 mdp.%s 绑定它。\n\n修改权重和方案参数请使用上方编辑器；如果要修改函数公式，需要进入已安装的 mjlab 源码。" % name}
+  else:
+    raise ValueError(f"reward 尚未配置实现映射: {name}")
+  implementation_path = Path(root) / relative
+  implementation_source = implementation_path.read_text(encoding="utf-8-sig")
+  tree = ast.parse(implementation_source, filename=str(implementation_path))
+  node = next((node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.name == function), None)
+  if node is None:
+    raise ValueError(f"找不到函数实现: {function}")
+  lines = implementation_source.splitlines()
+  start, end = node.lineno, getattr(node, "end_lineno", node.lineno)
+  return {"name": name, "title": f"{name} · {function}", "source": str(implementation_path), "line": start,
+          "binding": f"reward_cfg.py: mdp.{function}", "text": "\n".join(lines[start - 1:end])}
 
 
 def _validate_changes(common, profiles, profile, changes):

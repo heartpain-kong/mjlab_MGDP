@@ -11,7 +11,7 @@ import webbrowser
 from .catalog import TASKS, resolve_task
 from .commands import build_command, discover_models, display_command
 from .jobs import JobManager
-from .reward_editor import read_rewards, save_rewards
+from .reward_editor import read_rewards, reward_detail, save_rewards
 
 WEB = Path(__file__).parent / "web"
 DOCUMENTS = {
@@ -75,6 +75,9 @@ def create_server(root, python, host="127.0.0.1", port=8765):
         if parsed.path == "/api/rewards":
           alias, task = resolve_task(query.get("task", ["standard"])[0])
           return self.send({"task": alias, **read_rewards(root, task["profile"])})
+        if parsed.path == "/api/reward-detail":
+          alias, task = resolve_task(query.get("task", ["standard"])[0])
+          return self.send({"task": alias, **reward_detail(root, task["profile"], query.get("name", [""])[0])})
         if parsed.path == "/api/log":
           return self.send({"text": jobs.tail(query.get("id", [""])[0])})
         if parsed.path == "/api/document":
