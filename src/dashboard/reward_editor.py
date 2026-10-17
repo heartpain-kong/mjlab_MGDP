@@ -9,6 +9,7 @@ from pathlib import Path
 from pprint import pformat
 import re
 import shutil
+import sys
 
 
 SOURCE_RELATIVE = Path("src/tasks/velocity/config/lgdog1/reward_cfg.py")
@@ -33,6 +34,10 @@ IMPLEMENTATIONS = {
   "stand_still": ("src/tasks/velocity/mdp/rewards.py", "stand_still"),
 }
 INHERITED = {"joint_acc_l2", "joint_pos_limits", "action_rate_l2", "is_terminated"}
+INHERITED_IMPLEMENTATIONS = {
+  "joint_acc_l2": "joint_acc_l2", "joint_pos_limits": "joint_pos_limits",
+  "action_rate_l2": "action_rate_l2", "is_terminated": "is_terminated",
+}
 
 
 def _literal_assignment(tree, name):
@@ -65,14 +70,32 @@ def read_rewards(root, profile):
   weights = dict(common)
   weights.update(profiles[profile].get("weights", {}))
   weights.update(override.get("weights", {}))
+  baseline_weights = dict(common)
+  baseline_weights.update(profiles[profile].get("weights", {}))
   params = dict(profiles[profile].get("params", {}))
   params.update(override.get("params", {}))
+  baseline_params = profiles[profile].get("params", {})
   return {
     "profile": profile,
     "source": str(path),
-    "rewards": [{"name": name, "weight": weights[name], "enabled": weights[name] != 0,
-                 "params": params.get(name, {})} for name in common],
+    "rewards": [{"name": name, "weight": weights[name], "baseline": baseline_weights[name],
+                 "changed": weights[name] != baseline_weights[name] or params.get(name, {}) != baseline_params.get(name, {}),
+                 "enabled": weights[name] != 0, "params": params.get(name, {}),
+                 "baseline_params": baseline_params.get(name, {})} for name in common],
   }
+
+
+def _find_mjlab_reward(function):
+  for entry in sys.path:
+    candidate = Path(entry) / "mjlab/envs/mdp/rewards.py"
+    if candidate.is_file():
+      source = candidate.read_text(encoding="utf-8-sig")
+      tree = ast.parse(source, filename=str(candidate))
+      node = next((item for item in ast.walk(tree) if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == function), None)
+      if node is not None:
+        lines = source.splitlines()
+        return candidate, node.lineno, "\n".join(lines[node.lineno - 1:getattr(node, "end_lineno", node.lineno)])
+  return None
 
 
 def reward_detail(root, profile, name):
@@ -87,6 +110,11 @@ def reward_detail(root, profile, name):
   elif name in IMPLEMENTATIONS:
     relative, function = IMPLEMENTATIONS[name]
   elif name in INHERITED:
+    found = _find_mjlab_reward(INHERITED_IMPLEMENTATIONS[name])
+    if found:
+      package_path, line, text = found
+      return {"name": name, "title": f"{name} · mjlab 实现", "source": str(package_path), "line": line,
+              "binding": f"reward_cfg.py: mdp.{name}", "text": text}
     return {"name": name, "title": f"{name} 的实现", "source": "mjlab.envs.mdp（已安装依赖）", "line": None,
             "binding": f"reward_cfg.py: mdp.{name}", "text": "这个 reward 由 mjlab 的基础环境包提供，当前工程通过 mdp.%s 绑定它。\n\n修改权重和方案参数请使用上方编辑器；如果要修改函数公式，需要进入已安装的 mjlab 源码。" % name}
   else:
