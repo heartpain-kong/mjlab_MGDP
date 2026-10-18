@@ -90,7 +90,12 @@ DASHBOARD_REWARD_OVERRIDES = {'flat': {'weights': {}, 'params': {}},
  'rough': {'weights': {}, 'params': {}},
  'terrain_v4': {'weights': {}, 'params': {}},
  'him': {'weights': {}, 'params': {}},
- 'him_standard': {'weights': {}, 'params': {}}}
+ 'him_standard': {'weights': {'action_rate_l2': -0.05,
+                              'foot_clearance': -0.8,
+                              'soft_landing': -0.001,
+                              'stand_still': -1.0,
+                              'foot_gait': 0.75},
+                  'params': {'foot_clearance': {'target_height': 0.1}}}}
 # END LGDOG DASHBOARD OVERRIDES
 
 
