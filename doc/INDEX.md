@@ -7,6 +7,7 @@
 | 使用浏览器面板、短命令、了解目录迁移 | [WORKBENCH.md](WORKBENCH.md) |
 | 调整奖励、查看最终权重和函数位置 | [REWARDS.md](REWARDS.md) |
 | V2/V8 训练 run、课程和动作数据分析 | [TRAINING_DATA_ANALYSIS_2026-10-20.md](TRAINING_DATA_ANALYSIS_2026-10-20.md) |
+| V2 日志分析与 V3 文献调参 | [REWARD_LITERATURE_V3.md](REWARD_LITERATURE_V3.md) |
 | 标准 Rough + HIM 新任务 | [LGDOG_HIM_STANDARD.md](LGDOG_HIM_STANDARD.md) |
 | 原 V7 温和地形 HIM 方法与实现 | [LGDOG_HIM.md](LGDOG_HIM.md) |
 | LgDog 训练、导出与 sim2sim | [LGDOG_GUIDE.md](LGDOG_GUIDE.md) |
