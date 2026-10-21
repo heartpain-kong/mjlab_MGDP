@@ -67,11 +67,20 @@ class StandardHIMTests(unittest.TestCase):
     self.assertTrue(cfg.actor.class_name.endswith(":HIMActor"))
     self.assertTrue(cfg.algorithm.class_name.endswith(":HIMPPO"))
 
+  def test_stability_training_defaults_are_recorded_in_agent_config(self):
+    cfg = load_rl_cfg(TASK)
+    self.assertEqual(cfg.clip_actions, 1.0)
+    self.assertEqual(cfg.num_steps_per_env, 48)
+    self.assertEqual(cfg.algorithm.estimator_epochs, 5)
+    env = lgdog1_him_standard_env_cfg()
+    self.assertEqual(env.commands["twist"].resampling_time_range, (3.0, 5.0))
+
   def test_improved_curriculum_and_relative_clearance_are_used_on_standard_terrain(self):
     cfg = lgdog1_him_standard_env_cfg()
     self.assertEqual(cfg.scene.terrain.max_init_terrain_level, 1)
     self.assertNotIn("command_vel", cfg.curriculum)
     self.assertIs(cfg.curriculum["terrain_levels"].func, blind_mdp.terrain_levels_tracking)
+    self.assertEqual(cfg.curriculum["terrain_levels"].params, {"max_velocity_error": 0.8})
     self.assertIs(cfg.rewards["foot_clearance"].func, blind_mdp.feet_clearance_terrain)
     self.assertEqual(cfg.rewards["leg_contact_force"].params["sensor_name"], "legs_ground_contact")
     self.assertEqual(cfg.commands["twist"].ranges.lin_vel_x, (-0.4, 0.8))

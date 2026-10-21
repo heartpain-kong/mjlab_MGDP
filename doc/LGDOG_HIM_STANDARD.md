@@ -40,7 +40,9 @@ HIM 是策略中的状态估计与学习方法，地形生成、难度课程和�
 
 本体 PD、力矩上限、动作缩放 0.25、仿真 dt=0.005 s 和控制周期 0.02 s 沿用当前 LgDog 配置。新任务保留相对足下地面的抬脚代价，默认目标 0.10 m；后续调目标高度应在 `him_standard` 中明确记录。
 
-训练指令沿用现有 HIM 的固定范围：vx 为 (-0.4,0.8)、vy 为 ±0.3 m/s、yaw rate 为 ±0.6 rad/s。不启用 iteration 5000 的指令范围突变。地形课程仍需要较好的指令跟踪、足够的存活时间和离开出生平台后的地形暴露才升级。
+训练指令沿用现有 HIM 的范围：vx 为 (-0.4,0.8)、vy 为 ±0.3 m/s、yaw rate 为 ±0.6 rad/s；指令在 3–5 s 之间随机重采样，减少固定周期切换造成的动作尖峰。地形课程还要求完成回合的平均 XY 速度误差不超过 0.8 m/s，避免策略只靠走过距离提前进入更难地形。
+
+当前稳定性训练默认值为：归一化动作裁剪到 ±1.0、PPO rollout 为每个环境 48 步、HIM 辅助估计器每轮 5 个 epoch。它们会写入每个 run 的 `params/agent.yaml`，便于和旧的 24 步、无动作裁剪实验对照。
 
 ## 使用方法
 
@@ -61,7 +63,7 @@ python scripts/train.py LgDog1-Rough-Blind-HIM-Standard \
 python scripts/train.py LgDog1-Rough-Blind-HIM-Standard \
   --env.scene.num-envs=1024 --agent.max-iterations=16000 \
   --agent.logger=tensorboard --agent.seed=42 \
-  --agent.run-name=V8_him_standard_seed42 --enable-nan-guard True
+  --agent.run-name=V9_stability_seed42 --enable-nan-guard True
 ```
 
 `V8` 这里只是新实验的命名示例，并不表示已经启动训练。新日志位于 `logs/rsl_rl/lgdog1_velocity_blind_him_standard_v1/`。
@@ -98,9 +100,9 @@ python scripts/check_lgdog_him.py --task LgDog1-Rough-Blind-HIM-Standard \
 
 后续评估重点是标准台阶/坡面的通过率、摔倒率、速度误差和动作稳定性。旧 V7 使用不同地形和 critic 信息，不能仅凭训练总回报与新任务直接排名。
 
-## 本次已完成的验证（2026-10-17）
+## 本次已完成的验证（2026-10-21）
 
-- 32 项 CPU 测试通过，新增 5 项检查标准地形分布、扫描删除、HIM 历史输入、独立奖励配置、任务注册与 V7 隔离。
+- 45 项 CPU 测试通过，覆盖标准地形分布、扫描删除、HIM 历史输入、独立奖励配置、任务注册与 V7 隔离，以及稳定性训练默认值和课程速度门槛。
 - 真实 mjlab CPU 环境确认 actor `[4,6,47]`、critic `[4,74]`、干净目标 `[4,47]`、速度标签 `[4,3]`，历史推进及局部 reset 正确。
 - 四环境、每轮十二个控制步、两轮 PPO/HIM 更新完成，估计器参数发生更新。
 - ONNX 完整结构检查、ONNX Runtime/PyTorch 数值对齐和 history metadata 校验通过，输出 `[1,12]`。

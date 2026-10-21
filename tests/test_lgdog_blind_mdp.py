@@ -64,6 +64,16 @@ class CurriculumTests(unittest.TestCase):
       torch.tensor([2.]), torch.tensor([5.]), torch.tensor([False]), 20.)
     self.assertFalse(up.item())
 
+  def test_velocity_quality_gate_blocks_promotion(self):
+    args = (
+      torch.tensor([5.]), torch.tensor([4.5]), torch.tensor([2.]),
+      torch.tensor([20.]), torch.tensor([False]), 20.,
+    )
+    up_bad, _, _ = mdp.terrain_decisions(*args, velocity_error=torch.tensor([.9]))
+    up_good, _, _ = mdp.terrain_decisions(*args, velocity_error=torch.tensor([.7]))
+    self.assertFalse(up_bad.item())
+    self.assertTrue(up_good.item())
+
   def test_progress_ignores_drift_backwards_and_overspeed(self):
     command = torch.tensor([[1., 0., 0.]] * 4)
     env = NS(step_dt=.02, scene={"robot": NS(data=NS(
@@ -100,6 +110,18 @@ class CurriculumTests(unittest.TestCase):
     self.assertEqual(selected, [([0], [True], [False])])
     self.assertEqual(result["episode_progress_m"].item(), 5.)
     self.assertEqual(env.metrics_manager._episode_sums["tracking_progress"][0].item(), 5.)
+
+  def test_legacy_curriculum_can_disable_velocity_gate(self):
+    expected = torch.tensor([5.])
+    progress = torch.tensor([4.5])
+    exposure = torch.tensor([2.])
+    elapsed = torch.tensor([20.])
+    failed = torch.tensor([False])
+    up, _, _ = mdp.terrain_decisions(
+      expected, progress, exposure, elapsed, failed, 20.,
+      velocity_error=None,
+    )
+    self.assertTrue(up.item())
 
 
 class ContactTests(unittest.TestCase):

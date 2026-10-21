@@ -56,6 +56,13 @@ def lgdog1_ppo_runner_cfg(experiment_name: str = "lgdog1_velocity") -> RslRlOnPo
     ),
     experiment_name=experiment_name,
     save_interval=100,
-    num_steps_per_env=24,
+    # A 24-step rollout is only 0.48 s at the current 50 Hz control rate.  The
+    # longer rollout gives HIM more complete command/response segments while
+    # keeping the batch size manageable on the LgDog training GPU.
+    num_steps_per_env=48,
     max_iterations=10001,
+    # The previous runs had unbounded policy outputs.  Clip normalized actions
+    # before they are converted to joint targets; the value is still exposed in
+    # agent.yaml so an A/B run can set it back to null explicitly.
+    clip_actions=1.0,
   )

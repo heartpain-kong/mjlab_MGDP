@@ -157,9 +157,9 @@ def lgdog1_rough_env_cfg(
   #   于是表现成原地小碎步 + 转圈。提到 0.25 给它足量样本。
   #   （只改 LgDog1，不动 Go2/G1 共用的 velocity_env_cfg.py）
   twist_cmd.rel_standing_envs = 0.25
-  # 指令重采样间隔：Go2 用 mjlab 默认 (3.0, 8.0)；这里保留用户 legged_gym 的固定 3.0 s
-  # （不属于本次"对齐 Go2"的四类参数，想一起换就把下面这行删掉）。
-  twist_cmd.resampling_time_range = (3.0, 3.0)
+  # 指令重采样不再固定为 3 s。固定切换会在每次换指令时制造动作尖峰，
+  # 3~5 s 仍能覆盖足够多的指令，同时给策略更长的稳定响应窗口。
+  twist_cmd.resampling_time_range = (3.0, 5.0)
 
   ##
   # 观测噪声：取自用户 LgDog1_config.noise.noise_scales（noise_level = 1.0）

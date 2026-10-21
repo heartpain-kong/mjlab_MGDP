@@ -56,7 +56,10 @@ class HIMModelCfg(RslRlModelCfg):
 @dataclass
 class HIMPpoCfg(RslRlPpoAlgorithmCfg):
   estimator_learning_rate: float = 1e-3
-  estimator_epochs: int = 1
+  # Match the five PPO epochs: HIMPPO performs one auxiliary pass per
+  # mini-batch in each estimator epoch, so this yields 5 * 4 updates instead
+  # of only 4 updates per rollout.
+  estimator_epochs: int = 5
 
 
 def lgdog1_him_runner_cfg(experiment_name="lgdog1_velocity_blind_him_v1"):

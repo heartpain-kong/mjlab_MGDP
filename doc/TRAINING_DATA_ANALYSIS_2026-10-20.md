@@ -23,7 +23,7 @@ V2 的存活和腿部接触最好，但速度误差仍接近 1 m/s。V8 的地�
 
 10 月 19 日 V8 的 `Episode_Reward/action_rate_l2` 后期平均约 `-14.6`，远高于其它 run 的约 `-0.6` 到 `-0.9`。这类异常会让总 reward 失真，通常表示策略输出或相邻动作发生尖峰。当前训练快照的 `agent.clip_actions` 是 `null`。
 
-建议下一组实验把 `clip_actions` 设为 `1.0`，并增加一个动作统计：每轮记录 `max(abs(action))`、`mean(abs(action))` 和 `mean(abs(action - previous_action))`。先比较开关裁剪的两组短训练，再决定是否长期保留。
+源码已将新训练默认 `clip_actions` 设为 `1.0`；仍建议每轮记录 `max(abs(action))`、`mean(abs(action))` 和 `mean(abs(action - previous_action))`，并与旧的 `null` 实验对照。
 
 ### 3. 实验名称和真实 seed 不一致
 
@@ -31,7 +31,7 @@ V2 的存活和腿部接触最好，但速度误差仍接近 1 m/s。V8 的地�
 
 ### 4. 课程推进快于策略稳定
 
-V8 的 terrain level 达到约 1.0，但 `sustained_leg_contact` 仍约 0.67，速度误差约 1.0 m/s。建议课程升级同时加入稳定性门槛：只有速度误差、持续腿接触和 episode 完成率同时达标时才升阶；或者先固定 level 0–1 训练 3000–5000 轮，再开放完整课程。
+V8 的 terrain level 达到约 1.0，但 `sustained_leg_contact` 仍约 0.67，速度误差约 1.0 m/s。源码已在 blind 课程升级时加入平均 XY 速度误差 `<=0.8 m/s` 门槛，并继续使用回合完成、跟踪进度和离开出生平台条件。当前仍建议先固定 level 0–1 训练 3000–5000 轮，再观察是否需要开放更高等级。
 
 ### 5. 指令数据需要分桶统计
 
@@ -48,8 +48,8 @@ V8 的 terrain level 达到约 1.0，但 `sustained_leg_contact` 仍约 0.67，�
 
 先做三组短实验，每组 3000–5000 轮、相同 seed 和相同环境数：
 
-1. **V4 baseline**：当前 V3 reward，恢复 `feet_stumble=-0.5`，不改其它项。
-2. **V4 clip**：V4 baseline + `clip_actions=1.0`。
-3. **V4 curriculum**：V4 clip + 先固定低等级地形，稳定后再开放课程。
+1. **V9 stability**：当前 reward，`feet_stumble=-0.5`、`clip_actions=1.0`、rollout 48、HIM estimator epochs 5。
+2. **V9 curriculum**：V9 stability + 先固定低等级地形，稳定后再开放课程。
+3. **V9 reward A/B**：只改 `foot_gait` 或 `foot_clearance` 的一个参数，验证 reward 冲突是否仍存在。
 
 每组只比较以下指标：`velocity_error_xy`、`mean_episode_length`、`sustained_leg_contact`、`terrain_levels/level_mean`、`max(abs(action))` 和 `action_rate_l2`。通过标准建议为：速度误差低于 V2、持续腿接触低于 V2、episode length 不低于 V2，并且动作统计没有尖峰。

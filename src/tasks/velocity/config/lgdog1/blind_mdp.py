@@ -80,17 +80,30 @@ def outside_spawn_platform(env, radius=1.75):
   return (xy.abs().amax(dim=1) > radius).float() * env.step_dt
 
 
-def terrain_decisions(expected, progress, exposure, elapsed, failed, episode_s):
-  """Episode-level hysteresis, independent of the last resampled command."""
+def terrain_decisions(
+  expected, progress, exposure, elapsed, failed, episode_s,
+  velocity_error=None, max_velocity_error=0.8,
+):
+  """Episode-level hysteresis with a velocity-quality gate.
+
+  ``velocity_error`` is optional for compatibility with the generic unit
+  tests and older callers.  LgDog blind training supplies the episode mean
+  XY velocity error so a run cannot promote terrain solely by travelling far
+  while tracking the command poorly.
+  """
   eligible = expected >= 1.0
   ratio = progress / expected.clamp_min(1e-6)
+  if velocity_error is None:
+    tracking_ok = torch.ones_like(eligible, dtype=torch.bool)
+  else:
+    tracking_ok = velocity_error <= max_velocity_error
   up = (eligible & ~failed & (elapsed >= 0.9 * episode_s)
-        & (ratio >= 0.75) & (progress >= 2.0) & (exposure >= 1.0))
+        & tracking_ok & (ratio >= 0.75) & (progress >= 2.0) & (exposure >= 1.0))
   down = eligible & (failed | (ratio < 0.35)) & ~up
   return up, down, ratio
 
 
-def terrain_levels_tracking(env, env_ids):
+def terrain_levels_tracking(env, env_ids, max_velocity_error=None):
   """Read completed-episode sums BEFORE mjlab 1.2 MetricsManager.reset()."""
   sums = env.metrics_manager._episode_sums
   expected = sums["commanded_distance"][env_ids]
@@ -98,8 +111,17 @@ def terrain_levels_tracking(env, env_ids):
   exposure = sums["outside_spawn_platform"][env_ids]
   failed = env.termination_manager.terminated[env_ids]
   elapsed = env.episode_length_buf[env_ids] * env.step_dt
+  # MetricsManager accumulates this term once per control step.  Divide by the
+  # completed episode duration to obtain m/s before applying the promotion
+  # gate.  Older snapshots may not contain the metric, so keep a safe fallback.
+  velocity_error = None
+  if "velocity_error_xy_mps" in sums:
+    velocity_error = sums["velocity_error_xy_mps"][env_ids] / elapsed.clamp_min(env.step_dt)
+  gate_error = velocity_error if max_velocity_error is not None else None
   up, down, ratio = terrain_decisions(
-    expected, progress, exposure, elapsed, failed, env.max_episode_length_s
+    expected, progress, exposure, elapsed, failed, env.max_episode_length_s,
+    velocity_error=gate_error,
+    max_velocity_error=0.8 if max_velocity_error is None else max_velocity_error,
   )
   terrain = env.scene.terrain
   terrain.update_env_origins(env_ids, up, down)
@@ -111,6 +133,10 @@ def terrain_levels_tracking(env, env_ids):
     "promote_fraction": up.float().sum() / count,
     "demote_fraction": down.float().sum() / count,
     "tracking_ratio": torch.where(eligible, ratio, 0.0).sum() / count,
+    "velocity_error_xy_mps": (
+      torch.where(eligible, velocity_error, torch.zeros_like(expected)).sum() / count
+      if velocity_error is not None else torch.tensor(0.0, device=expected.device)
+    ),
     "reset_batch_failure_fraction": (failed & completed).float().sum() / completed.sum().clamp_min(1),
     "episode_commanded_m": expected.mean(),
     "episode_progress_m": progress.mean(),

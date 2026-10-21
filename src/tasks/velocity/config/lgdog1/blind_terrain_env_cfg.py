@@ -108,5 +108,9 @@ def lgdog1_blind_terrain_env_cfg(
     cfg.curriculum.pop("command_vel", None)
     cfg.curriculum["terrain_levels"] = CurriculumTermCfg(
       func=blind_mdp.terrain_levels_tracking,
+      # The standard Rough + HIM run gets the additional velocity-quality gate.
+      # Keep legacy TerrainV4/V7 promotion behavior unchanged for checkpoint
+      # comparisons.
+      params={"max_velocity_error": 0.8} if reward_profile == "him_standard" else {},
     )
   return cfg
