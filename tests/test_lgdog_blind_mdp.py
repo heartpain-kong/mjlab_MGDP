@@ -111,6 +111,23 @@ class CurriculumTests(unittest.TestCase):
     self.assertEqual(result["episode_progress_m"].item(), 5.)
     self.assertEqual(env.metrics_manager._episode_sums["tracking_progress"][0].item(), 5.)
 
+  def test_velocity_gate_uses_control_step_mean(self):
+    selected = []
+    terrain = NS(terrain_levels=torch.tensor([1.]),
+      update_env_origins=lambda ids, up, down: selected.append((ids.tolist(), up.tolist(), down.tolist())))
+    # 0.2 m/s accumulated over 20 seconds at a 50 Hz control rate.  The raw
+    # sum is 200, while dividing by elapsed seconds would incorrectly yield 10.
+    env = NS(metrics_manager=NS(_episode_sums={
+      "commanded_distance": torch.tensor([5.]), "tracking_progress": torch.tensor([4.5]),
+      "outside_spawn_platform": torch.tensor([2.]),
+      "velocity_error_xy_mps": torch.tensor([200.])}),
+      termination_manager=NS(terminated=torch.tensor([False])),
+      episode_length_buf=torch.tensor([1000]), step_dt=.02, max_episode_length_s=20.,
+      scene=NS(terrain=terrain))
+    result = mdp.terrain_levels_tracking(env, torch.tensor([0]), max_velocity_error=.8)
+    self.assertEqual(selected, [([0], [True], [False])])
+    self.assertAlmostEqual(result["velocity_error_xy_mps"].item(), .2, places=6)
+
   def test_legacy_curriculum_can_disable_velocity_gate(self):
     expected = torch.tensor([5.])
     progress = torch.tensor([4.5])

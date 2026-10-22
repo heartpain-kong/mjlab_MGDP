@@ -112,11 +112,14 @@ def terrain_levels_tracking(env, env_ids, max_velocity_error=None):
   failed = env.termination_manager.terminated[env_ids]
   elapsed = env.episode_length_buf[env_ids] * env.step_dt
   # MetricsManager accumulates this term once per control step.  Divide by the
-  # completed episode duration to obtain m/s before applying the promotion
-  # gate.  Older snapshots may not contain the metric, so keep a safe fallback.
+  # number of control steps to obtain the episode mean in m/s before applying
+  # the promotion gate.  Dividing by elapsed seconds would multiply a per-step
+  # m/s sum by 1 / step_dt (50x at the current 0.02 s control period).
+  # Older snapshots may not contain the metric, so keep a safe fallback.
   velocity_error = None
   if "velocity_error_xy_mps" in sums:
-    velocity_error = sums["velocity_error_xy_mps"][env_ids] / elapsed.clamp_min(env.step_dt)
+    episode_steps = (elapsed / env.step_dt).clamp_min(1.0)
+    velocity_error = sums["velocity_error_xy_mps"][env_ids] / episode_steps
   gate_error = velocity_error if max_velocity_error is not None else None
   up, down, ratio = terrain_decisions(
     expected, progress, exposure, elapsed, failed, env.max_episode_length_s,
