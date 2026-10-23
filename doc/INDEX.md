@@ -5,6 +5,7 @@
 | 想做什么 | 文档 |
 |---|---|
 | 使用浏览器面板、短命令、了解目录迁移 | [WORKBENCH.md](WORKBENCH.md) |
+| 把训练曲线当 K 线看（曲线终端） | [KLINE.md](KLINE.md) |
 | 调整奖励、查看最终权重和函数位置 | [REWARDS.md](REWARDS.md) |
 | V2/V8 训练 run、课程和动作数据分析 | [TRAINING_DATA_ANALYSIS_2026-10-20.md](TRAINING_DATA_ANALYSIS_2026-10-20.md) |
 | V2 日志分析与 V3 文献调参 | [REWARD_LITERATURE_V3.md](REWARD_LITERATURE_V3.md) |

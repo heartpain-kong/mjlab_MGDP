@@ -10,6 +10,7 @@ python lgdog.py
 
 ```bash
 python lgdog.py tasks                      # 看 7 个任务的短名称
+python lgdog.py kline                      # 曲线终端：把 TensorBoard 曲线当 K 线看（端口 8766）
 python lgdog.py train standard --envs 64 --iterations 2
 python lgdog.py play standard              # 自动选对应任务最新 checkpoint
 python lgdog.py sim standard --vx 0.4      # 自动选对应任务最新 ONNX
@@ -17,6 +18,17 @@ python lgdog.py rewards standard --term foot_clearance
 ```
 
 正式训练示例：`python lgdog.py train standard --envs 1024 --iterations 16000 --run-name V8_him_standard_seed42`。环境数应按显存调整。面板本身仅用 Python 标准库；训练仍需要原来的 mjlab / MuJoCo / PyTorch 环境。
+
+## 看曲线：曲线战士（TensorBoard 转 K 线）
+
+```bash
+python lgdog.py kline            # 浏览器打开 http://127.0.0.1:8766
+```
+
+把 `logs/rsl_rl` 下的标量曲线按训练步切成蜡烛图：分时曲线、短/中/长/全程 K、MA 均线、波动柱、
+自选轮次、最近 5 根高低、逐点流水，外加「全部指标 / 轮次对比 / 数据体检 / 指标词典 / 导出 CSV」。
+只读本机 event 文件，不联网；第一次读大的 run 要十几秒，之后走 `logs/kline_cache/` 秒开。
+细节见 [doc/KLINE.md](doc/KLINE.md)。
 
 ## 日常只需要找这几处
 
@@ -27,10 +39,13 @@ python lgdog.py rewards standard --term foot_clearance
 | `src/tasks/velocity/config/lgdog1/` | 地形、观测、课程、任务注册与 PPO 配置 |
 | `logs/rsl_rl/` | 训练 checkpoint、ONNX 和配置快照 |
 | `logs/dashboard/` | 面板启动的进程记录与输出日志 |
+| `logs/kline_cache/` | 曲线终端的 event 解析缓存（可随时删，删了会重解析） |
+| `src/kline/` | 曲线终端：event 解析、窗口聚合、只读 HTTP 服务与页面 |
 | [doc/](doc/INDEX.md) | 使用与技术文档 |
 | `archive/` | 旧补丁、旧验证记录和历史清单 |
 
 - [面板操作与目录迁移说明](doc/WORKBENCH.md)
+- [曲线终端（TensorBoard 转 K 线）](doc/KLINE.md)
 - [标准地形 HIM 训练说明](doc/LGDOG_HIM_STANDARD.md)
 - [奖励调参](doc/REWARDS.md)
 - [环境安装](doc/setup_zh.md)

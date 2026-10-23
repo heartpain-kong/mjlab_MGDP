@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0e1015">
+<title>曲线战士 · 老老实实看 TensorBoard 很枯燥吧？</title>
+<meta name="description" content="把 LgDog 的 TensorBoard 曲线当行情看：按训练步长窗口合成蜡烛图，配均线、波动柱、盘口和逐点流水。">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/assets/app.css">
+</head>
+<body>
+
+<!-- ══════════════════════ 顶栏 ══════════════════════ -->
+<header class="topbar">
+  <div class="brand" title="老老实实看 TensorBoard 很枯燥吧？">
+    <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+      <rect width="32" height="32" rx="7" fill="#1b202b"/>
+      <rect x="7" y="11" width="5" height="14" rx="1" fill="#ff4d4f"/>
+      <rect x="9" y="7" width="1" height="20" fill="#ff4d4f"/>
+      <rect x="19" y="8" width="5" height="11" rx="1" fill="#00b578"/>
+      <rect x="21" y="5" width="1" height="18" fill="#00b578"/>
+    </svg>
+    <span class="brand-text">曲线战士<em>老老实实看 TensorBoard 很枯燥吧？</em></span>
+  </div>
+
+  <div class="search-wrap">
+    <span class="search-ico">🔍</span>
+    <input id="search" type="text" autocomplete="off" spellcheck="false"
+           placeholder="搜索轮次 / 指标  如：V8、reward、地形">
+    <div id="searchResults" class="search-results" hidden></div>
+  </div>
+
+  <div class="topbar-ctrl">
+    <label class="ctrl">
+      <span>行情刷新</span>
+      <select id="refreshRate">
+        <option value="3000">3 秒</option>
+        <option value="5000">5 秒</option>
+        <option value="10000">10 秒</option>
+        <option value="30000">30 秒</option>
+        <option value="60000" selected>1 分钟（默认）</option>
+        <option value="300000">5 分钟</option>
+        <option value="0">手动刷新</option>
+      </select>
+    </label>
+    <label class="ctrl">
+      <span>涨跌颜色</span>
+      <select id="colorMode">
+        <option value="cn" selected>红＝上升（国内习惯）</option>
+        <option value="us">绿＝上升（国外习惯）</option>
+      </select>
+    </label>
+    <label class="ctrl">
+      <span>波动柱口径</span>
+      <select id="volumeMetric">
+        <option value="range" selected>窗口振幅</option>
+        <option value="std">标准差</option>
+        <option value="count">记录点数</option>
+        <option value="rel">相对变化</option>
+      </select>
+    </label>
+    <button id="btnReplay" class="btn" title="从头逐根播放 K 线，看训练是怎么一步步长出来的">🎬 回放</button>
+    <button id="btnHelp" class="btn" title="术语对照表：每个炒股词用训练的话讲一遍">？术语</button>
+    <button id="btnRefresh" class="btn" title="立即刷新一次">⟳ 刷新</button>
+    <div class="clock"><span id="clock">--:--:--</span><em id="clockDate">----</em></div>
+  </div>
+</header>
+
+<!-- ══════════════════════ 功能条 ══════════════════════
+     行情终端该有的小工具：指标列表、轮次对比、数据体检、指标词典、导出、重扫。 -->
+<div class="wx-bar">
+  <button class="wxbtn" data-drawer="tagDrawer" title="按分组列出这个轮次的全部指标，点一下换主图"><span>📊</span> <b>全部指标</b></button>
+  <button class="wxbtn" data-drawer="compareDrawer" title="所有轮次 × 关键指标的一张表，跨轮次比同区间"><span>🧭</span> <b>轮次对比</b></button>
+  <button class="wxbtn" data-drawer="healthDrawer" title="NaN、台阶、断档、常量占位 —— 这条曲线靠不靠谱"><span>🧪</span> <b>数据体检</b></button>
+  <button class="wxbtn" data-drawer="dictDrawer" title="每个指标的取向和一句话解释"><span>📚</span> <b>指标词典</b></button>
+  <button class="wxbtn" id="btnExport" title="把当前指标按当前窗口导出成 CSV"><span>⬇</span> <b>导出K线</b></button>
+  <button class="wxbtn" id="btnRescan" title="重新扫一遍 logdir（新开的训练不用重启服务）"><span>🔁</span> <b>重扫目录</b></button>
+  <span class="wx-bar-hint" id="wxHint"></span>
+</div>
+
+<!-- ══════════════════════ 训练指数 ══════════════════════ -->
+<div class="index-strip">
+  <div class="strip-title">训练指数</div>
+  <div class="strip-list" id="indexList"><span class="idx-empty">加载中…</span></div>
+</div>
+
+<!-- ══════════════════════ 主体 ══════════════════════ -->
+<main class="layout">
+
+  <!-- ───────── 左：当前轮次 + 收藏 ───────── -->
+  <aside class="pane pane-left">
+    <div class="pane-head">
+      <span>当前轮次</span>
+      <span class="pane-head-tools">
+        <button class="mini" id="btnReloadRun" title="重新读取这个轮次的 event 文件">⟳</button>
+      </span>
+    </div>
+    <div class="scroll" id="runInfo"></div>
+
+    <div class="pane-head">
+      <span>轮次收藏</span>
+      <span class="pane-head-tools">
+        <button class="mini" id="btnSortWatch" title="排序：默认 / 按当前指标 / 按名称">⇅</button>
+        <button class="mini" id="btnAllRuns" title="全部轮次">＋</button>
+      </span>
+    </div>
+    <div class="scroll grow" id="watchlist"></div>
+  </aside>
+
+  <!-- ───────── 中：行情头 + 主图 + 副图 ───────── -->
+  <section class="pane pane-center">
+
+    <div class="quote-head" id="quoteHead">
+      <div class="qh-left">
+        <div class="qh-name">
+          <h1 id="qName">—</h1>
+          <button type="button" class="qh-star" id="qStar" title="收藏这个轮次">☆</button>
+          <span class="qh-code" id="qCode">—</span>
+          <span class="qh-tags" id="qTags"></span>
+        </div>
+        <div class="qh-price">
+          <span class="qh-last" id="qPrice">—</span>
+          <span class="qh-unit" id="qUnit"></span>
+          <span class="qh-chg" id="qChange">—</span>
+          <span class="qh-pct" id="qPct">—</span>
+        </div>
+        <div class="qh-tagline"><span id="qTagName">—</span><code id="qTagRaw"></code></div>
+      </div>
+      <div class="qh-stats" id="qStats"></div>
+      <div class="ticker" id="warnTicker" hidden title="点开看数据体检">
+        <span class="ticker-tag" id="tickerTag">⚠ 提示</span>
+        <div class="ticker-view" id="tickerView"><div class="ticker-run" id="tickerRun"></div></div>
+        <span class="ticker-more">全部体检 ›</span>
+      </div>
+    </div>
+
+    <div class="tabbar" id="periodTabs">
+      <button data-period="trend" class="tab active" title="原始记录点连成的曲线，和 TensorBoard 里那条一样">分时</button>
+      <button data-period="short" class="tab" title="细窗口：一屏大约 120 根蜡烛">短K</button>
+      <button data-period="mid" class="tab" title="中窗口：一屏大约 40 根蜡烛">中K</button>
+      <button data-period="long" class="tab" title="粗窗口：一屏大约 12 根蜡烛，噪音最少">长K</button>
+      <button data-period="full" class="tab" title="整个轮次合成一根蜡烛：开盘＝第一次记录，收盘＝最后一次">全程K</button>
+      <span class="tab-spacer"></span>
+      <span class="chart-hint" id="chartHint"></span>
+      <button class="mini" id="btnZoomReset" title="重置视图（回到默认缩放）">🔄️</button>
+      <button class="mini" id="btnFull" title="全屏看主图（再点一次退出，也可按 Esc）">🖥️</button>
+    </div>
+
+    <div class="chart-box" id="mainChartBox">
+      <div id="mainChart" class="chart"></div>
+      <div class="loading-mask" id="loadingMask" hidden><span id="loadingText">正在解析 event 文件…</span></div>
+    </div>
+
+    <div class="tabbar sub" id="subTabs">
+      <button data-subgroup="reward" class="tab active" title="奖励项：哪一项在涨、哪一项在扣分">奖励</button>
+      <button data-subgroup="curriculum" class="tab" title="课程与地形：等级是不是在往上爬">课程</button>
+      <button data-subgroup="loss" class="tab" title="损失与熵：策略有没有发散">损失</button>
+      <button data-subgroup="metrics" class="tab" title="误差类指标：跟得准不准">指标</button>
+      <button data-subgroup="perf" class="tab" title="性能：帧率和耗时">性能</button>
+      <span class="tab-spacer"></span>
+      <select id="subSelect" class="sub-select" title="副图画哪个指标"></select>
+      <button id="btnOverlay" class="tab ovtab disabled" title="把副图这条线同时画到上面的主图，用最外侧那根刻度">📈 叠到主图</button>
+    </div>
+    <div class="chart-box sub">
+      <div id="subChart" class="chart"></div>
+    </div>
+
+  </section>
+
+  <!-- ───────── 右：盘口 + 流水 ───────── -->
+  <aside class="pane pane-right">
+    <section class="rblock">
+      <div class="pane-head"><span>最近 5 根高低</span></div>
+      <div class="orderbook" id="orderbook"></div>
+    </section>
+
+    <section class="rblock grow">
+      <div class="pane-head"><span>逐点流水 <em class="dim" id="tapeHint">最近记录，倒序</em></span></div>
+      <div class="tape-head"><span>步</span><span>值</span><span>Δ</span></div>
+      <div class="scroll grow" id="tape"></div>
+    </section>
+  </aside>
+
+</main>
+
+<!-- ══════════════════════ 状态栏 ══════════════════════ -->
+<footer class="statusbar">
+  <span id="statusLeft" class="dim">就绪</span>
+  <span class="grow"></span>
+  <span id="statusSrc" class="dim"></span>
+  <span id="statusNext" class="dim"></span>
+  <span class="dim" id="verTag" title="本地面板版本">v1.0.0</span>
+</footer>
+
+<div class="disclaimer" id="disclaimer" title="点这里看完整说明">
+  ⚠️ 本页面只是把 TensorBoard 曲线套了层行情皮的本地小工具，不构成任何训练结论 · 点此看完整说明
+</div>
+
+<!-- ══════════════════════ 全部轮次抽屉 ══════════════════════ -->
+<div class="drawer" id="runDrawer" hidden>
+  <div class="drawer-panel">
+    <div class="drawer-head">
+      <strong>全部轮次</strong>
+      <input id="drawerFilter" placeholder="过滤：轮次名 / 实验名 / 指标…">
+      <button class="mini" data-close>✕</button>
+    </div>
+    <div class="drawer-body" id="drawerBody"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════ 全部指标 ══════════════════════ -->
+<div class="drawer" id="tagDrawer" hidden>
+  <div class="drawer-panel">
+    <div class="drawer-head">
+      <strong>全部指标</strong>
+      <span class="wx-sub" id="tagDrawerSub"></span>
+      <button class="mini" data-close>✕</button>
+    </div>
+    <div class="drawer-body" id="tagDrawerBody"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════ 轮次对比 ══════════════════════ -->
+<div class="drawer" id="compareDrawer" hidden>
+  <div class="drawer-panel wide">
+    <div class="drawer-head">
+      <strong>轮次对比</strong>
+      <span class="wx-sub" id="compareSub">取各轮次最后一个记录点</span>
+      <button class="mini" data-close>✕</button>
+    </div>
+    <div class="drawer-body" id="compareBody"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════ 数据体检 ══════════════════════ -->
+<div class="drawer" id="healthDrawer" hidden>
+  <div class="drawer-panel">
+    <div class="drawer-head">
+      <strong>数据体检</strong>
+      <span class="wx-sub" id="healthSub"></span>
+      <button class="mini" data-close>✕</button>
+    </div>
+    <div class="drawer-body" id="healthBody"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════ 指标词典 ══════════════════════ -->
+<div class="drawer" id="dictDrawer" hidden>
+  <div class="drawer-panel">
+    <div class="drawer-head">
+      <strong>指标词典</strong>
+      <input id="dictFilter" placeholder="过滤指标…">
+      <button class="mini" data-close>✕</button>
+    </div>
+    <div class="drawer-body" id="dictBody"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════ 术语对照表 ══════════════════════ -->
+<div class="drawer" id="helpDrawer" hidden>
+  <div class="drawer-panel help-panel">
+    <div class="drawer-head">
+      <strong>这些炒股词，用训练的话讲</strong>
+      <button class="mini" data-close>✕</button>
+    </div>
+    <div class="drawer-body help-body">
+      <h4>这一屏到底是什么</h4>
+      <p>把 <b>TensorBoard 里的一条曲线</b>当成一张<b>行情图</b>：横轴是训练步（不是日期），纵轴是指标值（不是价格）。
+        每次刷新读的是你本机的 <code>events.out.tfevents*</code>，没有任何联网请求。</p>
+
+      <h4>图上的词</h4>
+      <dl>
+        <dt>轮次 / 城市</dt><dd>一个训练 run（<code>logs/rsl_rl/&lt;实验&gt;/&lt;时间戳_run名&gt;</code>）。左边那一列就是自选列表，和你收藏城市是一个手感。</dd>
+        <dt>指标 / 品种</dt><dd>一条 scalar，比如 <code>Train/mean_reward</code>。换指标 = 换一只股票，整张图连同盘口、流水一起换掉。</dd>
+        <dt>分时</dt><dd>原始记录点直接连起来，就是 TensorBoard 里那条线。点太多时按顺序等分取均值，形状不变。</dd>
+        <dt>蜡烛 / K 线</dt><dd>把连续若干个记录点<b>按训练步切成窗口</b>：<b>开盘</b>＝窗口里第一个值，<b>收盘</b>＝最后一个值，<b>细线两端</b>＝窗口里的最高 / 最低。一根蜡烛告诉你「这一段训练里指标在多大范围内抖」。</dd>
+        <dt>短K / 中K / 长K / 全程K</dt><dd>窗口宽度的四档预设，按这个轮次的总步数自动取整成 1/2/5×10ⁿ 步。窗口越宽噪音越少、越能看出趋势。</dd>
+        <dt>均线 MA5 / MA10 / MA20 / MA60</dt><dd>最近 5 / 10 / 20 / 60 根蜡烛收盘价的平均，用来判断大方向。数字越大越平滑。</dd>
+        <dt>波动柱 / 成交量</dt><dd>下面那排柱子，口径在顶栏切：<b>窗口振幅</b>（最高−最低）、<b>标准差</b>、<b>记录点数</b>、<b>相对变化</b>。柱子高＝这一段训练抖得厉害。</dd>
+        <dt>基准线（灰色虚线）</dt><dd>图上第一根蜡烛的开盘值，相当于行情里的「昨收」。涨跌幅都是跟它比的。</dd>
+        <dt>未收盘的最后一根</dt><dd>训练还在写日志时，最后一个窗口没满，那根蜡烛会继续长 —— 和股票软件里今天那根一样。</dd>
+        <dt>叠到主图</dt><dd>副图那条线用最外侧的刻度画到主图上，方便看两个指标是不是同涨同跌。</dd>
+      </dl>
+
+      <h4>右边那两栏</h4>
+      <dl>
+        <dt>最近 5 根高低</dt><dd>最近五根蜡烛的最高和最低，上下一对照就知道这一段是在收敛还是在震荡。</dd>
+        <dt>逐点流水</dt><dd>最近每个记录点的步数、值、和上一点的差。找「哪一步突然跳」就看它。</dd>
+      </dl>
+
+      <h4>键盘和链接</h4>
+      <dl>
+        <dt><code>↑</code> / <code>↓</code></dt><dd>在轮次之间上下切换（抽屉打开、或者光标在输入框里时不生效）。</dd>
+        <dt><code>Esc</code></dt><dd>关闭抽屉 / 退出全屏。</dd>
+        <dt>滚轮 · 拖动 · 双击</dt><dd>缩放主图（以光标为锚点）、左右平移、复位。</dd>
+        <dt>深链接</dt><dd><code>?run=V10_seed42&amp;tag=Curriculum/terrain_levels/level_mean&amp;period=long&amp;overlay=1</code>
+          可以直接打开某个视角，方便发给别人；<code>?drawer=compare</code> 会直接打开某个抽屉。</dd>
+      </dl>
+
+      <h4>上面那几个按钮</h4>
+      <dl>
+        <dt>📊 全部指标</dt><dd>按分组列出这个轮次的全部 scalar。点名字换主图，点「副」换副图。</dd>
+        <dt>🧭 轮次对比</dt><dd>所有轮次 × 关键指标的一张表。⚠️ 跨轮次比较务必取同区间：这套任务的指令范围课程会在 iteration 5000 附近放宽，之后误差类指标会台阶式变差。</dd>
+        <dt>🧪 数据体检</dt><dd>NaN、常量占位、异常台阶、时间断档、采样过稀 —— 逐条列出来，附上出问题的 step。</dd>
+        <dt>📚 指标词典</dt><dd>每个指标的中文名、取向（越大越好 / 越小越好）和一句话解释。</dd>
+        <dt>⬇ 导出K线</dt><dd>把当前指标按当前窗口导出 CSV，列是 run / tag / 窗口 / 开高低收 / 均值 / 标准差 / 点数 / 起止时间。</dd>
+        <dt>🎬 回放</dt><dd>从第一根开始逐根长出来，看训练早期是怎么抖过来的。</dd>
+      </dl>
+
+      <h4>数据从哪来</h4>
+      <dl>
+        <dt>曲线</dt><dd>本机 <code>logs/rsl_rl/</code> 下的 event 文件，由 <code>tensorboard</code> 的 EventAccumulator 读取，第一次读会建缓存（<code>logs/kline_cache/</code>），之后秒开。</dd>
+        <dt>缓存什么时候失效</dt><dd>缓存头记着源文件的修改时间和大小，文件一变就自动重读；只想让它重扫目录的话点「🔁 重扫目录」。</dd>
+        <dt>其它数据源</dt><dd>启动时可以用 <code>--logdir</code> 多加几个目录（比如归档到别处的训练数据），多个目录的轮次会并排列出来。</dd>
+      </dl>
+
+      <p class="help-foot">一句话：<b>把「训练步」当日期、把「指标值」当价格</b>。红＝这一段在涨，绿＝在跌，蜡烛＝一个窗口，均线＝滑动平均。
+        <span class="dim">· 本地面板 v1.0.0</span></p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════ 完整说明（免责） ══════════════════════ -->
+<div class="drawer" id="aboutDrawer" hidden>
+  <div class="drawer-panel help-panel">
+    <div class="drawer-head">
+      <strong>(｡•́︿•̀｡) 那个……有几件事得先说清楚</strong>
+      <button class="mini" data-close>✕</button>
+    </div>
+    <div class="drawer-body help-body">
+      <p><b>这不是行情软件，是个给训练曲线套了层炒股软件皮的本地小玩具。</b>
+        横轴的「步」是训练的 iteration，纵轴的「价格」是 TensorBoard 里的 scalar。红涨绿跌只是配色。</p>
+
+      <h5>✧ 它不会替你下结论</h5>
+      <ul class="wm-list">
+        <li>「涨」只表示<b>这个数在变大</b>，不表示变好了。误差、损失、失败率涨了都是坏事。</li>
+        <li>蜡烛的<b>开高低收</b>是窗口内的统计量，不是某一步的真实价格；窗口切换会改变形态，这很正常。</li>
+        <li>跨轮次比较务必取<b>同区间</b>：这套任务的指令范围课程在 iteration 5000 附近放宽，之后误差类指标会台阶式变差。</li>
+        <li>mjlab 的 metrics <b>不做 dt 缩放</b>，记录的是每步原始值的和；拿 <code>velocity_error_xy_mps</code> 判课程时要除以步数，不是秒数。</li>
+      </ul>
+
+      <h5>✧ 它怎么读数据</h5>
+      <ul class="wm-list">
+        <li>只读本机 <code>logs/rsl_rl/</code> 下的 <code>events.out.tfevents*</code>，不联网、不上传。</li>
+        <li>第一次读一个大的 run 要十来秒（60 MB 左右），之后走 <code>logs/kline_cache/</code>，打开基本是秒开。</li>
+        <li>训练还在写时，同一个文件最多每十几秒重读一次，避免每个请求都重扫一遍。</li>
+        <li>解析在后台线程做，页面上会显示「正在解析 event 文件」，不会把界面卡住。</li>
+      </ul>
+
+      <p class="wm-note">⚠️ 所有数字都是本机日志里的原始值，可能因为日志没写全、nan guard 拦截、中断续训而缺段；
+        做重要判断前请回 TensorBoard 或训练日志核对 (｡•́︿•̀｡)</p>
+
+      <p class="wm-cute">老老实实看 TensorBoard 很枯燥吧？<br>
+        所以才做成这副样子的嘛 (๑&gt;؂&lt;๑)</p>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="/assets/chart.js"></script>
+<script src="/assets/app.js"></script>
+</body>
+</html>

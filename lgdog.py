@@ -24,6 +24,11 @@ def main():
   ui = sub.add_parser("ui", help="启动本地浏览器控制面板（默认操作）")
   ui.add_argument("--port", type=int, default=8765)
   ui.add_argument("--no-browser", action="store_true")
+  kline = sub.add_parser("kline", help="启动曲线终端：TensorBoard 曲线按窗口合成 K 线")
+  kline.add_argument("--port", type=int, default=8766)
+  kline.add_argument("--logdir", action="append", default=None,
+                     help="event 目录，可给多次；默认 logs/rsl_rl")
+  kline.add_argument("--no-browser", action="store_true")
   sub.add_parser("tasks", help="查看短任务名，无需加载训练依赖")
   models = sub.add_parser("models", help="列出任务的模型")
   models.add_argument("task", nargs="?", default="standard")
@@ -63,6 +68,10 @@ def main():
     if args.mode in (None, "ui"):
       from src.dashboard.server import serve
       serve(ROOT, python, port=getattr(args, "port", 8765), open_browser=not getattr(args, "no_browser", False))
+      return 0
+    if args.mode == "kline":
+      from src.kline.server import serve as serve_kline
+      serve_kline(ROOT, args.logdir, port=args.port, open_browser=not args.no_browser)
       return 0
     if args.mode == "tasks":
       for alias, task in TASKS.items():
