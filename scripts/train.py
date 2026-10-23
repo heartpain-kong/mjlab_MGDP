@@ -115,7 +115,12 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
     )
     print("[INFO] Recording videos during training.")
 
-  env = ActionMonitorVecEnvWrapper(env, clip_actions=cfg.agent.clip_actions)
+  # Penalize only the part of the policy output that lies outside the
+  # executable normalized action range.  This prevents PPO from hiding a
+  # diverging Gaussian behind the environment clip.
+  env = ActionMonitorVecEnvWrapper(
+    env, clip_actions=cfg.agent.clip_actions, raw_action_penalty_coef=1.0e-4
+  )
 
   agent_cfg = asdict(cfg.agent)
   env_cfg = asdict(cfg.env)

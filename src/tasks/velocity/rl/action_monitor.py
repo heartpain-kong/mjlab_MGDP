@@ -14,10 +14,12 @@ from mjlab.rl import RslRlVecEnvWrapper
 
 
 class ActionMonitorVecEnvWrapper(RslRlVecEnvWrapper):
-  """Record raw action magnitude and clipping saturation before ``step``."""
+  """Record raw action magnitude and gently penalize unbounded outputs."""
 
-  def __init__(self, env, clip_actions: float | None = None):
+  def __init__(self, env, clip_actions: float | None = None,
+               raw_action_penalty_coef: float = 0.0):
     super().__init__(env, clip_actions=clip_actions)
+    self.raw_action_penalty_coef = float(raw_action_penalty_coef)
     self.raw_action_abs_max_seen = 0.0
     self.raw_action_abs_mean_last = 0.0
     self.action_saturation_fraction_last = 0.0
@@ -46,8 +48,20 @@ class ActionMonitorVecEnvWrapper(RslRlVecEnvWrapper):
     # and the VecEnv done convention.  It will clamp a second time when a
     # limit is configured; the already clipped tensor makes that idempotent.
     obs, rewards, dones, extras = super().step(clipped_actions)
+    raw_penalty = torch.zeros_like(rewards)
+    if self.raw_action_penalty_coef > 0.0 and self.clip_actions is not None:
+      excess = (raw_abs - float(self.clip_actions)).clamp_min(0.0)
+      raw_penalty = (
+        excess.square().mean(dim=-1)
+        * self.raw_action_penalty_coef
+        * float(self.unwrapped.step_dt)
+      )
+      raw_penalty = raw_penalty.reshape_as(rewards)
+      rewards = rewards - raw_penalty
     log = extras.setdefault("log", {})
     log["Metrics/raw_action_abs_max"] = raw_max
     log["Metrics/raw_action_abs_mean"] = raw_mean
     log["Metrics/action_saturation_fraction"] = saturation
+    if self.raw_action_penalty_coef > 0.0:
+      log["Metrics/raw_action_penalty"] = raw_penalty.mean()
     return obs, rewards, dones, extras

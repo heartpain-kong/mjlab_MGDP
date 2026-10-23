@@ -6,7 +6,7 @@
 不是同一套东西，逐项搬超参没有意义。
 
 用户侧的可比项：
-    learning_rate 1e-3 / entropy_coef 0.01 / num_mini_batches 16 /
+    learning_rate 3e-4 / entropy_coef 0.0 / num_mini_batches 16 /
     schedule 'adaptive' / desired_kl 0.01 / hidden [512,256,128] elu
 → 下面这些与 mjlab 默认一致或已按用户值设置。
 """
@@ -31,7 +31,9 @@ def lgdog1_ppo_runner_cfg(experiment_name: str = "lgdog1_velocity") -> RslRlOnPo
       obs_normalization=True,
       distribution_cfg={
         "class_name": "GaussianDistribution",
-        "init_std": 1.0,
+        # Keep exploration inside the normalized action range while the
+        # environment wrapper clips executed actions to [-1, 1].
+        "init_std": 0.5,
         "std_type": "scalar",
       },
     ),
@@ -44,10 +46,12 @@ def lgdog1_ppo_runner_cfg(experiment_name: str = "lgdog1_velocity") -> RslRlOnPo
       value_loss_coef=1.0,
       use_clipped_value_loss=True,
       clip_param=0.2,
-      entropy_coef=0.01,
+      # An unbounded Gaussian plus a positive entropy bonus made V10/V11
+      # increase std until almost every action was clipped before execution.
+      entropy_coef=0.0,
       num_learning_epochs=5,
       num_mini_batches=4,
-      learning_rate=1.0e-3,
+      learning_rate=3.0e-4,
       schedule="adaptive",
       gamma=0.99,
       lam=0.95,
