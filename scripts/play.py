@@ -10,13 +10,15 @@ import torch
 import tyro
 
 from mjlab.envs import ManagerBasedRlEnv
-from mjlab.rl import MjlabOnPolicyRunner, RslRlVecEnvWrapper
+from mjlab.rl import MjlabOnPolicyRunner
 from mjlab.tasks.registry import list_tasks, load_env_cfg, load_rl_cfg, load_runner_cls
 from mjlab.tasks.tracking.mdp import MotionCommandCfg
 from mjlab.utils.os import get_checkpoint_path
 from mjlab.utils.torch import configure_torch_backends
 from mjlab.utils.wrappers import VideoRecorder
 from mjlab.viewer import NativeMujocoViewer, ViserPlayViewer
+
+from src.tasks.velocity.rl.action_monitor import ActionMonitorVecEnvWrapper
 
 
 @dataclass(frozen=True)
@@ -178,7 +180,8 @@ def run_play(task_id: str, cfg: PlayConfig):
       disable_logger=True,
     )
 
-  env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
+  env = ActionMonitorVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
+  action_monitor = env
   if DUMMY_MODE:
     action_shape: tuple[int, ...] = env.unwrapped.action_space.shape
     if cfg.agent == "zero":
@@ -239,6 +242,19 @@ def run_play(task_id: str, cfg: PlayConfig):
     ViserPlayViewer(env, policy).run()
   else:
     raise RuntimeError(f"Unsupported viewer backend: {resolved_viewer}")
+
+  if action_monitor.action_monitor_steps:
+    print(
+      "[动作监控] 原始 abs max={:.3f}，最近 abs mean={:.3f}，最近饱和率={:.2%}，步数={}（裁剪前统计）".format(
+        action_monitor.raw_action_abs_max_seen,
+        action_monitor.raw_action_abs_mean_last,
+        action_monitor.action_saturation_fraction_last,
+        action_monitor.action_monitor_steps,
+      )
+    )
+    if (action_monitor.raw_action_abs_max_seen > 3.0
+        or action_monitor.action_saturation_fraction_last > 0.05):
+      print("[动作监控] ⚠️ 原始动作偏大或饱和率偏高，回放中出现腿部抽动时优先检查该策略。")
 
   env.close()
 

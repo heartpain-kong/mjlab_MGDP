@@ -86,6 +86,18 @@ python scripts/sim2sim.py LgDog1-Rough-Blind-HIM-Standard \
 - 地形/扫描选择：`him_env_cfg.py::lgdog1_him_standard_env_cfg`。
 - 接触与课程机制：`blind_terrain_env_cfg.py`、`blind_mdp.py`。
 - 历史长度、编码器、PPO：`him_env_cfg.py`、`src/tasks/velocity/rl/him*.py`。
+- 原始动作监控：`src/tasks/velocity/rl/action_monitor.py`。训练日志新增
+  `Metrics/raw_action_abs_max`、`Metrics/raw_action_abs_mean` 和
+  `Metrics/action_saturation_fraction`；它们分别在裁剪前记录动作幅值和达到
+  `clip_actions` 上限的比例。
+- 本地面板的“动作健康”卡片会自动读取当前任务最新 TensorBoard run，显示原始最大值、
+  饱和率、策略标准差和平均奖励；原始最大值 > 3、饱和率 > 5% 或策略标准差 > 3
+  时显示告警。sim2sim 默认也使用 `--action-clip 1.0`，并在结束时打印相同的动作统计。
+
+建议把 `raw_action_abs_max` 和 `action_saturation_fraction` 与已有的
+`Episode_Reward/action_rate_l2` 一起看。后者只反映裁剪后的执行动作，前两者才能发现
+策略输出已经发散。对当前 LgDog 默认值，连续多个迭代的饱和率超过 0.05 或原始最大值
+超过 3，应暂停该轮并检查 `Policy/mean_std`、entropy、学习率和 checkpoint。
 
 ```bash
 python -m unittest discover -s tests -v

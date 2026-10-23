@@ -46,6 +46,30 @@ function fillModels() {
   $("summary-models").textContent=models.length;
 }
 async function loadModels() { const alias=$("task").value; const data=await api(`/api/models?task=${encodeURIComponent(alias)}`); if(alias!==$("task").value)return; models=data.models;fillModels(); }
+function metricValue(data,name){return data?.metrics?.[name]?.value;}
+function renderActionMetrics(data){
+  const rawMax=metricValue(data,"raw_action_abs_max"), saturation=metricValue(data,"action_saturation_fraction"), policyStd=metricValue(data,"policy_mean_std"), reward=metricValue(data,"mean_reward");
+  $("metric-raw-max").textContent=rawMax==null?"—":rawMax.toFixed(2);
+  $("metric-saturation").textContent=saturation==null?"—":`${(saturation*100).toFixed(1)}%`;
+  $("metric-policy-std").textContent=policyStd==null?"—":policyStd.toFixed(2);
+  $("metric-reward").textContent=reward==null?"—":reward.toFixed(2);
+  const status=$("action-health-status");
+  status.classList.toggle("warning",Boolean(data?.warning));
+  status.textContent=data?.warning?"需要检查":data?.available?"正常":"等待数据";
+  if(data?.warning){
+    $("action-health-detail").textContent=`${data.warning} · ${data.run||"未命名 run"} · step ${data.metrics?.raw_action_abs_max?.step??"—"}`;
+  }else if(data?.available){
+    $("action-health-detail").textContent=`${data.run||"未命名 run"} · 最新 step ${data.metrics?.raw_action_abs_max?.step??data.metrics?.mean_reward?.step??"—"} · 原始动作在裁剪前统计`;
+  }else{
+    $("action-health-detail").textContent=data?.warning||"训练启动后自动读取最新 TensorBoard 记录。";
+  }
+}
+async function loadActionMetrics(){
+  if(!state||!$("task")?.value)return;
+  const alias=$("task").value;
+  try{const data=await api(`/api/metrics?task=${encodeURIComponent(alias)}`);if(alias===$("task").value)renderActionMetrics(data);}
+  catch(error){renderActionMetrics({available:false,warning:error.message,metrics:{}});}
+}
 function showMode() {
   document.querySelectorAll("[data-section]").forEach(el=>{
     const inactive=el.dataset.section!==mode;
@@ -129,7 +153,7 @@ async function refresh(all=false) {
   try {
     const data=await api("/api/state");state=data;
     $("connection").lastChild.textContent=" 本地服务运行中";
-    renderJobs();if(all)await loadModels();await loadLog();
+    renderJobs();if(all)await loadModels();await loadActionMetrics();await loadLog();
   }catch(error){$("connection").textContent="服务未连接";if(all)toast(error.message);}
 }
 async function showDocument(id) {
@@ -140,9 +164,9 @@ async function start() {
     state=await api("/api/state");
     $("task").replaceChildren(...state.tasks.map(t=>new Option(t.label,t.alias)));
     $("task").value="standard";$("copy-root").textContent=state.root;$("python-path").textContent=state.python;
-    updateTask();await loadModels();showMode();await preview();renderJobs();await loadLog();
+    updateTask();await loadModels();showMode();await preview();renderJobs();await loadActionMetrics();await loadLog();
     document.querySelectorAll("[data-mode]").forEach(button=>button.addEventListener("click",()=>{mode=button.dataset.mode;showMode();preview();}));
-    $("task").addEventListener("change",async()=>{$("custom-model").value="";$("run-name").value=`${$("task").value}_seed${$("seed").value}`;updateTask();await loadModels();showMode();preview();});
+    $("task").addEventListener("change",async()=>{$("custom-model").value="";$("run-name").value=`${$("task").value}_seed${$("seed").value}`;updateTask();await loadModels();showMode();await loadActionMetrics();preview();});
     $("resume").addEventListener("change",()=>{showMode();preview();});
     $("run-form").addEventListener("input",queuePreview);$("run-form").addEventListener("change",queuePreview);
     document.querySelectorAll("[data-preset]").forEach(button=>button.addEventListener("click",()=>{const smoke=button.dataset.preset==="smoke";$("train-envs").value=smoke?64:1024;$("iterations").value=smoke?2:16000;preview();}));

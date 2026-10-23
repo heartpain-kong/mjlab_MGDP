@@ -5,6 +5,7 @@ import hmac
 import json
 from pathlib import Path
 import secrets
+import threading
 from urllib.parse import parse_qs, urlparse
 import webbrowser
 
@@ -21,6 +22,16 @@ DOCUMENTS = {
   "reward-code": ("奖励配置源码", "src/tasks/velocity/config/lgdog1/reward_cfg.py"),
 }
 
+ACTION_METRIC_TAGS = {
+  "raw_action_abs_max": "Metrics/raw_action_abs_max",
+  "raw_action_abs_mean": "Metrics/raw_action_abs_mean",
+  "action_saturation_fraction": "Metrics/action_saturation_fraction",
+  "policy_mean_std": "Policy/mean_std",
+  "entropy": "Loss/entropy",
+  "mean_reward": "Train/mean_reward",
+  "terrain_level": "Curriculum/terrain_levels/level_mean",
+}
+
 
 def create_server(root, python, host="127.0.0.1", port=8765):
   if host not in {"127.0.0.1", "localhost"}:
@@ -28,6 +39,79 @@ def create_server(root, python, host="127.0.0.1", port=8765):
   root = Path(root).resolve()
   jobs = JobManager(root)
   token = secrets.token_urlsafe(32)
+  metrics_cache = {}
+  metrics_lock = threading.Lock()
+
+  def parse_metrics(alias, task, event_file, stat, signature):
+    """Load one event file off the request thread; large runs can be tens of MB."""
+    try:
+      from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
+      accumulator = EventAccumulator(str(event_file), size_guidance={"scalars": 0})
+      accumulator.Reload()
+      available_tags = set(accumulator.Tags().get("scalars", []))
+      metrics = {}
+      for name, tag in ACTION_METRIC_TAGS.items():
+        if tag not in available_tags:
+          continue
+        points = accumulator.Scalars(tag)
+        if points:
+          point = points[-1]
+          metrics[name] = {"value": float(point.value), "step": int(point.step), "tag": tag}
+      raw_max = metrics.get("raw_action_abs_max", {}).get("value")
+      saturation = metrics.get("action_saturation_fraction", {}).get("value")
+      policy_std = metrics.get("policy_mean_std", {}).get("value")
+      warnings = []
+      if raw_max is not None and raw_max > 3.0:
+        warnings.append("原始动作幅值偏大")
+      if saturation is not None and saturation > 0.05:
+        warnings.append("动作饱和率偏高")
+      if policy_std is not None and policy_std > 3.0:
+        warnings.append("策略标准差偏大")
+      data = {"task": alias, "experiment": task["experiment"], "available": bool(metrics),
+              "run": event_file.parent.name, "updated": stat.st_mtime, "metrics": metrics,
+              "warning": "；".join(warnings) if warnings else None}
+    except ImportError:
+      data = {"task": alias, "experiment": task["experiment"], "available": False,
+              "run": event_file.parent.name, "updated": stat.st_mtime,
+              "metrics": {}, "warning": "当前 Python 环境未安装 TensorBoard"}
+    except Exception as error:  # A partially written event file should not break the panel.
+      data = {"task": alias, "experiment": task["experiment"], "available": False,
+              "run": event_file.parent.name, "updated": stat.st_mtime,
+              "metrics": {}, "warning": f"读取 TensorBoard 失败：{type(error).__name__}"}
+    with metrics_lock:
+      metrics_cache[alias] = {"signature": signature, "loading": False, "data": data}
+
+  def latest_metrics(task_value):
+    """Read the newest TensorBoard scalars without making the dashboard write anything."""
+    alias, task = resolve_task(task_value)
+    base = root / "logs" / "rsl_rl" / task["experiment"]
+    # RSL-RL writes one event file directly inside each run.  Keep this one
+    # level deep: recursively walking checkpoints/videos every 1.8 s makes the
+    # browser panel appear frozen on a large training archive.
+    event_files = sorted(
+      (path for path in base.glob("*/events.out.tfevents*") if path.is_file()),
+      key=lambda path: path.stat().st_mtime,
+      reverse=True,
+    ) if base.is_dir() else []
+    if not event_files:
+      return {"task": alias, "experiment": task["experiment"], "available": False,
+              "run": None, "updated": None, "metrics": {}, "warning": None}
+    event_file = event_files[0]
+    stat = event_file.stat()
+    signature = (str(event_file), stat.st_mtime_ns, stat.st_size)
+    with metrics_lock:
+      cached = metrics_cache.get(alias)
+      if cached and cached["signature"] == signature:
+        if cached.get("loading"):
+          return {"task": alias, "experiment": task["experiment"], "available": False,
+                  "run": event_file.parent.name, "updated": stat.st_mtime,
+                  "metrics": {}, "warning": "正在读取最新 TensorBoard 记录…"}
+        return cached["data"]
+      metrics_cache[alias] = {"signature": signature, "loading": True}
+    threading.Thread(target=parse_metrics, args=(alias, task, event_file, stat, signature), daemon=True).start()
+    return {"task": alias, "experiment": task["experiment"], "available": False,
+            "run": event_file.parent.name, "updated": stat.st_mtime,
+            "metrics": {}, "warning": "正在读取最新 TensorBoard 记录…"}
 
   class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
@@ -72,6 +156,8 @@ def create_server(root, python, host="127.0.0.1", port=8765):
                             "jobs": jobs.list(), "documents": [{"id": key, "label": value[0]} for key, value in DOCUMENTS.items()]})
         if parsed.path == "/api/models":
           return self.send({"models": discover_models(root, query.get("task", ["standard"])[0])})
+        if parsed.path == "/api/metrics":
+          return self.send(latest_metrics(query.get("task", ["standard"])[0]))
         if parsed.path == "/api/rewards":
           alias, task = resolve_task(query.get("task", ["standard"])[0])
           return self.send({"task": alias, **read_rewards(root, task["profile"])})

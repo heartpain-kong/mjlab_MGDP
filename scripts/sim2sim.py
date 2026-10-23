@@ -556,6 +556,7 @@ def run(args) -> int:
   print(f"  接口        in {in_shape} → out {out_shape}")
   print(f"  关节({meta['nq_joint']})   {meta['joint_names']}")
   print(f"  动作缩放    {meta['action_scale']}")
+  print(f"  动作裁剪    ±{args.action_clip:g}（同时统计裁剪前原始动作）")
   print(f"  控制频率    {1.0 / CTRL_DT:.0f} Hz（物理 {model.opt.timestep * 1000:.0f} ms × 4）")
   print(f"  默认站姿    {np.round(meta['default_qpos'], 3).tolist()}")
   print(f"  执行器顺序  {meta['joint_of_actuator']}")
@@ -617,6 +618,10 @@ def run(args) -> int:
     hdg_hold = kb is not None  # 有键盘时默认开（否则直行会画圈）
 
   log = []
+  raw_action_abs_max = 0.0
+  raw_action_abs_sum = 0.0
+  raw_action_saturated = 0
+  raw_action_samples = 0
   t0 = time.time()
   n_reset = 0
   for step in range(n_ctrl):
@@ -669,8 +674,13 @@ def run(args) -> int:
     mujoco.mj_forward(model, data)
     frame = build_obs(model, data, meta, cmd, episode_step * CTRL_DT, last_action)
     obs = history.push(frame)
-    action = sess.run(None, {iname: obs[None, :]})[0][0].astype(np.float64)
-    action = np.clip(action, -args.action_clip, args.action_clip)
+    raw_action = sess.run(None, {iname: obs[None, :]})[0][0].astype(np.float64)
+    raw_abs = np.abs(raw_action)
+    raw_action_abs_max = max(raw_action_abs_max, float(raw_abs.max()))
+    raw_action_abs_sum += float(raw_abs.mean())
+    raw_action_saturated += int(np.count_nonzero(raw_abs >= args.action_clip))
+    raw_action_samples += raw_action.size
+    action = np.clip(raw_action, -args.action_clip, args.action_clip)
 
     # 关节序目标 → 执行器序 ctrl（见 build_model 里的 perm 说明）
     target_joint = meta["default_qpos"] + meta["action_scale"] * action
@@ -750,6 +760,12 @@ def run(args) -> int:
   if n_reset:
     print(f"  复位次数    {n_reset}")
   print(f"  实时率      {survived / wall:.2f}× 实时（CPU 单线程）")
+  saturation_rate = raw_action_saturated / raw_action_samples if raw_action_samples else 0.0
+  raw_action_abs_mean = raw_action_abs_sum / n if n else 0.0
+  print(f"  原始动作    abs max {raw_action_abs_max:.3f}  abs mean {raw_action_abs_mean:.3f}  "
+        f"饱和率 {saturation_rate * 100:.2f}%（阈值 ±{args.action_clip:g}）")
+  if raw_action_abs_max > 3.0 or saturation_rate > 0.05:
+    print("  ⚠️ 动作健康告警：策略输出在裁剪前偏大或饱和率偏高，可能出现腿部抽动。")
 
   ok = survived >= args.duration * 0.95 and log[:, 1].mean() < 30
   print(f"\n  {'✅ 通过：全程未摔、姿态稳定' if ok else '⚠️ 未通过：见上面数据'}")
@@ -850,9 +866,11 @@ def main():
   ap.add_argument(
     "--speed-yaw", type=float, default=1.0, help="键盘转向速率 [rad/s]（默认 1.0，= 训练范围上限）"
   )
-  ap.add_argument("--action-clip", type=float, default=100.0, help="动作裁剪上限")
+  ap.add_argument("--action-clip", type=float, default=1.0, help="动作裁剪上限（默认与训练 clip_actions=1.0 一致）")
   ap.add_argument("--check-obs", action="store_true", help="只对拍观测，不跑策略")
   args = ap.parse_args()
+  if args.action_clip <= 0:
+    ap.error("--action-clip 必须大于 0")
   return run(args)
 
 
