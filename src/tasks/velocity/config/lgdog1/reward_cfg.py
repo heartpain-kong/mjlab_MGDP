@@ -73,8 +73,11 @@ REWARD_PROFILES = {
     },
   },
   # 新标准崎岖地形任务独立调参；不会覆盖 V7 的 him 配置。
+  # foot_clearance 关闭 + action_rate_l2 加强（2026-10-24）：抬脚高度由足下射线奖励处理，
+  # 这里不再叠加世界坐标 z 的抬脚代价。写在这里而不是面板覆盖，免得面板覆盖
+  # 静默压过后续对 profile 的修改。
   "him_standard": {
-    "weights": {},
+    "weights": {"foot_clearance": 0.0, "action_rate_l2": -0.2},
     "params": {
       "foot_clearance": {"target_height": 0.10},
       "leg_contact_force": {"sensor_name": "legs_ground_contact"},
@@ -90,7 +93,7 @@ DASHBOARD_REWARD_OVERRIDES = {'flat': {'weights': {}, 'params': {}},
  'rough': {'weights': {}, 'params': {}},
  'terrain_v4': {'weights': {}, 'params': {}},
  'him': {'weights': {}, 'params': {}},
- 'him_standard': {'weights': {'foot_clearance': 0.0, 'action_rate_l2': -0.2}, 'params': {}}}
+ 'him_standard': {'weights': {}, 'params': {}}}
 # END LGDOG DASHBOARD OVERRIDES
 
 
