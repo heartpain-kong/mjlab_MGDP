@@ -38,6 +38,11 @@ python lgdog.py --python C:\path\to\training-env\Scripts\python.exe ui
 4. 查看右侧的实际命令，再点击启动。页面下方显示进程 PID、运行状态和真实输出。
 5. 打开“查看奖励”后，可以看到当前方案的全部 reward。直接编辑权重或参数 JSON，取消勾选会把权重设为 0，点击“保存奖励修改”即可写入 `reward_cfg.py`。保存前会生成 `reward_cfg.py.bak`，修改需要重启训练进程才会生效。
 6. 奖励区支持名称筛选和“恢复基线”。黄色行表示当前 profile 有覆盖值；双击 reward 会显示实际函数源码和绑定位置。继承自 mjlab 的函数如果能在当前 Python 环境找到，也会直接显示依赖源码。
+
+> ⚠️ **“保存奖励修改”写进的是 `DASHBOARD_REWARD_OVERRIDES`，它的优先级高于 `REWARD_PROFILES`。**
+> 试出满意的值后要手工搬进 `REWARD_PROFILES[配置名]["weights"]`，再把面板覆盖清空，然后才提交 ——
+> 否则提交的 profile 改动会被面板覆盖静默压掉，`test_standard_reward_tuning_does_not_change_v7` 也会失败。
+> 完整流程和踩坑记录见 [REWARDS.md](REWARDS.md#★-面板调参试出来的值必须搬进-profile-再提交)。
 7. 停止按钮仅停止本次面板启动的对应进程。停止不会补存尚未保存的训练步，已存 checkpoint 保留。
 
 Play 默认使用 Viser 浏览器界面，启动后打开页面中的“机器人视图”（通常 `http://127.0.0.1:8080`，以日志输出为准）。也可以切换为原生 MuJoCo 窗口。Sim2Sim 使用普通 MuJoCo，勾选窗口时显示在运行服务的电脑上。

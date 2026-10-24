@@ -107,6 +107,38 @@ python scripts/train.py LgDog1-Rough-Blind-HIM \
 
 这种 CLI 覆盖发生在任务配置构建之后，只影响这次启动；`list_rewards.py` 展示的是源码默认配置。CLI 覆盖后的值应查看训练启动的 Reward 表和该 run 的 `params/env.yaml` 快照。
 
+### ★ 面板调参：试出来的值必须搬进 profile 再提交
+
+浏览器工作台的奖励编辑器（`POST /api/rewards/save`）保存时写的是
+`reward_cfg.py` 里 `# BEGIN/END LGDOG DASHBOARD OVERRIDES` 之间的
+`DASHBOARD_REWARD_OVERRIDES`。这个字典**优先级高于 `REWARD_PROFILES`**：
+
+```python
+# reward_cfg.py::make_lgdog_rewards()
+settings = deepcopy(REWARD_PROFILES[profile])
+dashboard = deepcopy(DASHBOARD_REWARD_OVERRIDES.get(profile, {}))
+settings["weights"].update(dashboard.get("weights", {}))   # ← 面板覆盖后应用
+```
+
+所以按下面的顺序做，否则一定踩坑：
+
+1. 面板里随便试，值会落进 `DASHBOARD_REWARD_OVERRIDES`；
+2. 试出满意的数后，把它**手工搬到 `REWARD_PROFILES[配置名]["weights"]`**；
+3. 把 `DASHBOARD_REWARD_OVERRIDES` 对应 profile 清回 `{'weights': {}, 'params': {}}`；
+4. `git status` 应只剩 profile 那一处改动，再提交。
+
+**为什么必须这样做**（2026-10-24 实际踩过）：调参值留在面板覆盖里时，
+
+- 之后任何人修改 profile 里的同名权重都**不会生效**，面板覆盖会静默压过它 ——
+  正是 `ARCHITECTURE.md` 警告的「改了代码却没生效」；
+- `DASHBOARD_REWARD_OVERRIDES` 是本地状态，提交进版本库后每个 pull 下来的人都带着
+  这份静默覆盖，而且每次 pull 都可能与别人的改动撞同一行，产生无意义的冲突；
+- `tests/test_lgdog_him_standard.py::test_standard_reward_tuning_does_not_change_v7`
+  会失败：它 patch profile 后断言新值生效，被面板覆盖挡住时读到旧值。
+  该测试曾经"通过"，只是因为当时面板覆盖里的值恰好与断言相同。
+
+一句话：**面板覆盖只用于本地试验，提交的调参一律写进 `REWARD_PROFILES`。**
+
 profile 的 `params` 按参数名覆盖，某个参数自身为字典时会整体替换。例如覆盖 `pose.std_standing` 时要提供所需的全部关节匹配规则。
 
 ## 本次重构的检查
