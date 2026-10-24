@@ -20,7 +20,8 @@ function collect() {
   const model = $("custom-model").value.trim() || $("model").value;
   return {mode, task:$("task").value, envs:$(mode==="play"?"play-envs":"train-envs").value,
     iterations:$("iterations").value, seed:$("seed").value, run_name:$("run-name").value,
-    max_terrain_level:$("max-terrain-level")?.value || "",
+    terrain_num_rows:$("terrain-num-rows")?.value || "",
+    terrain_difficulty_max:$("terrain-difficulty-max")?.value || "",
     resume:$("resume").checked, checkpoint:model, onnx:model, viewer:$("viewer").value,
     map:$("map").value, duration:$("duration").value, vx:$("vx").value, vy:$("vy").value,
     wz:$("wz").value, spawn_y:$("spawn-y").value, show_viewer:$("show-viewer").checked,

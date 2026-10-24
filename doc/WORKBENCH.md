@@ -63,15 +63,16 @@ python lgdog.py tasks
 python lgdog.py models standard
 python lgdog.py train standard --envs 64 --iterations 2 --dry-run
 python lgdog.py train standard --envs 1024 --iterations 16000 --run-name V8_him_standard_seed42
-python lgdog.py train standard --envs 1024 --iterations 16000 --max-terrain-level 3
+python lgdog.py train standard --envs 1024 --iterations 16000 --terrain-num-rows 20
 python lgdog.py play standard --viewer viser
 python lgdog.py sim standard --map stairs --vx 0.4 --spawn-y 4
 python lgdog.py rewards standard --term foot_clearance
 python lgdog.py curves
 ```
 
-训练面板或短命令里实验名称留空时，会按已有 `V` 编号自动递增。地形等级上限按内部
-0 起始等级计数，例如 `3` 表示允许等级 0–3。
+标准 HIM 默认使用 15 行地形课程；面板里可以填写更大的训练行数和最大难度倍率。
+这表示扩大可探索的地形空间，课程仍会按成功和速度质量逐步升级。实验名称留空时，会按
+已有 `V` 编号自动递增。
 
 `--dry-run` 只显示命令。Play/Sim2Sim 默认从该任务独立实验目录中寻找最新已有模型，跳过尚无模型的 run。Flat/Rough 共用实验目录，必须显式选择对应模型：`python lgdog.py play flat --checkpoint /path/to/model.pt`。
 

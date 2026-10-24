@@ -32,7 +32,8 @@ class TrainConfig:
   video_length: int = 200
   video_interval: int = 2000
   enable_nan_guard: bool = False
-  max_terrain_level: int | None = None
+  terrain_num_rows: int | None = None
+  terrain_difficulty_max: float | None = None
   torchrunx_log_dir: str | None = None
   gpu_ids: list[int] | Literal["all"] | None = field(default_factory=lambda: [0])
 
@@ -63,14 +64,22 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
   cfg.agent.seed = seed
   cfg.env.seed = seed
 
-  if cfg.max_terrain_level is not None:
-    terrain_term = cfg.env.curriculum.get("terrain_levels")
-    if terrain_term is None:
-      raise ValueError("--max-terrain-level 只适用于带 terrain_levels 课程的任务")
-    if cfg.max_terrain_level < 0:
-      raise ValueError("--max-terrain-level 必须大于等于 0")
-    terrain_term.params["max_level"] = int(cfg.max_terrain_level)
-    print(f"[INFO] Terrain curriculum cap: level <= {cfg.max_terrain_level}")
+  terrain = cfg.env.scene.terrain
+  if cfg.terrain_num_rows is not None or cfg.terrain_difficulty_max is not None:
+    if terrain is None or terrain.terrain_generator is None:
+      raise ValueError("地形扩展参数只适用于 generator 地形任务")
+    generator = terrain.terrain_generator
+    if cfg.terrain_num_rows is not None:
+      if cfg.terrain_num_rows < 2:
+        raise ValueError("--terrain-num-rows 必须大于等于 2")
+      generator.num_rows = int(cfg.terrain_num_rows)
+      print(f"[INFO] Terrain curriculum rows: {generator.num_rows}")
+    if cfg.terrain_difficulty_max is not None:
+      if not 0.5 <= cfg.terrain_difficulty_max <= 1.5:
+        raise ValueError("--terrain-difficulty-max 必须在 0.5 到 1.5 之间")
+      lower, _ = generator.difficulty_range
+      generator.difficulty_range = (lower, float(cfg.terrain_difficulty_max))
+      print(f"[INFO] Terrain difficulty range: {generator.difficulty_range}")
 
   print(f"[INFO] Training with: device={device}, seed={seed}, rank={rank}")
 

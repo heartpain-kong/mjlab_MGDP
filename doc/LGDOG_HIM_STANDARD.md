@@ -66,14 +66,21 @@ python scripts/train.py LgDog1-Rough-Blind-HIM-Standard \
   --agent.run-name=V9_stability_seed42 --enable-nan-guard True
 ```
 
-地形课程可以设置内部等级上限。等级从 0 开始，`--max-terrain-level=3` 允许训练到 0–3，
-不会继续升级到 4；省略该参数则不限制。实验名可以省略，训练脚本会扫描当前日志和
-`E:\\mjlab\\数据` 归档，自动生成下一个 `V<n>_seed<seed>` 名称。
+标准 HIM 默认把地形生成器从 10 行扩展到 15 行，增加可学习的课程分辨率；初始环境仍只从
+0–1 级开始，策略通过速度跟踪和存活条件逐步升级。需要继续扩展时可以显式设置行数和最大
+难度倍率：
 
 ```bash
 python scripts/train.py LgDog1-Rough-Blind-HIM-Standard \
-  --max-terrain-level=3 --agent.seed=42
+  --terrain-num-rows=20 --terrain-difficulty-max=1.0 --agent.seed=42
 ```
+
+这里的难度倍率作用于地形生成器的 `difficulty_range`，不是直接跳到最高行。Scaling Rough
+Terrain、TransCurriculum、TACL 和 PSC 都强调先扩展可探索空间，再由学习进度、成功率或安全
+信号选择下一批任务；因此不建议一开始把难度倍率直接提高到 1.5。
+
+训练脚本会扫描当前日志和 `E:\\mjlab\\数据` 归档，实验名省略时自动生成下一个
+`V<n>_seed<seed>` 名称。
 
 `V8` 这里只是新实验的命名示例，并不表示已经启动训练。新日志位于 `logs/rsl_rl/lgdog1_velocity_blind_him_standard_v1/`。
 

@@ -104,6 +104,11 @@ def lgdog1_blind_terrain_env_cfg(
   twist.ranges.lin_vel_y = (-0.3, 0.3)
   twist.ranges.ang_vel_z = (-0.6, 0.6)
   if not play:
+    if reward_profile == "him_standard":
+      # Expand the available curriculum rows while keeping the initial reset
+      # level at 1.  This follows the finer terrain bins used by
+      # TransCurriculum; promotion still depends on tracking and survival.
+      cfg.scene.terrain.terrain_generator.num_rows = 15
     cfg.scene.terrain.max_init_terrain_level = 1
     cfg.curriculum.pop("command_vel", None)
     cfg.curriculum["terrain_levels"] = CurriculumTermCfg(

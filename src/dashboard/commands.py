@@ -76,17 +76,22 @@ def build_command(root, python, options):
     envs = integer(options.get("envs", 1024), "环境数", 1, 8192)
     iterations = integer(options.get("iterations", 16000), "训练轮数", 1, 1000000)
     seed = integer(options.get("seed", 42), "seed", 0, 2147483647)
-    max_level = str(options.get("max_terrain_level", "")).strip()
-    if max_level:
-      max_level = integer(max_level, "地形等级上限", 0, 1000)
+    terrain_rows = str(options.get("terrain_num_rows", "")).strip()
+    if terrain_rows:
+      terrain_rows = integer(terrain_rows, "地形训练行数", 2, 100)
+    terrain_difficulty = str(options.get("terrain_difficulty_max", "")).strip()
+    if terrain_difficulty:
+      terrain_difficulty = number(terrain_difficulty, "最大地形难度倍率", 0.5, 1.5)
     name = str(options.get("run_name", "")).strip()
     if name and not re.fullmatch(r"[a-zA-Z0-9_.-]{1,80}", name):
       raise ValueError("实验名只能使用 1–80 位英文字母、数字、下划线、点和短横线")
     argv = [str(python), str(scripts / "train.py"), task["id"],
             f"--env.scene.num-envs={envs}", f"--agent.max-iterations={iterations}",
             "--agent.logger=tensorboard", f"--agent.seed={seed}", "--enable-nan-guard", "True"]
-    if max_level != "":
-      argv.append(f"--max-terrain-level={max_level}")
+    if terrain_rows != "":
+      argv.append(f"--terrain-num-rows={terrain_rows}")
+    if terrain_difficulty != "":
+      argv.append(f"--terrain-difficulty-max={terrain_difficulty}")
     auto_name = next_run_name(root / "logs/rsl_rl" / task["experiment"], seed)
     argv.append(f"--agent.run-name={name or auto_name}")
     if options.get("resume"):
