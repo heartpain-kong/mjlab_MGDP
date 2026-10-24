@@ -6,6 +6,8 @@ import math
 
 import torch
 
+from src.tasks.velocity.mdp import ops
+
 
 def clearance_cost(clearance, speed_xy, contact, valid, active, target_height):
   """Swing-only clearance cost; invalid ray hits contribute zero, never NaN."""
@@ -47,8 +49,7 @@ def relative_foot_height(env, sensor_names):
 
 def commanded_distance(env, command_name="twist"):
   command = env.command_manager.get_command(command_name)
-  speed = command[:, :2].norm(dim=-1)
-  return torch.where(speed > 0.1, speed * env.step_dt, 0.0)
+  return ops.commanded_distance(command, env.step_dt)
 
 
 def tracking_progress(env, command_name="twist"):
@@ -58,16 +59,14 @@ def tracking_progress(env, command_name="twist"):
   Both vectors use the body frame, matching the existing tracking reward.
   """
   command = env.command_manager.get_command(command_name)[:, :2]
-  speed = command.norm(dim=-1)
   velocity = env.scene["robot"].data.root_link_lin_vel_b[:, :2]
-  along = (velocity * command).sum(dim=-1) / speed.clamp_min(1e-6)
-  along = torch.minimum(along.clamp_min(0.0), speed)
-  return torch.where(speed > 0.1, along * env.step_dt, 0.0)
+  return ops.tracking_progress(command, velocity, env.step_dt)
 
 
 def velocity_error_xy(env, command_name="twist"):
   command = env.command_manager.get_command(command_name)
-  return (command[:, :2] - env.scene["robot"].data.root_link_lin_vel_b[:, :2]).norm(dim=-1)
+  velocity = env.scene["robot"].data.root_link_lin_vel_b[:, :2]
+  return ops.velocity_error_xy(command, velocity)
 
 
 def world_distance(env):

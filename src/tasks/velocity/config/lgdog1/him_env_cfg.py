@@ -56,6 +56,9 @@ class HIMModelCfg(RslRlModelCfg):
 @dataclass
 class HIMPpoCfg(RslRlPpoAlgorithmCfg):
   estimator_learning_rate: float = 1e-3
+  # CUDA fused Adam reduces optimizer launch overhead for the PPO/HIM minibatches.
+  # HIMPPO falls back to regular Adam on CPU or older PyTorch builds.
+  fused_optimizer: bool = True
   # Match the five PPO epochs: HIMPPO performs one auxiliary pass per
   # mini-batch in each estimator epoch, so this yields 5 * 4 updates instead
   # of only 4 updates per rollout.

@@ -37,12 +37,14 @@ python lgdog.py kline            # 浏览器打开 http://127.0.0.1:8766
 | `lgdog.py` | 统一入口：浏览器面板与简短命令 |
 | [reward_cfg.py](src/tasks/velocity/config/lgdog1/reward_cfg.py) | 奖励权重、参数；新标准 HIM 修改 `him_standard` |
 | `src/tasks/velocity/config/lgdog1/` | 地形、观测、课程、任务注册与 PPO 配置 |
-| `logs/rsl_rl/` | 训练 checkpoint、ONNX 和配置快照 |
+| `logs/rsl_rl/` | 训练 checkpoint、ONNX、TorchScript 和配置快照 |
 | `logs/dashboard/` | 面板启动的进程记录与输出日志 |
 | `logs/kline_cache/` | 曲线终端的 event 解析缓存（可随时删，删了会重解析） |
 | `src/kline/` | 曲线终端：event 解析、窗口聚合、只读 HTTP 服务与页面 |
 | [doc/](doc/INDEX.md) | 使用与技术文档 |
 | `archive/` | 旧补丁、旧验证记录和历史清单 |
+
+每个 HIM checkpoint 会额外生成 `policy_jit.pt`（TorchScript 推理模型）；`policy.onnx` 仍保留用于现有 sim2sim 和部署链路。
 
 - [面板操作与目录迁移说明](doc/WORKBENCH.md)
 - [曲线终端（TensorBoard 转 K 线）](doc/KLINE.md)

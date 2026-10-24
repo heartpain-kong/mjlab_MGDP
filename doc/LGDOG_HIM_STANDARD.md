@@ -86,7 +86,7 @@ Terrain、TransCurriculum、TACL 和 PSC 都强调先扩展可探索空间，再
 
 迁移到训练机时同步当前工程目录及新增文件。`archive/LgDog_HIM_patch.zip` 是早期 V7 的历史补丁，不包含这个新任务或控制面板。
 
-先从头训练，不要用 `--agent.resume=True` 直接恢复 V7 的完整 checkpoint：新任务的 critic 从 261 维改成了 74 维，训练分布也变了。训练保存 checkpoint 时仍会导出同目录下的 `policy.onnx`，输入 `[1,282]`，输出 `[1,12]`，历史排列和 reset 协议与已有 HIM 相同。
+先从头训练，不要用 `--agent.resume=True` 直接恢复 V7 的完整 checkpoint：新任务的 critic 从 261 维改成了 74 维，训练分布也变了。训练保存 checkpoint 时会同时导出同目录下的 `policy.onnx` 和 `policy_jit.pt`，输入 `[1,282]`，输出 `[1,12]`，历史排列和 reset 协议与已有 HIM 相同。CUDA 训练默认启用 fused Adam；CPU 或不支持该算子的 PyTorch 会自动回退到普通 Adam。速度跟踪、课程进度和指令门控中的热点张量算子已用 TorchScript kernel 脚本化。
 
 ```bash
 EXP_DIR="logs/rsl_rl/lgdog1_velocity_blind_him_standard_v1/你的实际实验目录"

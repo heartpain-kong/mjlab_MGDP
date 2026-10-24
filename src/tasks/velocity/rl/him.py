@@ -91,7 +91,8 @@ class HIMPPO(PPO):
   mjlab returns reset observations, not terminal successor observations.
   """
 
-  def __init__(self, *args, estimator_learning_rate=1e-3, estimator_epochs=1, **kwargs):
+  def __init__(self, *args, estimator_learning_rate=1e-3, estimator_epochs=1,
+               fused_optimizer=True, **kwargs):
     super().__init__(*args, **kwargs)
     if self.is_multi_gpu or self.symmetry or self.rnd:
       raise ValueError("This HIM experiment supports single-device PPO without symmetry/RND")
@@ -99,9 +100,35 @@ class HIMPPO(PPO):
     estimator_ids = {id(p) for p in self.actor.estimator.parameters()}
     for group in self.optimizer.param_groups:
       group["params"] = [p for p in group["params"] if id(p) not in estimator_ids]
-    self.estimator_optimizer = torch.optim.Adam(
-      self.actor.estimator.parameters(), lr=estimator_learning_rate
-    )
+    use_fused = bool(fused_optimizer and self.device.startswith("cuda") and torch.cuda.is_available())
+    self.fused_optimizer = use_fused
+    try:
+      self.estimator_optimizer = torch.optim.Adam(
+        self.actor.estimator.parameters(), lr=estimator_learning_rate, fused=use_fused
+      )
+    except (TypeError, RuntimeError):
+      self.fused_optimizer = False
+      self.estimator_optimizer = torch.optim.Adam(
+        self.actor.estimator.parameters(), lr=estimator_learning_rate
+      )
+    if self.fused_optimizer:
+      # The base PPO optimizer was created before HIMPPO removes estimator
+      # parameters. Rebuild it with the remaining actor/critic parameters so
+      # the fused path does not accidentally update the estimator twice.
+      params = [p for group in self.optimizer.param_groups for p in group["params"]]
+      defaults = self.optimizer.defaults
+      try:
+        self.optimizer = torch.optim.Adam(
+          params,
+          lr=defaults["lr"],
+          betas=defaults["betas"],
+          eps=defaults["eps"],
+          weight_decay=defaults["weight_decay"],
+          amsgrad=defaults.get("amsgrad", False),
+          fused=True,
+        )
+      except (TypeError, RuntimeError):
+        self.fused_optimizer = False
     shape = (self.storage.num_transitions_per_env, self.storage.num_envs)
     self.next_frames = torch.zeros(*shape, self.actor.frame_dim, device=self.device)
     self.next_velocities = torch.zeros(*shape, 3, device=self.device)
@@ -179,6 +206,12 @@ class HIMRunner(MjlabOnPolicyRunner):
     super().save(path, infos)
     directory = str(Path(path).parent)
     self.export_policy_to_onnx(directory)
+    try:
+      self.export_policy_to_jit(directory, "policy_jit.pt")
+    except (RuntimeError, TypeError, ValueError) as error:
+      # ONNX and the regular checkpoint remain usable if a local TorchScript
+      # compiler cannot handle a future distribution module.
+      print(f"[WARN] TorchScript export skipped: {type(error).__name__}: {error}")
 
   def export_policy_to_onnx(self, path, filename="policy.onnx", verbose=False):
     super().export_policy_to_onnx(path, filename, verbose)

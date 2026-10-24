@@ -13,6 +13,8 @@ from mjlab.utils.lab_api.string import (
   resolve_matching_names_values,
 )
 
+from . import ops
+
 if TYPE_CHECKING:
   from mjlab.envs import ManagerBasedRlEnv
 
@@ -34,10 +36,7 @@ def track_linear_velocity(
   command = env.command_manager.get_command(command_name)
   assert command is not None, f"Command '{command_name}' not found."
   actual = asset.data.root_link_lin_vel_b
-  xy_error = torch.sum(torch.square(command[:, :2] - actual[:, :2]), dim=1)
-  z_error = torch.square(actual[:, 2])
-  lin_vel_error = xy_error + (2 * z_error)
-  return torch.exp(-lin_vel_error / std**2)
+  return ops.linear_velocity_tracking(command, actual, std)
 
 
 def track_angular_velocity(
@@ -54,10 +53,7 @@ def track_angular_velocity(
   command = env.command_manager.get_command(command_name)
   assert command is not None, f"Command '{command_name}' not found."
   actual = asset.data.root_link_ang_vel_b
-  z_error = torch.square(command[:, 2] - actual[:, 2])
-  xy_error = torch.sum(torch.square(actual[:, :2]), dim=1)
-  ang_vel_error = z_error + (0.05 * xy_error)
-  return torch.exp(-ang_vel_error / std**2)
+  return ops.angular_velocity_tracking(command, actual, std)
 
 
 def body_orientation_l2(
@@ -152,11 +148,7 @@ def feet_air_time(
   if command_name is not None:
     command = env.command_manager.get_command(command_name)
     if command is not None:
-      linear_norm = torch.norm(command[:, :2], dim=1)
-      angular_norm = torch.abs(command[:, 2])
-      total_command = linear_norm + angular_norm
-      scale = (total_command > command_threshold).float()
-      reward *= scale
+      reward *= ops.command_active(command, command_threshold)
   return reward
 
 
@@ -177,11 +169,7 @@ def feet_clearance(
   if command_name is not None:
     command = env.command_manager.get_command(command_name)
     if command is not None:
-      linear_norm = torch.norm(command[:, :2], dim=1)
-      angular_norm = torch.abs(command[:, 2])
-      total_command = linear_norm + angular_norm
-      active = (total_command > command_threshold).float()
-      cost = cost * active
+      cost = cost * ops.command_active(command, command_threshold)
   return cost
 
 
@@ -204,11 +192,7 @@ def feet_gait(
     if command_name is not None:
         command = env.command_manager.get_command(command_name)
         if command is not None:
-            linear_norm = torch.norm(command[:, :2], dim=1)
-            angular_norm = torch.abs(command[:, 2])
-            total_command = linear_norm + angular_norm
-            scale = (total_command > command_threshold).float()
-            reward *= scale
+            reward *= ops.command_active(command, command_threshold)
     return reward
 
 
@@ -244,10 +228,7 @@ class feet_swing_height:
       self.peak_heights,
     )
     first_contact = contact_sensor.compute_first_contact(dt=self.step_dt)
-    linear_norm = torch.norm(command[:, :2], dim=1)
-    angular_norm = torch.abs(command[:, 2])
-    total_command = linear_norm + angular_norm
-    active = (total_command > command_threshold).float()
+    active = ops.command_active(command, command_threshold)
     error = self.peak_heights / target_height - 1.0
     cost = torch.sum(torch.square(error) * first_contact.float(), dim=1) * active
     num_landings = torch.sum(first_contact.float())
@@ -276,10 +257,7 @@ def feet_slip(
   contact_sensor: ContactSensor = env.scene[sensor_name]
   command = env.command_manager.get_command(command_name)
   assert command is not None
-  linear_norm = torch.norm(command[:, :2], dim=1)
-  angular_norm = torch.abs(command[:, 2])
-  total_command = linear_norm + angular_norm
-  active = (total_command > command_threshold).float()
+  active = ops.command_active(command, command_threshold)
   assert contact_sensor.data.found is not None
   in_contact = (contact_sensor.data.found > 0).float()  # [B, N]
   foot_vel_xy = asset.data.site_lin_vel_w[:, asset_cfg.site_ids, :2]  # [B, N, 2]
@@ -338,8 +316,7 @@ def feet_stumble(
   if command_name is not None:
     command = env.command_manager.get_command(command_name)
     if command is not None:
-      total_command = torch.norm(command[:, :2], dim=1) + torch.abs(command[:, 2])
-      cost = cost * (total_command > command_threshold).float()
+      cost = cost * ops.command_active(command, command_threshold)
   return cost
 
 
@@ -381,8 +358,7 @@ def leg_contact_force(
   if command_name is not None:
     command = env.command_manager.get_command(command_name)
     if command is not None:
-      total_command = torch.norm(command[:, :2], dim=1) + torch.abs(command[:, 2])
-      cost = cost * (total_command > command_threshold).float()
+      cost = cost * ops.command_active(command, command_threshold)
   return cost
 
 
@@ -407,11 +383,7 @@ def soft_landing(
   if command_name is not None:
     command = env.command_manager.get_command(command_name)
     if command is not None:
-      linear_norm = torch.norm(command[:, :2], dim=1)
-      angular_norm = torch.abs(command[:, 2])
-      total_command = linear_norm + angular_norm
-      active = (total_command > command_threshold).float()
-      cost = cost * active
+      cost = cost * ops.command_active(command, command_threshold)
   return cost
 
 
@@ -511,10 +483,6 @@ def stand_still(
     if command_name is not None:
         command = env.command_manager.get_command(command_name)
         if command is not None:
-            linear_norm = torch.norm(command[:, :2], dim=1)
-            angular_norm = torch.abs(command[:, 2])
-            total_command = linear_norm + angular_norm
-            scale = (total_command <= command_threshold).float()
-            reward *= scale
+            reward *= 1.0 - ops.command_active(command, command_threshold)
     return reward
 
