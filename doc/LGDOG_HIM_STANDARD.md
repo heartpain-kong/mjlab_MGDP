@@ -66,6 +66,15 @@ python scripts/train.py LgDog1-Rough-Blind-HIM-Standard \
   --agent.run-name=V9_stability_seed42 --enable-nan-guard True
 ```
 
+地形课程可以设置内部等级上限。等级从 0 开始，`--max-terrain-level=3` 允许训练到 0–3，
+不会继续升级到 4；省略该参数则不限制。实验名可以省略，训练脚本会扫描当前日志和
+`E:\\mjlab\\数据` 归档，自动生成下一个 `V<n>_seed<seed>` 名称。
+
+```bash
+python scripts/train.py LgDog1-Rough-Blind-HIM-Standard \
+  --max-terrain-level=3 --agent.seed=42
+```
+
 `V8` 这里只是新实验的命名示例，并不表示已经启动训练。新日志位于 `logs/rsl_rl/lgdog1_velocity_blind_him_standard_v1/`。
 
 迁移到训练机时同步当前工程目录及新增文件。`archive/LgDog_HIM_patch.zip` 是早期 V7 的历史补丁，不包含这个新任务或控制面板。

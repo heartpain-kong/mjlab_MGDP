@@ -20,6 +20,7 @@ from mjlab.utils.torch import configure_torch_backends
 from mjlab.utils.wrappers import VideoRecorder
 
 from src.tasks.velocity.rl.action_monitor import ActionMonitorVecEnvWrapper
+from src.dashboard.run_naming import resolve_run_name
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,7 @@ class TrainConfig:
   video_length: int = 200
   video_interval: int = 2000
   enable_nan_guard: bool = False
+  max_terrain_level: int | None = None
   torchrunx_log_dir: str | None = None
   gpu_ids: list[int] | Literal["all"] | None = field(default_factory=lambda: [0])
 
@@ -60,6 +62,15 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
 
   cfg.agent.seed = seed
   cfg.env.seed = seed
+
+  if cfg.max_terrain_level is not None:
+    terrain_term = cfg.env.curriculum.get("terrain_levels")
+    if terrain_term is None:
+      raise ValueError("--max-terrain-level 只适用于带 terrain_levels 课程的任务")
+    if cfg.max_terrain_level < 0:
+      raise ValueError("--max-terrain-level 必须大于等于 0")
+    terrain_term.params["max_level"] = int(cfg.max_terrain_level)
+    print(f"[INFO] Terrain curriculum cap: level <= {cfg.max_terrain_level}")
 
   print(f"[INFO] Training with: device={device}, seed={seed}, rank={rank}")
 
@@ -153,11 +164,10 @@ def launch_training(task_id: str, args: TrainConfig | None = None):
   args = args or TrainConfig.from_task(task_id)
 
   # Create log directory once before launching workers.
-  log_root_path = Path("logs") / "rsl_rl" / args.agent.experiment_name
-  log_root_path.resolve()
+  log_root_path = (Path("logs") / "rsl_rl" / args.agent.experiment_name).resolve()
+  args.agent.run_name = resolve_run_name(log_root_path, args.agent.run_name, args.agent.seed)
   log_dir_name = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-  if args.agent.run_name:
-    log_dir_name += f"_{args.agent.run_name}"
+  log_dir_name += f"_{args.agent.run_name}"
   log_dir = log_root_path / log_dir_name
 
   # Select GPUs based on CUDA_VISIBLE_DEVICES and user specification.

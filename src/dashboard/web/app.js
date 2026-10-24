@@ -20,6 +20,7 @@ function collect() {
   const model = $("custom-model").value.trim() || $("model").value;
   return {mode, task:$("task").value, envs:$(mode==="play"?"play-envs":"train-envs").value,
     iterations:$("iterations").value, seed:$("seed").value, run_name:$("run-name").value,
+    max_terrain_level:$("max-terrain-level")?.value || "",
     resume:$("resume").checked, checkpoint:model, onnx:model, viewer:$("viewer").value,
     map:$("map").value, duration:$("duration").value, vx:$("vx").value, vy:$("vy").value,
     wz:$("wz").value, spawn_y:$("spawn-y").value, show_viewer:$("show-viewer").checked,
@@ -166,7 +167,7 @@ async function start() {
     $("task").value="standard";$("copy-root").textContent=state.root;$("python-path").textContent=state.python;
     updateTask();await loadModels();showMode();await preview();renderJobs();await loadActionMetrics();await loadLog();
     document.querySelectorAll("[data-mode]").forEach(button=>button.addEventListener("click",()=>{mode=button.dataset.mode;showMode();preview();}));
-    $("task").addEventListener("change",async()=>{$("custom-model").value="";$("run-name").value=`${$("task").value}_seed${$("seed").value}`;updateTask();await loadModels();showMode();await loadActionMetrics();preview();});
+    $("task").addEventListener("change",async()=>{$("custom-model").value="";$("run-name").value="";updateTask();await loadModels();showMode();await loadActionMetrics();preview();});
     $("resume").addEventListener("change",()=>{showMode();preview();});
     $("run-form").addEventListener("input",queuePreview);$("run-form").addEventListener("change",queuePreview);
     document.querySelectorAll("[data-preset]").forEach(button=>button.addEventListener("click",()=>{const smoke=button.dataset.preset==="smoke";$("train-envs").value=smoke?64:1024;$("iterations").value=smoke?2:16000;preview();}));

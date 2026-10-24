@@ -103,7 +103,7 @@ def terrain_decisions(
   return up, down, ratio
 
 
-def terrain_levels_tracking(env, env_ids, max_velocity_error=None):
+def terrain_levels_tracking(env, env_ids, max_velocity_error=None, max_level=None):
   """Read completed-episode sums BEFORE mjlab 1.2 MetricsManager.reset()."""
   sums = env.metrics_manager._episode_sums
   expected = sums["commanded_distance"][env_ids]
@@ -127,6 +127,12 @@ def terrain_levels_tracking(env, env_ids, max_velocity_error=None):
     max_velocity_error=0.8 if max_velocity_error is None else max_velocity_error,
   )
   terrain = env.scene.terrain
+  if max_level is not None:
+    max_level = int(max_level)
+    if max_level < 0:
+      raise ValueError("max_level must be >= 0")
+    # Terrain levels are zero-based.  A cap of 3 allows levels 0, 1, 2, 3.
+    up = up & (terrain.terrain_levels[env_ids] < max_level)
   terrain.update_env_origins(env_ids, up, down)
   eligible = expected >= 1.0
   count = eligible.sum().clamp_min(1)

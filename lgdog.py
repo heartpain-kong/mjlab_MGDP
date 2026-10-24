@@ -43,6 +43,8 @@ def main():
       child.add_argument("--iterations", type=int, default=16000)
       child.add_argument("--seed", type=int, default=42)
       child.add_argument("--run-name", default="")
+      child.add_argument("--max-terrain-level", type=int, default=None,
+                         help="地形课程最大等级（0 表示只训练初始等级）")
       child.add_argument("--resume", action="store_true")
     if mode == "play":
       child.add_argument("--viewer", choices=("viser", "native"), default="viser")
