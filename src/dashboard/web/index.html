@@ -17,7 +17,7 @@
   </aside>
   <main id="workspace">
     <header class="topbar"><span>工作空间 <b>/</b> mjlab</span><div><span id="connection" class="connection"><i></i> 本地服务</span><button id="refresh" class="icon-button" title="刷新模型和状态">↻</button></div></header>
-    <section class="heading"><div><div class="eyebrow">LGDOG WORKBENCH</div><h1>训练工作台</h1><p>训练、回放和部署验证，从一个入口开始。</p></div><div class="header-actions"><button id="curves" class="secondary">启动 TensorBoard</button><a href="http://127.0.0.1:6006" target="_blank" rel="noopener" class="text-link">曲线页面 ↗</a></div></section>
+    <section class="heading"><div><div class="eyebrow">LGDOG WORKBENCH</div><h1>训练工作台</h1><p>训练、回放和部署验证，从一个入口开始。</p></div><div class="header-actions"><button id="history" class="secondary">历史记录</button><button id="curves" class="secondary">启动 TensorBoard</button><a href="http://127.0.0.1:6006" target="_blank" rel="noopener" class="text-link">曲线页面 ↗</a></div></section>
     <nav class="mobile-tools" aria-label="使用与配置"><button data-doc="start">使用说明 ↗</button><button data-doc="reward-code">奖励配置 ↗</button><button data-doc="rewards">奖励调参 ↗</button></nav>
     <div class="summary"><div><small>当前任务</small><strong id="summary-task">标准地形 HIM</strong></div><div><small>策略输入</small><strong id="summary-obs">282 <em>维</em></strong></div><div><small>本任务模型</small><strong id="summary-models">—</strong></div><div><small>本次运行中</small><strong id="summary-running">0</strong></div></div>
     <div class="mode-tabs" role="tablist" aria-label="操作模式"><button class="selected" data-mode="train" role="tab" aria-selected="true">01 <span>训练</span></button><button data-mode="play" role="tab" aria-selected="false">02 <span>Play 回放</span></button><button data-mode="sim" role="tab" aria-selected="false">03 <span>Sim2Sim</span></button><button data-mode="rewards" role="tab" aria-selected="false">04 <span>查看奖励</span></button></div>
@@ -49,4 +49,5 @@
 </div>
 <div id="toast" class="toast hidden" role="status"></div>
 <dialog id="document-dialog"><div class="card-heading"><h2 id="document-title">说明</h2><button id="close-document" class="small-button">关闭 ✕</button></div><div class="document-path"><code id="document-path"></code><button id="copy-document-path" class="small-button">复制路径</button></div><pre id="document-text"></pre></dialog>
+<dialog id="history-dialog"><div class="card-heading"><h2 id="history-title">修改与运行记录</h2><div class="history-heading-actions"><button id="history-refresh" class="small-button">刷新</button><button id="copy-history" class="small-button">复制</button><button id="close-history" class="small-button">关闭 ✕</button></div></div><p class="hint" id="history-path">记录保存在 logs/dashboard/history/，追加写入，不随面板重启丢失。</p><div id="history-body" class="history-body"><div class="empty">正在读取…</div></div></dialog>
 </body></html>

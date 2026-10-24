@@ -11,6 +11,7 @@ import webbrowser
 
 from .catalog import TASKS, resolve_task
 from .commands import build_command, discover_models, display_command
+from . import history
 from .jobs import JobManager
 from .reward_editor import read_rewards, reward_detail, save_rewards
 
@@ -37,7 +38,7 @@ def create_server(root, python, host="127.0.0.1", port=8765):
   if host not in {"127.0.0.1", "localhost"}:
     raise ValueError("本地面板只允许绑定 127.0.0.1 或 localhost")
   root = Path(root).resolve()
-  jobs = JobManager(root)
+  jobs = JobManager(root, on_event=lambda event, record: history.record_run_event(root, event, record))
   token = secrets.token_urlsafe(32)
   metrics_cache = {}
   metrics_lock = threading.Lock()
@@ -166,6 +167,8 @@ def create_server(root, python, host="127.0.0.1", port=8765):
           return self.send({"task": alias, **reward_detail(root, task["profile"], query.get("name", [""])[0])})
         if parsed.path == "/api/log":
           return self.send({"text": jobs.tail(query.get("id", [""])[0])})
+        if parsed.path == "/api/history":
+          return self.send(history.read_history(root, query.get("limit", [history.DEFAULT_LIMIT])[0]))
         if parsed.path == "/api/document":
           document = DOCUMENTS.get(query.get("id", [""])[0])
           if not document:
@@ -198,7 +201,14 @@ def create_server(root, python, host="127.0.0.1", port=8765):
           return self.send({"job": jobs.launch(argv, data.get("mode", "train"), alias)})
         if self.path == "/api/rewards/save":
           alias, task = resolve_task(data.get("task", "standard"))
+          before = {item["name"]: {"weight": item["weight"], "params": item["params"]}
+                    for item in read_rewards(root, task["profile"])["rewards"]}
           result = save_rewards(root, task["profile"], data.get("changes"))
+          after = {item["name"]: {"weight": item["weight"], "params": item["params"]}
+                   for item in result.get("rewards") or []}
+          history.record_reward_edit(root, task=alias, profile=task["profile"], before=before,
+                                     after=after, source=result.get("source"),
+                                     backup=result.get("backup"))
           return self.send({"task": alias, **result})
         if self.path == "/api/stop":
           return self.send({"job": jobs.stop(str(data.get("id", "")))})

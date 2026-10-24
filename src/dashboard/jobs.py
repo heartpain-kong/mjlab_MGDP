@@ -8,6 +8,7 @@ import re
 import signal
 import subprocess
 import threading
+import time
 import uuid
 
 from .commands import display_command
@@ -16,13 +17,15 @@ ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
 
 class JobManager:
-  def __init__(self, root):
+  def __init__(self, root, on_event=None):
     self.root = Path(root).resolve()
     self.directory = self.root / "logs/dashboard/jobs"
     self.directory.mkdir(parents=True, exist_ok=True)
     self.lock = threading.RLock()
     self.jobs = {}
     self.history = []
+    # 记录回调：on_event("start" | "end", record)。只做旁路记录，异常不影响进程管理。
+    self.on_event = on_event
     for path in sorted(self.directory.glob("*.json"), reverse=True)[:20]:
       try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -41,6 +44,16 @@ class JobManager:
     temp.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
     temp.replace(path)
 
+  def _emit(self, event, record):
+    """Hand a lifecycle event to the history recorder; never break job control."""
+    callback = self.on_event
+    if callback is None:
+      return
+    try:
+      callback(event, dict(record))
+    except Exception:  # noqa: BLE001 - 记录失败不能影响启停
+      pass
+
   def _refresh(self):
     for record, process in self.jobs.values():
       code = process.poll()
@@ -49,6 +62,7 @@ class JobManager:
         record.update(status="stopped" if stopped else ("completed" if code == 0 else "failed"),
                       returncode=code, can_stop=False)
         self._save(record)
+        self._emit("end", record)
 
   def launch(self, argv, mode, task):
     with self.lock:
@@ -61,6 +75,7 @@ class JobManager:
       job_id = uuid.uuid4().hex[:12]
       log_path = self.directory / f"{job_id}.log"
       record = {"id": job_id, "mode": mode, "task": task, "command": display_command(argv),
+                "argv": [str(item) for item in argv], "started_ts": time.time(),
                 "created": datetime.now(timezone.utc).isoformat(), "status": "running",
                 "returncode": None, "can_stop": True, "log": str(log_path.relative_to(self.root))}
       env = os.environ.copy()
@@ -75,6 +90,7 @@ class JobManager:
       record["pid"] = process.pid
       self.jobs[job_id] = (record, process)
       self._save(record)
+      self._emit("start", record)
       return dict(record)
 
   def list(self):

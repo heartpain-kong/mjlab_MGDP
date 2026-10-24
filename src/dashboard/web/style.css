@@ -5,3 +5,17 @@
 @media(max-width:720px){.reward-row{grid-template-columns:20px minmax(95px,1fr) 88px}.reward-row textarea{grid-column:2 / -1}.reward-actions{align-items:flex-end;flex-direction:column}.reward-actions .primary{width:100%}}
 @media(max-width:720px){.heading{flex-wrap:wrap;gap:16px}.header-actions{display:flex;flex-direction:row;flex-wrap:wrap;gap:12px}.mobile-tools{display:flex;gap:7px;flex-wrap:wrap;margin:0 0 18px}.mobile-tools button{border:1px solid #dce7e6;background:#fff;color:#48716d;border-radius:6px;padding:7px 9px;font-size:10px}.mode-tabs button{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;padding:9px 3px}.mode-tabs span{margin:0;white-space:nowrap}}
 .metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 18px}.metric-grid>div{border-bottom:1px solid #edf1f2;padding-bottom:10px}.metric-grid small{display:block;color:var(--muted);font-size:10px;margin-bottom:7px}.metric-grid strong{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}.health-pill{font-size:10px;color:#61857a;background:#e6f2ec;border-radius:5px;padding:4px 7px}.health-pill.warning{color:#a45c4c;background:#f7e8e3}.action-health .hint{margin-top:15px}.action-health{border-color:#dceae7}
+.history-heading-actions{display:flex;gap:6px;align-items:center}
+.history-body{max-height:64vh;overflow:auto;display:grid;grid-template-columns:1fr 1fr;gap:15px}
+.history-section{border:1px solid #eaf0f2;border-radius:9px;padding:13px;background:#fbfdfd;min-width:0}
+.history-section h3{font-size:11px;font-weight:650;margin:0 0 11px;color:#43606b;letter-spacing:.3px}
+.history-row{border-bottom:1px solid #eef2f3;padding:9px 0;min-width:0}
+.history-row:last-child{border-bottom:0}
+.history-row-top{display:flex;justify-content:space-between;gap:9px;font-size:10px;color:#8398a1;margin-bottom:6px}
+.history-chip{background:#eaf3f0;color:#4a7c71;border-radius:4px;padding:2px 6px;font-size:9px;white-space:nowrap}
+.history-chip.status-failed{background:#f7e8e3;color:#a45c4c}
+.history-chip.status-stopped{background:#f2eff7;color:#6b5b85}
+.history-chip.status-completed{background:#e6f2ec;color:#61857a}
+.history-change{display:block;font:10px/1.7 Consolas,"Microsoft YaHei",monospace;color:#3f5c66;overflow-wrap:anywhere}
+.history-row .hint{margin:5px 0 0;font-size:9px;overflow-wrap:anywhere}
+@media(max-width:900px){.history-body{grid-template-columns:1fr}}

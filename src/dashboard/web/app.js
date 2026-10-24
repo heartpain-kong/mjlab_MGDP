@@ -161,6 +161,80 @@ async function refresh(all=false) {
 async function showDocument(id) {
   try {const data=await api(`/api/document?id=${encodeURIComponent(id)}`);$("document-title").textContent=data.title;$("document-path").textContent=data.path;$("document-text").textContent=data.text;$("document-dialog").showModal();}catch(error){toast(error.message);}
 }
+function formatTime(value){ if(!value)return "—"; const date=new Date(value); return Number.isNaN(date.getTime())?String(value):date.toLocaleString(); }
+function historySection(title,count){
+  const section=document.createElement("section");section.className="history-section";
+  const heading=document.createElement("h3");heading.textContent=`${title} · ${count}`;section.append(heading);
+  if(!count){const empty=document.createElement("div");empty.className="empty";empty.textContent="还没有记录。";section.append(empty);}
+  return section;
+}
+function historyRewardRow(edit){
+  const row=document.createElement("div");row.className="history-row";
+  const top=document.createElement("div");top.className="history-row-top";
+  const when=document.createElement("span");when.textContent=formatTime(edit.time);
+  const who=document.createElement("span");who.className="history-chip";who.textContent=`${edit.task||"?"} · ${edit.profile||"?"}`;
+  top.append(when,who);row.append(top);
+  for(const change of edit.changes||[]){
+    const line=document.createElement("code");line.className="history-change";
+    const [before,after]=change.weight||[];
+    line.textContent=`${change.name}: ${before} → ${after}`;
+    const [oldParams,newParams]=change.params||[];
+    if(JSON.stringify(oldParams||{})!==JSON.stringify(newParams||{})){
+      line.textContent+=` · params ${JSON.stringify(oldParams||{})} → ${JSON.stringify(newParams||{})}`;
+    }
+    row.append(line);
+  }
+  if(edit.backup){const note=document.createElement("small");note.className="hint";note.textContent=`备份：${edit.backup}`;row.append(note);}
+  return row;
+}
+function historyRunRow(run){
+  const row=document.createElement("div");row.className="history-row";
+  const top=document.createElement("div");top.className="history-row-top";
+  const when=document.createElement("span");when.textContent=formatTime(run.started||run.ended);
+  const status=document.createElement("span");status.className=`history-chip status-${run.status||"unknown"}`;status.textContent=statuses[run.status]||run.status||"未知";
+  top.append(when,status);row.append(top);
+  const what=document.createElement("code");what.className="history-change";
+  const bits=[modeNames[run.mode]||run.mode,run.task];
+  if(run.run_name)bits.push(`run=${run.run_name}`);
+  if(run.envs)bits.push(`envs=${run.envs}`);
+  if(run.iterations)bits.push(`iter=${run.iterations}`);
+  if(run.seed!==undefined&&run.seed!==null)bits.push(`seed=${run.seed}`);
+  if(run.duration_s!=null)bits.push(`${run.duration_s}s`);
+  what.textContent=bits.filter(Boolean).join(" · ");row.append(what);
+  if(run.log){const log=document.createElement("small");log.className="hint";log.textContent=run.log;row.append(log);}
+  return row;
+}
+function renderHistory(data){
+  const body=$("history-body");body.replaceChildren();
+  const edits=data.reward_edits||[], runs=data.runs||[];
+  const editSection=historySection("奖励修改",edits.length);
+  for(const edit of edits)editSection.append(historyRewardRow(edit));
+  const runSection=historySection("运行记录",runs.length);
+  for(const run of runs)runSection.append(historyRunRow(run));
+  body.append(editSection,runSection);
+  $("copy-history").dataset.text=historyText(data);
+}
+function historyText(data){
+  const lines=[];
+  for(const edit of data.reward_edits||[]){
+    lines.push(`[奖励修改] ${edit.time} ${edit.task} / ${edit.profile}`);
+    for(const change of edit.changes||[]){
+      const [before,after]=change.weight||[];
+      lines.push(`  ${change.name}: ${before} -> ${after}`);
+    }
+  }
+  for(const run of data.runs||[]){
+    lines.push(`[运行] ${run.started||run.ended} ${modeNames[run.mode]||run.mode} ${run.task} ${statuses[run.status]||run.status||""}${run.run_name?` run=${run.run_name}`:""}`);
+  }
+  return lines.join("\n");
+}
+async function showHistory(){
+  try{
+    const data=await api("/api/history?limit=80");
+    renderHistory(data);
+    if(!$("history-dialog").open)$("history-dialog").showModal();
+  }catch(error){toast(error.message);}
+}
 async function start() {
   try {
     state=await api("/api/state");
@@ -185,6 +259,10 @@ async function start() {
     document.querySelectorAll("[data-doc]").forEach(button=>button.addEventListener("click",()=>showDocument(button.dataset.doc)));
     $("close-document").addEventListener("click",()=>$("document-dialog").close());
     $("copy-document-path").addEventListener("click",()=>copy($("document-path").textContent));
+    $("history").addEventListener("click",showHistory);
+    $("history-refresh").addEventListener("click",showHistory);
+    $("close-history").addEventListener("click",()=>$("history-dialog").close());
+    $("copy-history").addEventListener("click",()=>{const text=$("copy-history").dataset.text||"";text?copy(text):toast("还没有可复制的记录");});
     setInterval(()=>refresh(),1800);
   }catch(error){toast(error.message);$("command").textContent="面板初始化失败，请检查服务终端。";}
 }

@@ -51,6 +51,31 @@ Play 默认使用 Viser 浏览器界面，启动后打开页面中的“机器�
 
 关闭浏览器不会停止任务。面板服务退出后，子进程仍直接向日志文件写输出；再次启动面板会显示历史记录，但不会直接接管旧进程。标为“历史·状态未知”的任务需根据 PID 在系统中检查；只有本次服务启动的进程有停止按钮。避免在不确认旧任务状态时重复启动训练。
 
+## 审计记录：改过哪些 reward、跑过哪些训练
+
+页面右上角的“**历史记录**”汇总两类追加日志，写在 `logs/dashboard/history/` 下：
+
+| 文件 | 内容 | 写入时机 |
+|---|---|---|
+| `reward_edits.jsonl` | 每次“保存奖励修改”的实际变化：reward 名、旧值 → 新值、参数变化、备份文件 | 保存成功后 |
+| `train_runs.jsonl` | 每个操作一条 `run_start` 和一条 `run_end`：模式、任务、命令、PID、日志路径、状态、返回码、耗时 | 进程启动时 / 进程结束时 |
+
+配套细节：
+
+- 两者都是**单行 JSON 追加写**，文件长期增长也不会拖慢面板；读取只取尾部若干条（`GET /api/history?limit=80`）。
+- 训练记录的 `run_start` 还会从命令行里解析出 `run_name` / `envs` / `iterations` / `seed`（回放和 sim2sim 记录 `checkpoint` / `onnx` / `map`），事后能还原当时想跑什么。
+- 记录失败**不会影响**启停进程：`JobManager` 只把事件交给回调，异常被吞掉。
+- 只有**真正变化**的 reward 才入账；点保存但值没动不会产生垃圾记录。
+- 坏掉的行（手改文件、写到一半断电）会被跳过，不影响其它记录。
+- 首次启动前文件不存在时，接口返回 `{"reward_edits": [], "runs": []}`。
+
+想直接看文件：
+
+```bash
+tail -n 20 logs/dashboard/history/reward_edits.jsonl
+tail -n 40 logs/dashboard/history/train_runs.jsonl
+```
+
 ## 短命令
 
 | 短名称 | 方案 |
