@@ -1,17 +1,15 @@
 """HIM-inspired actor, auxiliary learning, and export for mjlab/RSL-RL 5."""
 
 import copy
-from pathlib import Path
 
 import torch
 from torch import nn
 from rsl_rl.algorithms import PPO
 from rsl_rl.models import MLPModel
 from rsl_rl.modules import EmpiricalNormalization
-from mjlab.rl.runner import MjlabOnPolicyRunner
-from mjlab.rl.exporter_utils import attach_metadata_to_onnx, get_base_metadata
 
 from .him_estimator import HIMEstimator
+from .runner import PPOHIMRunner
 
 
 class HIMActor(MLPModel):
@@ -201,25 +199,6 @@ class HIMPPO(PPO):
     return iteration
 
 
-class HIMRunner(MjlabOnPolicyRunner):
-  def save(self, path, infos=None):
-    super().save(path, infos)
-    directory = str(Path(path).parent)
-    self.export_policy_to_onnx(directory)
-    try:
-      self.export_policy_to_jit(directory, "policy_jit.pt")
-    except (RuntimeError, TypeError, ValueError) as error:
-      # ONNX and the regular checkpoint remain usable if a local TorchScript
-      # compiler cannot handle a future distribution module.
-      print(f"[WARN] TorchScript export skipped: {type(error).__name__}: {error}")
-
-  def export_policy_to_onnx(self, path, filename="policy.onnx", verbose=False):
-    super().export_policy_to_onnx(path, filename, verbose)
-    metadata = get_base_metadata(self.env.unwrapped, "lgdog_him")
-    metadata.update({"policy_architecture": "lgdog_him_v1",
-                     "history_length": str(self.alg.actor.history_length),
-                     "frame_dim": str(self.alg.actor.frame_dim),
-                     "history_order": "oldest_to_newest",
-                     "history_reset": "repeat_first_frame",
-                     "control_dt": str(self.env.unwrapped.step_dt)})
-    attach_metadata_to_onnx(str(Path(path) / filename), metadata)
+# Backward-compatible name for scripts and downstream imports.  New task
+# registrations use the shared runner directly.
+HIMRunner = PPOHIMRunner

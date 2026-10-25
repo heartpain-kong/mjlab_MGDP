@@ -20,6 +20,10 @@ from mjlab.utils.torch import configure_torch_backends
 from mjlab.utils.wrappers import VideoRecorder
 
 from src.tasks.velocity.rl.action_monitor import ActionMonitorVecEnvWrapper
+from src.tasks.velocity.mdp.curriculums import (
+  make_velocity_stages,
+  velocity_ranges_from_bounds,
+)
 from src.dashboard.run_naming import resolve_run_name
 
 
@@ -34,6 +38,8 @@ class TrainConfig:
   enable_nan_guard: bool = False
   terrain_num_rows: int | None = None
   terrain_difficulty_max: float | None = None
+  velocity_min_abs: float | None = None
+  velocity_max_abs: float | None = None
   resume_checkpoint: str | None = None
   torchrunx_log_dir: str | None = None
   gpu_ids: list[int] | Literal["all"] | None = field(default_factory=lambda: [0])
@@ -81,6 +87,39 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
       lower, _ = generator.difficulty_range
       generator.difficulty_range = (lower, float(cfg.terrain_difficulty_max))
       print(f"[INFO] Terrain difficulty range: {generator.difficulty_range}")
+
+  if cfg.velocity_min_abs is not None or cfg.velocity_max_abs is not None:
+    min_abs = 0.4 if cfg.velocity_min_abs is None else float(cfg.velocity_min_abs)
+    max_abs = 0.8 if cfg.velocity_max_abs is None else float(cfg.velocity_max_abs)
+    final_ranges = velocity_ranges_from_bounds(min_abs, max_abs)
+    initial_ranges = velocity_ranges_from_bounds(min_abs * 0.5, max_abs * 0.5)
+    twist = cfg.env.commands.get("twist")
+    if twist is None:
+      raise ValueError("当前任务没有 twist 速度指令，不能设置速度课程")
+    command_curriculum = cfg.env.curriculum.get("command_vel")
+    if command_curriculum is None:
+      # Legacy PPO/terrain profiles without a command curriculum still honor
+      # the workbench values as a fixed final command range.
+      twist.ranges.lin_vel_x = final_ranges["lin_vel_x"]
+      twist.ranges.lin_vel_y = final_ranges["lin_vel_y"]
+      twist.ranges.ang_vel_z = final_ranges["ang_vel_z"]
+      print("[INFO] Task has no command curriculum; using the final speed range as fixed limits")
+    else:
+      twist.ranges.lin_vel_x = initial_ranges["lin_vel_x"]
+      twist.ranges.lin_vel_y = initial_ranges["lin_vel_y"]
+      twist.ranges.ang_vel_z = final_ranges["ang_vel_z"]
+      if "velocity_stages" in command_curriculum.params:
+        command_curriculum.params["velocity_stages"] = make_velocity_stages(min_abs, max_abs)
+      else:
+        command_curriculum.params["lin_vel_x_limit"] = final_ranges["lin_vel_x"]
+        command_curriculum.params["lin_vel_y_limit"] = final_ranges["lin_vel_y"]
+    print(
+      "[INFO] Velocity curriculum: "
+      f"min_abs={min_abs:g}, max_abs={max_abs:g}, "
+      f"final_x={final_ranges['lin_vel_x']}, "
+      f"final_y={final_ranges['lin_vel_y']}, "
+      f"final_yaw={final_ranges['ang_vel_z']}"
+    )
 
   print(f"[INFO] Training with: device={device}, seed={seed}, rank={rank}")
 

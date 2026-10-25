@@ -92,12 +92,20 @@ def build_command(root, python, options):
     envs = integer(options.get("envs", 1024), "环境数", 1, 8192)
     iterations = integer(options.get("iterations", 16000), "训练轮数", 1, 1000000)
     seed = integer(options.get("seed", 42), "seed", 0, 2147483647)
-    terrain_rows = str(options.get("terrain_num_rows", "")).strip()
+    terrain_rows = str(options.get("terrain_num_rows") or "").strip()
     if terrain_rows:
       terrain_rows = integer(terrain_rows, "地形训练行数", 2, 100)
-    terrain_difficulty = str(options.get("terrain_difficulty_max", "")).strip()
+    terrain_difficulty = str(options.get("terrain_difficulty_max") or "").strip()
     if terrain_difficulty:
       terrain_difficulty = number(terrain_difficulty, "最大地形难度倍率", 0.5, 1.5)
+    velocity_min = str(options.get("velocity_min_abs") or "").strip()
+    if velocity_min:
+      velocity_min = number(velocity_min, "最低速度绝对值", 0.05, 3.0)
+    velocity_max = str(options.get("velocity_max_abs") or "").strip()
+    if velocity_max:
+      velocity_max = number(velocity_max, "最高速度绝对值", 0.05, 3.0)
+    if velocity_min and velocity_max and velocity_min > velocity_max:
+      raise ValueError("最低速度绝对值不能大于最高速度绝对值")
     name = str(options.get("run_name", "")).strip()
     if name and not re.fullmatch(r"[a-zA-Z0-9_.-]{1,80}", name):
       raise ValueError("实验名只能使用 1–80 位英文字母、数字、下划线、点和短横线")
@@ -108,6 +116,10 @@ def build_command(root, python, options):
       argv.append(f"--terrain-num-rows={terrain_rows}")
     if terrain_difficulty != "":
       argv.append(f"--terrain-difficulty-max={terrain_difficulty}")
+    if velocity_min != "":
+      argv.append(f"--velocity-min-abs={velocity_min}")
+    if velocity_max != "":
+      argv.append(f"--velocity-max-abs={velocity_max}")
     auto_name = next_run_name(root / "logs/rsl_rl" / task["experiment"], seed)
     argv.append(f"--agent.run-name={name or auto_name}")
     if options.get("resume"):
@@ -117,7 +129,7 @@ def build_command(root, python, options):
       for source_alias in task.get("resume_sources", ()):
         compatible.add((root / "logs/rsl_rl" / TASKS[source_alias]["experiment"]).resolve())
       if checkpoint.parent.parent not in compatible:
-        raise ValueError("续训请选择当前任务或兼容阶段的 checkpoint")
+        raise ValueError("续训只能选择当前算法和场景的 checkpoint；平地不能续训崎岖或障碍场景")
       argv.append("--agent.resume=True")
       if checkpoint.parent.parent == expected:
         argv += [f"--agent.load-run={re.escape(checkpoint.parent.name)}$",

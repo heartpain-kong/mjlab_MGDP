@@ -1,4 +1,8 @@
 import os
+from pathlib import Path
+import warnings
+
+import torch
 
 import wandb
 
@@ -8,6 +12,7 @@ from mjlab.rl.exporter_utils import (
   get_base_metadata,
 )
 from mjlab.rl.runner import MjlabOnPolicyRunner
+from src.tasks.velocity.mdp.curriculums import RewardBasedVelocityCurriculum
 
 
 class VelocityOnPolicyRunner(MjlabOnPolicyRunner):
@@ -26,3 +31,95 @@ class VelocityOnPolicyRunner(MjlabOnPolicyRunner):
     attach_metadata_to_onnx(onnx_path, metadata)
     if self.logger.logger_type in ["wandb"]:
       wandb.save(policy_path + filename, base_path=os.path.dirname(policy_path))
+
+
+class PPOHIMRunner(MjlabOnPolicyRunner):
+  """One LgDog PPO entry point with optional HIM history identification.
+
+  Plain PPO actors keep the normal single-frame contract.  HIM actors expose
+  ``estimator`` and keep their six-frame export contract.  The runner is shared
+  so checkpoint/export handling stays in one place while incompatible weights
+  remain rejected by the model and algorithm contracts.
+  """
+  env: RslRlVecEnvWrapper
+
+  @property
+  def is_him(self):
+    return hasattr(self.alg.actor, "estimator")
+
+  def _velocity_curriculum(self):
+    manager = getattr(getattr(self.env, "unwrapped", None), "curriculum_manager", None)
+    if manager is None or "command_vel" not in getattr(manager, "active_terms", ()):
+      return None
+    term = manager.get_term_cfg("command_vel").func
+    return term if isinstance(term, RewardBasedVelocityCurriculum) else None
+
+  def save(self, path: str, infos=None):
+    infos = {**(infos or {})}
+    curriculum = self._velocity_curriculum()
+    if curriculum is not None:
+      infos["him_velocity_curriculum"] = curriculum.state_dict()
+    super().save(path, infos)
+    policy_dir = Path(path).parent
+    self.export_policy_to_onnx(str(policy_dir), "policy.onnx")
+    try:
+      self.export_policy_to_jit(str(policy_dir), "policy_jit.pt")
+    except (AttributeError, RuntimeError, TypeError, ValueError) as error:
+      print(f"[WARN] TorchScript export skipped: {type(error).__name__}: {error}")
+    if self.logger.logger_type in ["wandb"]:
+      wandb.save(str(policy_dir / "policy.onnx"), base_path=str(policy_dir.parent))
+      jit_path = policy_dir / "policy_jit.pt"
+      if jit_path.is_file():
+        wandb.save(str(jit_path), base_path=str(policy_dir.parent))
+
+  def load(self, path, load_cfg=None, strict=True, map_location=None):
+    infos = super().load(path, load_cfg, strict, map_location)
+    curriculum = self._velocity_curriculum()
+    state = (infos or {}).get("him_velocity_curriculum") if isinstance(infos, dict) else None
+    if curriculum is not None:
+      if state is not None:
+        curriculum.load_state_dict(state)
+      else:
+        self._restore_legacy_velocity_ranges(curriculum, path)
+      # Refresh command samples after restoring mutable curriculum ranges.
+      with torch.inference_mode():
+        self.env.reset()
+    return infos
+
+  @staticmethod
+  def _restore_legacy_velocity_ranges(curriculum, checkpoint_path):
+    """Recover ranges from old env.yaml checkpoints without curriculum state."""
+    try:
+      import yaml
+      from src.utils.training_logs import ConfigLoader
+      config_path = Path(checkpoint_path).resolve().parent / "params" / "env.yaml"
+      if config_path.is_file():
+        saved_cfg = yaml.load(config_path.read_text(), Loader=ConfigLoader)
+        if isinstance(saved_cfg, dict) and curriculum.restore_legacy_ranges(saved_cfg):
+          return
+    except Exception:
+      pass
+    warnings.warn(
+      "Checkpoint has no velocity curriculum state or saved command ranges; "
+      "using the configured initial ranges."
+    )
+
+  def export_policy_to_onnx(self, path, filename="policy.onnx", verbose=False):
+    super().export_policy_to_onnx(path, filename, verbose)
+    if self.is_him:
+      metadata = get_base_metadata(self.env.unwrapped, "lgdog_him")
+      metadata.update({
+        "policy_architecture": "lgdog_him_v1",
+        "history_length": str(self.alg.actor.history_length),
+        "frame_dim": str(self.alg.actor.frame_dim),
+        "history_order": "oldest_to_newest",
+        "history_reset": "repeat_first_frame",
+        "control_dt": str(self.env.unwrapped.step_dt),
+      })
+    else:
+      run_name = (
+        wandb.run.name if self.logger.logger_type == "wandb" and wandb.run else "local"
+      )  # type: ignore[assignment]
+      metadata = get_base_metadata(self.env.unwrapped, run_name)
+      metadata.update({"policy_architecture": "lgdog_ppo_v1", "history_length": "1"})
+    attach_metadata_to_onnx(str(Path(path) / filename), metadata)

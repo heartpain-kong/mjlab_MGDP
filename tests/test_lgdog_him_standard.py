@@ -7,9 +7,14 @@ from unittest.mock import patch
 from mjlab.tasks.registry import load_env_cfg, load_rl_cfg, load_runner_cls
 from mjlab.terrains.config import ROUGH_TERRAINS_CFG
 from src.tasks.velocity.config.lgdog1 import blind_mdp
-from src.tasks.velocity.config.lgdog1.him_env_cfg import lgdog1_him_env_cfg, lgdog1_him_standard_env_cfg
+from src.tasks.velocity.mdp.curriculums import RewardBasedVelocityCurriculum
+from src.tasks.velocity.config.lgdog1.him_env_cfg import (
+  lgdog1_him_env_cfg,
+  lgdog1_him_flat_env_cfg,
+  lgdog1_him_standard_env_cfg,
+)
 from src.tasks.velocity.config.lgdog1.reward_cfg import REWARD_PROFILES
-from src.tasks.velocity.rl.him import HIMRunner
+from src.tasks.velocity.rl import PPOHIMRunner
 
 
 TASK = "LgDog1-Rough-Blind-HIM-Standard"
@@ -61,7 +66,7 @@ class StandardHIMTests(unittest.TestCase):
 
   def test_registered_runner_and_checkpoint_directory_are_independent(self):
     cfg = load_rl_cfg(TASK)
-    self.assertIs(load_runner_cls(TASK), HIMRunner)
+    self.assertIs(load_runner_cls(TASK), PPOHIMRunner)
     self.assertEqual(cfg.experiment_name, "lgdog1_velocity_blind_him_standard_v1")
     self.assertNotEqual(cfg.experiment_name, load_rl_cfg("LgDog1-Rough-Blind-HIM").experiment_name)
     self.assertTrue(cfg.actor.class_name.endswith(":HIMActor"))
@@ -78,12 +83,20 @@ class StandardHIMTests(unittest.TestCase):
   def test_improved_curriculum_and_relative_clearance_are_used_on_standard_terrain(self):
     cfg = lgdog1_him_standard_env_cfg()
     self.assertEqual(cfg.scene.terrain.max_init_terrain_level, 1)
-    self.assertNotIn("command_vel", cfg.curriculum)
+    self.assertIn("command_vel", cfg.curriculum)
+    self.assertIs(cfg.curriculum["command_vel"].func, RewardBasedVelocityCurriculum)
     self.assertIs(cfg.curriculum["terrain_levels"].func, blind_mdp.terrain_levels_tracking)
     self.assertEqual(cfg.curriculum["terrain_levels"].params, {"max_velocity_error": 0.8})
     self.assertIs(cfg.rewards["foot_clearance"].func, blind_mdp.feet_clearance_terrain)
     self.assertEqual(cfg.rewards["leg_contact_force"].params["sensor_name"], "legs_ground_contact")
-    self.assertEqual(cfg.commands["twist"].ranges.lin_vel_x, (-0.4, 0.8))
+    self.assertEqual(cfg.commands["twist"].ranges.lin_vel_x, (-0.2, 0.4))
+
+  def test_flat_him_keeps_speed_curriculum_but_removes_terrain_curriculum(self):
+    cfg = lgdog1_him_flat_env_cfg()
+    self.assertEqual(cfg.scene.terrain.terrain_type, "plane")
+    self.assertNotIn("terrain_levels", cfg.curriculum)
+    self.assertIs(cfg.curriculum["command_vel"].func, RewardBasedVelocityCurriculum)
+    self.assertEqual(cfg.commands["twist"].ranges.lin_vel_x, (-0.2, 0.4))
 
 
 if __name__ == "__main__":

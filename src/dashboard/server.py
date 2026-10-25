@@ -1,16 +1,22 @@
 """Loopback-only browser workbench. No external frontend/runtime dependencies."""
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import csv
 import hmac
 import json
+import os
 from pathlib import Path
 import secrets
+import shutil
+import subprocess
 import threading
+import time
 from urllib.parse import parse_qs, urlparse
 import webbrowser
 
 from .catalog import ALGORITHMS, SCENES, SIM2SIM_MAPS, TASKS, resolve_task
-from .commands import build_command, discover_models, display_command
+from .commands import build_command, discover_models, display_command, integer
+from .run_naming import next_run_name
 from . import history
 from .jobs import JobManager
 from .reward_editor import read_rewards, reward_detail, save_rewards
@@ -32,6 +38,57 @@ ACTION_METRIC_TAGS = {
   "mean_reward": "Train/mean_reward",
   "terrain_level": "Curriculum/terrain_levels/level_mean",
 }
+
+
+def _nvidia_smi_path():
+  candidates = [shutil.which("nvidia-smi")]
+  if os.name == "nt":
+    candidates.extend([
+      r"C:\Windows\System32\nvidia-smi.exe",
+      r"C:\Program Files\NVIDIA Corporation\NVSMI\nvidia-smi.exe",
+    ])
+  return next((path for path in candidates if path and Path(path).is_file()), None)
+
+
+def gpu_info():
+  """Return lightweight GPU telemetry without importing torch or CUDA libraries."""
+  executable = _nvidia_smi_path()
+  if not executable:
+    return {"available": False, "gpus": [], "reason": "未找到 nvidia-smi"}
+  query = [
+    executable, "--query-gpu=index,name,memory.total,memory.used,memory.free,"
+    "utilization.gpu,temperature.gpu,power.draw", "--format=csv,noheader,nounits",
+  ]
+  kwargs = {"capture_output": True, "text": True, "timeout": 2, "check": False}
+  if os.name == "nt":
+    kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+  try:
+    result = subprocess.run(query, **kwargs)
+  except (OSError, subprocess.SubprocessError) as error:
+    return {"available": False, "gpus": [], "reason": f"nvidia-smi 读取失败：{type(error).__name__}"}
+  if result.returncode != 0:
+    reason = (result.stderr or "nvidia-smi 返回错误").strip().splitlines()[0]
+    return {"available": False, "gpus": [], "reason": reason[:160]}
+  gpus = []
+  for row in csv.reader(result.stdout.splitlines()):
+    if len(row) < 8:
+      continue
+    def numeric(value, integer_value=False):
+      value = value.strip()
+      try:
+        number = float(value)
+      except ValueError:
+        return None
+      return int(number) if integer_value else number
+    gpus.append({
+      "index": numeric(row[0], True), "name": row[1].strip(),
+      "memory_total_mib": numeric(row[2], True), "memory_used_mib": numeric(row[3], True),
+      "memory_free_mib": numeric(row[4], True), "utilization_gpu": numeric(row[5], True),
+      "temperature_c": numeric(row[6], True), "power_w": numeric(row[7]),
+    })
+  return {"available": bool(gpus), "gpus": gpus,
+          "updated": time.time(), "source": executable,
+          "reason": None if gpus else "nvidia-smi 没有返回 GPU 数据"}
 
 
 def create_server(root, python, host="127.0.0.1", port=8765):
@@ -157,7 +214,15 @@ def create_server(root, python, host="127.0.0.1", port=8765):
                             "algorithms": [{"alias": alias, **item} for alias, item in ALGORITHMS.items()],
                             "scenes": [{"alias": alias, **item} for alias, item in SCENES.items()],
                             "sim2sim_maps": [{"alias": alias, **item} for alias, item in SIM2SIM_MAPS.items()],
-                            "jobs": jobs.list(), "documents": [{"id": key, "label": value[0]} for key, value in DOCUMENTS.items()]})
+                            "gpu": gpu_info(), "jobs": jobs.list(),
+                            "documents": [{"id": key, "label": value[0]} for key, value in DOCUMENTS.items()]})
+        if parsed.path == "/api/gpu":
+          return self.send(gpu_info())
+        if parsed.path == "/api/run-name":
+          alias, task = resolve_task(query.get("task", ["standard"])[0])
+          seed = integer(query.get("seed", [42])[0], "seed", 0, 2147483647)
+          return self.send({"task": alias, "seed": seed,
+                            "name": next_run_name(root / "logs/rsl_rl" / task["experiment"], seed)})
         if parsed.path == "/api/models":
           return self.send({"models": discover_models(root, query.get("task", ["standard"])[0])})
         if parsed.path == "/api/metrics":

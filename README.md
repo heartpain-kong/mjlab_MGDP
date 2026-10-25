@@ -1,15 +1,44 @@
 # LgDog · mjlab 训练工作台
 
+## Ubuntu 一键安装
+
+在 Ubuntu 22.04/24.04 的算力租借实例中，把仓库上传或克隆后执行：
+
+```bash
+cd unitree_rl_mjlab_lgdog
+bash install_ubuntu.sh
+source .venv/bin/activate
+python scripts/verify_install.py
+```
+
+脚本会安装系统编译库、创建 `.venv`、安装锁定的 mjlab/MuJoCo/Warp 组合、以 editable 模式安装当前源码，并检查 LgDog 任务是否注册成功。默认使用 Python 3.10–3.13 和 PyPI 的 PyTorch GPU 包；只有做 CPU 导入检查时使用 `bash install_ubuntu.sh --cpu`。显卡训练仍需要 NVIDIA 驱动和可用 CUDA 驱动。
+
+已有系统依赖或没有 sudo 权限时：
+
+```bash
+bash install_ubuntu.sh --skip-system-deps
+```
+
+需要指定 PyTorch CUDA 源时：
+
+```bash
+bash install_ubuntu.sh --torch-index https://download.pytorch.org/whl/cu128
+```
+
+详细参数和手工安装步骤见 [doc/setup_zh.md](doc/setup_zh.md)；GPUFree 平台的 CUDA、SSH 转发和显存记录见 [doc/DEPLOYMENT_GPUFREE.md](doc/DEPLOYMENT_GPUFREE.md)。
+
+## 运行
+
 在已安装训练依赖的 Python 环境中，进入这个目录：
 
 ```bash
 python lgdog.py
 ```
 
-浏览器打开 **http://127.0.0.1:8765**。选择任务后，可以启动训练、play 回放、sim2sim、查看奖励和真实日志。默认任务是 **HIM + 标准崎岖地形盲走**。
+浏览器打开 **http://127.0.0.1:8765**。选择任务后，可以启动训练、play 回放、sim2sim、查看奖励和真实日志。默认任务是 **HIM-PPO + 标准崎岖地形盲走**。
 
 ```bash
-python lgdog.py tasks                      # 看 7 个任务的短名称
+python lgdog.py tasks                      # 看 8 个任务的短名称
 python lgdog.py kline                      # 曲线终端：把 TensorBoard 曲线当 K 线看（端口 8766）
 python lgdog.py train standard --envs 64 --iterations 2
 python lgdog.py play standard              # 自动选对应任务最新 checkpoint
@@ -51,5 +80,6 @@ python lgdog.py kline            # 浏览器打开 http://127.0.0.1:8766
 - [标准地形 HIM 训练说明](doc/LGDOG_HIM_STANDARD.md)
 - [奖励调参](doc/REWARDS.md)
 - [环境安装](doc/setup_zh.md)
+- [GPUFree Ubuntu 部署记录](doc/DEPLOYMENT_GPUFREE.md)
 
 目录已从 `unitree_rl_mjlab_lgdog/unitree_rl_mjlab_lgdog/` 合并为一层，训练日志和模型随工程一起保留。原有 `scripts/train.py`、`play.py`、`sim2sim.py` 仍可直接运行。上游中英文 README 保存在 `doc/UPSTREAM_README*.md`。

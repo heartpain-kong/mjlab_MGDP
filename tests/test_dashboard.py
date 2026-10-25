@@ -36,6 +36,19 @@ class CommandTests(unittest.TestCase):
     with self.assertRaisesRegex(ValueError, "实验名"):
       build_command(self.root, sys.executable, {"mode":"train", "run_name":"bad; command"})
 
+  def test_training_preview_converts_positive_speed_bounds_to_cli_flags(self):
+    command = build_command(self.root, sys.executable, {
+      "mode": "train", "velocity_min_abs": "0.4", "velocity_max_abs": "0.8",
+    })
+    self.assertIn("--velocity-min-abs=0.4", command)
+    self.assertIn("--velocity-max-abs=0.8", command)
+    with self.assertRaisesRegex(ValueError, "最低速度绝对值"):
+      build_command(self.root, sys.executable, {"mode": "train", "velocity_min_abs": "-0.1"})
+    with self.assertRaisesRegex(ValueError, "不能大于最高"):
+      build_command(self.root, sys.executable, {
+        "mode": "train", "velocity_min_abs": "0.9", "velocity_max_abs": "0.8",
+      })
+
   def test_latest_numeric_checkpoint_skips_new_empty_run(self):
     self.checkpoint(name="model_99.pt")
     chosen = self.checkpoint(name="model_100.pt")
@@ -53,7 +66,7 @@ class CommandTests(unittest.TestCase):
 
   def test_resume_rejects_other_task_and_uses_exact_run_pattern(self):
     old = self.checkpoint("lgdog1_velocity_blind_him_v1")
-    with self.assertRaisesRegex(ValueError, "兼容阶段"):
+    with self.assertRaisesRegex(ValueError, "只能选择当前算法"):
       build_command(self.root, sys.executable, {"mode":"train", "resume":True, "checkpoint":str(old)})
     new = self.checkpoint(run="2026-10-17_V8.a")
     command = build_command(self.root, sys.executable, {"mode":"train", "resume":True, "checkpoint":str(new)})
@@ -118,6 +131,7 @@ class HTTPTests(unittest.TestCase):
     status, body = self.request("GET", "/")
     self.assertEqual(status, 200)
     self.assertIn("训练工作台", body.decode())
+    self.assertIn("最低速度绝对值", body.decode())
     status, body = self.request("GET", "/api/state")
     self.assertEqual(status, 200)
     state = json.loads(body)

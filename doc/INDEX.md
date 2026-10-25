@@ -17,6 +17,7 @@
 | V1–V7b 历史训练记录 | [TRAINING_V.md](TRAINING_V.md) |
 | TerrainV4 分析 | [LGDOG_TERRAIN_V4.md](LGDOG_TERRAIN_V4.md) |
 | 安装训练依赖 | [setup_zh.md](setup_zh.md) |
+| GPUFree Ubuntu 22.04 部署、CUDA 修复、SSH 转发和显存经验 | [DEPLOYMENT_GPUFREE.md](DEPLOYMENT_GPUFREE.md) |
 | 原项目说明 | [中文](UPSTREAM_README_zh.md) / [English](UPSTREAM_README.md) |
 
 `archive/` 内为历史补丁和验证记录，当前功能请同步完整工程。模型与训练快照仍在 `logs/rsl_rl/`。旧记录里提到的 Linux 机器外部 `DEPLOY_NOTES.md`、`export/` 不属于这份工程的随附文件。

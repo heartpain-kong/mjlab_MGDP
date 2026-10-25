@@ -1,6 +1,6 @@
 "use strict";
 const $ = id => document.getElementById(id);
-let state = null, mode = "train", models = [], rewardData = null, selectedJob = null, previewVersion = 0, timer = null;
+let state = null, mode = "train", models = [], rewardData = null, selectedJob = null, previewVersion = 0, timer = null, runNameVersion = 0;
 let lastCommand = "";
 const modeNames = {train:"训练", play:"Play 回放", sim:"Sim2Sim", rewards:"查看奖励", curves:"训练曲线"};
 const statuses = {running:"运行中", stopping:"停止中", completed:"已完成", failed:"失败", stopped:"已停止", unknown:"历史·状态未知"};
@@ -15,7 +15,7 @@ async function api(path, body) {
 }
 function toast(text) { $("toast").textContent=text; $("toast").classList.remove("hidden"); clearTimeout(timer); timer=setTimeout(()=>$("toast").classList.add("hidden"),4500); }
 async function copy(text) { try { await navigator.clipboard.writeText(text); toast("已复制"); } catch { toast("浏览器不允许复制，请手动选择文本"); } }
-function task() { return state.tasks.find(t=>t.alias===$("task").value); }
+function task() { return state?.tasks?.find(t=>t.alias===$("task")?.value)||null; }
 function matchingTasks() {
   const algorithm=$("algorithm")?.value, scene=$("scene")?.value;
   return state.tasks.filter(item=>(!algorithm||item.algorithm===algorithm)&&(!scene||item.scene===scene));
@@ -27,16 +27,14 @@ function renderModelSceneSelectors(preferredAlias=$("task")?.value||"standard") 
   const algorithmValue=algorithm.value||current.algorithm||"him";
   algorithm.replaceChildren(...state.algorithms.map(item=>new Option(`${item.label} · ${item.description}`,item.alias)));
   algorithm.value=state.algorithms.some(item=>item.alias===algorithmValue)?algorithmValue:(current.algorithm||"him");
-  const availableScenes=state.scenes.filter(item=>state.tasks.some(taskItem=>taskItem.algorithm===algorithm.value&&taskItem.scene===item.alias));
-  const sceneValue=current.algorithm===algorithm.value?current.scene:(availableScenes[0]?.alias||"rough");
-  scene.replaceChildren(...availableScenes.map(item=>new Option(`${item.label} · ${item.description}`,item.alias)));
-  scene.value=availableScenes.some(item=>item.alias===sceneValue)?sceneValue:(availableScenes[0]?.alias||"");
+  const sceneValue=scene.value||(current.algorithm===algorithm.value?current.scene:"rough");
+  scene.replaceChildren(...state.scenes.map(item=>new Option(`${item.label} · ${item.description}`,item.alias)));
+  scene.value=state.scenes.some(item=>item.alias===sceneValue)?sceneValue:"rough";
   const matches=matchingTasks();
-  taskSelect.replaceChildren(...matches.map(item=>new Option(item.label,item.alias)));
-  const defaults={"him|flat":"him_flat","him|rough":"standard","him|rough_gentle":"him","ppo|flat":"flat","ppo|rough":"blind","ppo|rough_gentle":"gentle","ppo|rough_scan":"rough"};
-  const fallback=defaults[`${algorithm.value}|${scene.value}`];
-  const selected=matches.some(item=>item.alias===preferredAlias)?preferredAlias:(matches.some(item=>item.alias===fallback)?fallback:(matches[0]?.alias||""));
+  taskSelect.replaceChildren(...(matches.length?matches.map(item=>new Option(item.label,item.alias)):[new Option("当前组合没有注册任务","")]));
+  const selected=matches.some(item=>item.alias===preferredAlias)?preferredAlias:(matches[0]?.alias||"");
   taskSelect.value=selected;
+  taskSelect.disabled=true;
   return selected;
 }
 function syncSelectorsFromTask() {
@@ -51,6 +49,8 @@ function collect() {
     iterations:$("iterations").value, seed:$("seed").value, run_name:$("run-name").value,
     terrain_num_rows:$("terrain-num-rows")?.value || "",
     terrain_difficulty_max:$("terrain-difficulty-max")?.value || "",
+    velocity_min_abs:$("velocity-min-abs")?.value || "",
+    velocity_max_abs:$("velocity-max-abs")?.value || "",
     resume:$("resume").checked, checkpoint:model, onnx:model, viewer:$("viewer").value,
     map:$("map").value, map_file:$("map-file")?.value||"", duration:$("duration").value,
     vx:$("vx").value, vy:$("vy").value, wz:$("wz").value,
@@ -62,14 +62,33 @@ function collect() {
 }
 function updateTask() {
   const t=task();
-  if(!t)return;
+  if(!t){
+    $("summary-task").textContent="未注册任务";
+    $("summary-obs").textContent="—";
+    $("task-description").textContent=`${$("algorithm")?.value||"算法"} + ${$("scene")?.value||"场景"} 没有对应的训练任务，请更换组合。`;
+    $("critic-chip").textContent="";$("profile-chip").textContent="";$("experiment-path").textContent="—";
+    $("model-hint").textContent="任务由算法和场景决定；当前组合没有可用模型。";
+    updateRunNameHint();
+    return;
+  }
   $("summary-task").textContent=t.label;
   $("summary-obs").textContent=`${t.obs} 维`;
   $("task-description").textContent=t.description;
   $("critic-chip").textContent=`critic ${t.critic} 维`;
   $("profile-chip").textContent=`reward: ${t.profile}`;
   $("experiment-path").textContent=`logs/rsl_rl/${t.experiment}`;
-  $("model-hint").textContent=t.resume_sources?.length?"当前任务模型和兼容阶段模型都会显示；Flat-HIM checkpoint 可用于 Rough-HIM 续训。":(t.shared?"Flat/Rough 共用目录，请手动选择与任务匹配的模型。":"模型来自当前任务的独立实验目录。");
+  $("model-hint").textContent=t.shared?"Flat/Rough 共用目录，请手动选择与任务匹配的模型。":"续训只能使用当前算法和场景的 checkpoint。";
+  updateRunNameHint();
+}
+async function updateRunNameHint(){
+  const hint=$("run-name-hint"), input=$("run-name");
+  if(!hint||!input||!state||!task()){if(hint)hint.textContent="当前组合没有自动命名信息。";return;}
+  const version=++runNameVersion;const seed=$("seed")?.value||"42";
+  try{
+    const data=await api(`/api/run-name?task=${encodeURIComponent($("task").value)}&seed=${encodeURIComponent(seed)}`);
+    if(version!==runNameVersion)return;
+    input.placeholder=data.name;hint.textContent=`留空时实时使用：${data.name}`;
+  }catch(error){if(version===runNameVersion)hint.textContent=`自动命名读取失败：${error.message}`;}
 }
 function renderMapInfo(){
   const item=state?.sim2sim_maps?.find(mapItem=>mapItem.alias===$("map")?.value);
@@ -89,10 +108,10 @@ function fillModels() {
   $("model").replaceChildren(new Option(matching.length?"选择模型文件":"该任务尚无对应模型", ""));
   for(const m of matching) $("model").add(new Option(`${m.source_label?`${m.source_label} · `:""}${m.run} / ${m.name}`,m.path));
   if(matching.some(m=>m.path===previous)) $("model").value=previous;
-  else if(matching.length&&!task().shared) $("model").value=matching[0].path;
+  else if(matching.length&&!task()?.shared) $("model").value=matching[0].path;
   $("summary-models").textContent=models.length;
 }
-async function loadModels() { const alias=$("task").value; const data=await api(`/api/models?task=${encodeURIComponent(alias)}`); if(alias!==$("task").value)return; models=data.models;fillModels(); }
+async function loadModels() { const alias=$("task").value; if(!alias){models=[];fillModels();return;} const data=await api(`/api/models?task=${encodeURIComponent(alias)}`); if(alias!==$("task").value)return; models=data.models;fillModels(); }
 function metricValue(data,name){return data?.metrics?.[name]?.value;}
 function renderActionMetrics(data){
   const rawMax=metricValue(data,"raw_action_abs_max"), saturation=metricValue(data,"action_saturation_fraction"), policyStd=metricValue(data,"policy_mean_std"), reward=metricValue(data,"mean_reward");
@@ -111,8 +130,27 @@ function renderActionMetrics(data){
     $("action-health-detail").textContent=data?.warning||"训练启动后自动读取最新 TensorBoard 记录。";
   }
 }
+function renderGpu(data){
+  const status=$("gpu-status");
+  if(!status)return;
+  const gpu=data?.gpus?.[0];
+  if(!data?.available||!gpu){
+    status.classList.add("warning");status.textContent="不可用";
+    $("gpu-memory").textContent="—";$("gpu-util").textContent="—";$("gpu-temp").textContent="—";$("gpu-power").textContent="—";
+    $("gpu-detail").textContent=data?.reason||"未找到 nvidia-smi；服务器面板启动时需继承 NVIDIA 驱动环境。";return;
+  }
+  status.classList.remove("warning");status.textContent=`GPU ${gpu.index}`;
+  const total=Number(gpu.memory_total_mib),used=Number(gpu.memory_used_mib),free=Number(gpu.memory_free_mib);
+  const usedText=Number.isFinite(used)&&Number.isFinite(total)?`${(used/1024).toFixed(1)} / ${(total/1024).toFixed(1)} GB`:"—";
+  $("gpu-memory").textContent=usedText;
+  $("gpu-util").textContent=Number.isFinite(Number(gpu.utilization_gpu))?`${gpu.utilization_gpu}%`:"—";
+  $("gpu-temp").textContent=Number.isFinite(Number(gpu.temperature_c))?`${gpu.temperature_c}°C`:"—";
+  $("gpu-power").textContent=Number.isFinite(Number(gpu.power_w))?`${Number(gpu.power_w).toFixed(0)} W`:"—";
+  const freeText=Number.isFinite(free)?` · 空闲 ${(free/1024).toFixed(1)} GB`:"";
+  $("gpu-detail").textContent=`${gpu.name}${freeText}${data.gpus.length>1?` · 共 ${data.gpus.length} 张卡`:""}`;
+}
 async function loadActionMetrics(){
-  if(!state||!$("task")?.value)return;
+  if(!state||!$("task")?.value){renderActionMetrics({available:false,warning:"当前算法与场景没有注册任务",metrics:{}});return;}
   const alias=$("task").value;
   try{const data=await api(`/api/metrics?task=${encodeURIComponent(alias)}`);if(alias===$("task").value)renderActionMetrics(data);}
   catch(error){renderActionMetrics({available:false,warning:error.message,metrics:{}});}
@@ -200,7 +238,7 @@ async function refresh(all=false) {
   try {
     const data=await api("/api/state");state=data;
     $("connection").lastChild.textContent=" 本地服务运行中";
-    renderJobs();if(all)await loadModels();await loadActionMetrics();await loadLog();
+    renderGpu(data.gpu);renderJobs();if(all)await loadModels();await loadActionMetrics();await loadLog();
   }catch(error){$("connection").textContent="服务未连接";if(all)toast(error.message);}
 }
 async function showDocument(id) {
@@ -288,15 +326,15 @@ async function start() {
     renderModelSceneSelectors("standard");
     renderSimMaps();
     $("copy-root").textContent=state.root;$("python-path").textContent=state.python;
-    updateTask();await loadModels();showMode();await preview();renderJobs();await loadActionMetrics();await loadLog();
+    updateTask();renderGpu(state.gpu);await updateRunNameHint();await loadModels();showMode();await preview();renderJobs();await loadActionMetrics();await loadLog();
     document.querySelectorAll("[data-mode]").forEach(button=>button.addEventListener("click",()=>{mode=button.dataset.mode;showMode();preview();}));
-    const changeTask=async()=>{$("custom-model").value="";$("run-name").value="";updateTask();await loadModels();showMode();await loadActionMetrics();preview();};
+    const changeTask=async()=>{$("custom-model").value="";$("run-name").value="";updateTask();await updateRunNameHint();await loadModels();showMode();await loadActionMetrics();preview();};
     $("task").addEventListener("change",async()=>{syncSelectorsFromTask();await changeTask();});
-    $("algorithm").addEventListener("change",async()=>{const alias=renderModelSceneSelectors($("task").value);if(alias)await changeTask();});
-    $("scene").addEventListener("change",async()=>{const alias=renderModelSceneSelectors($("task").value);if(alias)await changeTask();});
+    $("algorithm").addEventListener("change",async()=>{renderModelSceneSelectors($("task").value);await changeTask();});
+    $("scene").addEventListener("change",async()=>{renderModelSceneSelectors($("task").value);await changeTask();});
     $("map").addEventListener("change",()=>{renderMapInfo();queuePreview();});
     $("resume").addEventListener("change",()=>{showMode();preview();});
-    $("run-form").addEventListener("input",queuePreview);$("run-form").addEventListener("change",queuePreview);
+    $("run-form").addEventListener("input",event=>{if(event.target.id==="seed")updateRunNameHint();queuePreview();});$("run-form").addEventListener("change",queuePreview);
     document.querySelectorAll("[data-preset]").forEach(button=>button.addEventListener("click",()=>{const smoke=button.dataset.preset==="smoke";$("train-envs").value=smoke?64:1024;$("iterations").value=smoke?2:16000;preview();}));
     $("run-form").addEventListener("submit",async event=>{event.preventDefault();$("launch").disabled=true;try{const data=await api("/api/run",collect());selectedJob=data.job.id;toast("已启动，查看下方真实日志");await refresh();}catch(error){toast(error.message);}finally{preview();}});
     $("save-rewards").addEventListener("click",async()=>{try{$("save-rewards").disabled=true;const data=await api("/api/rewards/save",{task:$('task').value,changes:collectRewards()});rewardData=data;renderRewards();toast("奖励修改已保存，重启训练后生效；原文件已备份");}catch(error){toast(error.message);}finally{$("save-rewards").disabled=false;}});

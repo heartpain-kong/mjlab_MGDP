@@ -18,5 +18,6 @@
 .history-chip.status-completed{background:#e6f2ec;color:#61857a}
 .history-change{display:block;font:10px/1.7 Consolas,"Microsoft YaHei",monospace;color:#3f5c66;overflow-wrap:anywhere}
 .history-row .hint{margin:5px 0 0;font-size:9px;overflow-wrap:anywhere}
+.gpu-health{border-color:#dceae7}.gpu-health .hint{margin-top:15px}.gpu-health .health-pill.warning{color:#a45c4c;background:#f7e8e3}
 @media(max-width:900px){.history-body{grid-template-columns:1fr}}
 .selector-grid{margin-bottom:0}.compact-field{margin-top:0}.map-info{margin:-4px 0 15px;padding:10px 12px;border:1px solid #e1eeea;border-radius:7px;background:#f6faf9;color:#5c7c78;font-size:11px;line-height:1.6}

@@ -66,8 +66,25 @@ python scripts/train.py LgDog1-Rough-Blind-HIM-Standard \
   --agent.run-name=V9_stability_seed42 --enable-nan-guard True
 ```
 
-标准 HIM 默认把地形生成器从 10 行扩展到 15 行，增加可学习的课程分辨率；初始环境仍只从
-0–1 级开始，策略通过速度跟踪和存活条件逐步升级。需要继续扩展时可以显式设置行数和最大
+标准 HIM 默认使用 10 行地形课程；初始环境仍只从 0–1 级开始。速度课程从最终指令范围的
+50% 开始，完整回合线速度跟踪分数达到 0.8 后每次扩张 0.1，直到达到最终范围，偏航角速度保持
+配置范围；地形升级还要
+同时满足命令完成度、速度误差、存活时间和离开出生平台等条件。面板或命令行可以用正数直接改
+负向下限和正向上限：
+
+```bash
+python scripts/train.py LgDog1-Rough-Blind-HIM-Standard \
+  --velocity-min-abs=0.4 --velocity-max-abs=0.8
+```
+
+这套课程采用本机 `E:\mjlab\HIMLoco\legged_gym\legged_gym\envs\base\legged_robot.py`
+中的“跟踪质量达标后扩大命令范围”规则，以及
+`E:\mjlab\legged_wbc_mjlab-main\legged_wbc_mjlab-main\src\tasks\locomotion\ri_5036_him\mdp\curriculums.py`
+中的完整回合聚合方式。地形升级保留 `TransCurriculum` 文档强调的分层难度空间，但使用本项目已有的
+路径进度、命令完成度、平均速度误差、存活时长和出生平台外暴露时间作为门控。论文中的 LP 教师和
+多维参数自动采样没有伪装成已实现功能；当前版本先把可复现的 HIMLoco/legged-gym 课程落地。
+
+需要继续扩展地形时可以显式设置行数和最大
 难度倍率：
 
 ```bash

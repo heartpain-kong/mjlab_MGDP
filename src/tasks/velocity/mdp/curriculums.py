@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, TypedDict, cast
 
 import torch
 
 from mjlab.entity import Entity
+from mjlab.managers.manager_base import ManagerTermBase
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 
 from .velocity_command import UniformVelocityCommandCfg
@@ -25,6 +27,213 @@ class VelocityStage(TypedDict):
 class RewardWeightStage(TypedDict):
   step: int
   weight: float
+
+
+def velocity_ranges_from_bounds(
+  min_abs: float, max_abs: float,
+) -> dict[str, tuple[float, float]]:
+  """Build signed command ranges from positive lower/upper magnitudes."""
+  minimum = float(min_abs)
+  maximum = float(max_abs)
+  if not math.isfinite(minimum) or not math.isfinite(maximum):
+    raise ValueError("速度范围必须使用有限数")
+  if minimum <= 0.0 or maximum <= 0.0:
+    raise ValueError("最低和最高速度绝对值必须大于 0")
+  if minimum > maximum:
+    raise ValueError("最低速度绝对值不能大于最高速度绝对值")
+  return {
+    "lin_vel_x": (-minimum, maximum),
+    "lin_vel_y": (-0.375 * maximum, 0.375 * maximum),
+    "ang_vel_z": (-0.75 * maximum, 0.75 * maximum),
+  }
+
+
+def make_velocity_stages(
+  min_abs: float = 0.4,
+  max_abs: float = 0.8,
+  *,
+  final_step: int = 240_000,
+) -> list[VelocityStage]:
+  """Create a control-step speed curriculum for the blind LgDog task."""
+  minimum = float(min_abs)
+  maximum = float(max_abs)
+  if final_step < 1:
+    raise ValueError("速度课程最终阶段必须位于第 1 个控制步之后")
+  final_ranges = velocity_ranges_from_bounds(minimum, maximum)
+  start_ranges = velocity_ranges_from_bounds(minimum * 0.5, maximum * 0.5)
+  middle_ranges = {
+    key: tuple((a + b) / 2.0 for a, b in zip(start_ranges[key], final_ranges[key]))
+    for key in start_ranges
+  }
+  return [
+    {"step": 0, **start_ranges},
+    {"step": final_step // 2, **middle_ranges},
+    {"step": final_step, **final_ranges},
+  ]
+
+
+class RewardBasedVelocityCurriculum(ManagerTermBase):
+  """Expand command speed only after completed episodes track it well.
+
+  This follows the HIMLoco/legged-gym rule rather than a wall-clock schedule:
+  aggregate full-episode tracking scores, and widen the planar command range
+  only when the linear score clears the configured threshold.  The final
+  bounds remain the positive/negative limits selected in the workbench.
+  """
+
+  _range_names = ("lin_vel_x", "lin_vel_y")
+  _reward_names = ("track_linear_velocity", "track_angular_velocity")
+
+  def __init__(self, cfg, env):
+    super().__init__(env)
+    params = cfg.params
+    self.command_name = params.get("command_name", "twist")
+    self.command_term = env.command_manager.get_term(self.command_name)
+    if self.command_term is None:
+      raise ValueError(f"Velocity curriculum command not found: {self.command_name}")
+    self.linear_threshold = float(params.get("linear_threshold", 0.8))
+    self.linear_increment = float(params.get("linear_increment", 0.1))
+    self.limits = {
+      name: tuple(float(value) for value in params.get(f"{name}_limit", (-1.0, 1.0)))
+      for name in self._range_names
+    }
+    interval_s = float(params.get("check_interval_s", env.max_episode_length_s))
+    if not math.isfinite(interval_s) or interval_s <= 0.0:
+      raise ValueError("Velocity curriculum check_interval_s must be positive")
+    if not 0.0 <= self.linear_threshold <= 1.0:
+      raise ValueError("Velocity curriculum linear_threshold must be between 0 and 1")
+    if not math.isfinite(self.linear_increment) or self.linear_increment <= 0.0:
+      raise ValueError("Velocity curriculum linear_increment must be positive")
+    for name, (low, high) in self.limits.items():
+      if not math.isfinite(low) or not math.isfinite(high) or low > high:
+        raise ValueError(f"Invalid velocity curriculum limit for {name}")
+      initial_low, initial_high = getattr(self.command_term.cfg.ranges, name)
+      if not low <= initial_low <= initial_high <= high:
+        raise ValueError(f"Initial {name} range is outside its curriculum limits")
+    self.check_interval_steps = max(1, math.ceil(interval_s / env.step_dt))
+    self.last_check_step = int(env.common_step_counter)
+    self.episode_count = 0
+    self.reward_sums = torch.zeros(2, device=self.device)
+    self.scores = torch.zeros(2, device=self.device)
+
+  def __call__(self, env, env_ids, **params):
+    del params
+    if env.common_step_counter == 0:
+      return self._metrics()
+    if isinstance(env_ids, slice):
+      env_ids = torch.arange(self.num_envs, device=self.device)[env_ids]
+    env_ids = env_ids[env.episode_length_buf[env_ids] > 0]
+    if len(env_ids):
+      sums = env.reward_manager._episode_sums
+      self.reward_sums += torch.stack([
+        sums[name][env_ids].sum() for name in self._reward_names
+      ])
+      self.episode_count += len(env_ids)
+    if (
+      env.common_step_counter - self.last_check_step < self.check_interval_steps
+      or self.episode_count == 0
+    ):
+      return self._metrics()
+    weights = torch.tensor([
+      env.reward_manager.get_term_cfg(name).weight for name in self._reward_names
+    ], device=self.device)
+    if not torch.isfinite(weights).all() or (weights <= 0).any():
+      raise ValueError("Velocity curriculum tracking rewards need positive weights")
+    duration = (
+      env.max_episode_length_s
+      if getattr(env.reward_manager, "_scale_by_dt", True)
+      else env.max_episode_length
+    )
+    self.scores.copy_(self.reward_sums / (weights * duration * self.episode_count))
+    if self.scores[0] > self.linear_threshold:
+      self._expand("lin_vel_x")
+      self._expand("lin_vel_y")
+    self.reward_sums.zero_()
+    self.episode_count = 0
+    self.last_check_step = int(env.common_step_counter)
+    return self._metrics()
+
+  def _expand(self, name):
+    low, high = getattr(self.command_term.cfg.ranges, name)
+    limit_low, limit_high = self.limits[name]
+    setattr(self.command_term.cfg.ranges, name, (
+      round(max(low - self.linear_increment, limit_low), 10),
+      round(min(high + self.linear_increment, limit_high), 10),
+    ))
+
+  def _metrics(self):
+    return {
+      "linear_score": self.scores[0],
+      "angular_score": self.scores[1],
+      "curriculum_vx_max": float(self.command_term.cfg.ranges.lin_vel_x[1]),
+      "curriculum_vx_min": float(self.command_term.cfg.ranges.lin_vel_x[0]),
+    }
+
+  def state_dict(self):
+    return {
+      "version": 1,
+      "command_name": self.command_name,
+      "ranges": {
+        name: tuple(getattr(self.command_term.cfg.ranges, name))
+        for name in self._range_names
+      },
+      "last_check_step": self.last_check_step,
+      "episode_count": self.episode_count,
+      "reward_sums": self.reward_sums.detach().cpu().clone(),
+      "scores": self.scores.detach().cpu().clone(),
+    }
+
+  def load_state_dict(self, state):
+    if state.get("version") != 1 or state.get("command_name") != self.command_name:
+      raise ValueError("Incompatible velocity curriculum checkpoint state")
+    ranges = self._checked_ranges(state.get("ranges", {}))
+    reward_sums = torch.as_tensor(state.get("reward_sums"), device=self.device)
+    scores = torch.as_tensor(state.get("scores"), device=self.device)
+    if (
+      reward_sums.shape != (2,) or scores.shape != (2,)
+      or not torch.isfinite(reward_sums).all() or not torch.isfinite(scores).all()
+      or (reward_sums < 0).any() or (scores < 0).any()
+      or int(state.get("episode_count", -1)) < 0
+      or int(state.get("last_check_step", -1)) < 0
+    ):
+      raise ValueError("Invalid velocity curriculum checkpoint statistics")
+    for name, bounds in ranges.items():
+      setattr(self.command_term.cfg.ranges, name, bounds)
+    self.reward_sums.copy_(reward_sums)
+    self.scores.copy_(scores)
+    self.episode_count = int(state.get("episode_count", 0))
+    self.last_check_step = min(int(state.get("last_check_step", 0)), int(self._env.common_step_counter))
+
+  def restore_legacy_ranges(self, saved_env_cfg: dict) -> bool:
+    """Restore the last range from a checkpoint made with step-based stages."""
+    ranges = dict(
+      saved_env_cfg.get("commands", {}).get(self.command_name, {}).get("ranges", {})
+    )
+    if any(name not in ranges for name in self._range_names):
+      return False
+    ranges = self._checked_ranges(ranges)
+    for name, bounds in ranges.items():
+      setattr(self.command_term.cfg.ranges, name, bounds)
+    self.last_check_step = int(self._env.common_step_counter)
+    self.reward_sums.zero_()
+    self.scores.zero_()
+    self.episode_count = 0
+    return True
+
+  def _checked_ranges(self, ranges: dict) -> dict[str, tuple[float, float]]:
+    result = {}
+    for name, (limit_low, limit_high) in self.limits.items():
+      try:
+        low, high = (float(value) for value in ranges[name])
+      except (KeyError, TypeError, ValueError) as error:
+        raise ValueError(f"Missing checkpoint command range for {name}") from error
+      if not math.isfinite(low) or not math.isfinite(high) or low > high:
+        raise ValueError(f"Invalid checkpoint command range for {name}")
+      result[name] = (
+        min(max(low, limit_low), limit_high),
+        min(max(high, limit_low), limit_high),
+      )
+    return result
 
 
 def terrain_levels_vel(

@@ -12,6 +12,10 @@ from mjlab.tasks.velocity import mdp
 from . import blind_mdp
 from .env_cfgs import BASE_BODY, FOOT_GEOMS, FOOT_SITES, lgdog1_rough_env_cfg
 from .reward_cfg import make_lgdog_rewards
+from src.tasks.velocity.mdp.curriculums import (
+  RewardBasedVelocityCurriculum,
+  velocity_ranges_from_bounds,
+)
 
 
 @dataclass
@@ -98,7 +102,8 @@ def lgdog1_blind_terrain_env_cfg(
     "outside_spawn_platform": MetricsTermCfg(func=blind_mdp.outside_spawn_platform),
     "velocity_error_xy_mps": MetricsTermCfg(func=blind_mdp.velocity_error_xy),
   })
-  # Keep speed modest while testing terrain fixes; enlarge only after evaluation.
+  # Keep the final envelope bounded; standard HIM starts at half this envelope
+  # and expands it from completed-episode tracking quality.
   twist = cfg.commands["twist"]
   twist.ranges.lin_vel_x = (-0.4, 0.8)
   twist.ranges.lin_vel_y = (-0.3, 0.3)
@@ -108,7 +113,7 @@ def lgdog1_blind_terrain_env_cfg(
       # Expand the available curriculum rows while keeping the initial reset
       # level at 1.  This follows the finer terrain bins used by
       # TransCurriculum; promotion still depends on tracking and survival.
-      cfg.scene.terrain.terrain_generator.num_rows = 15
+      cfg.scene.terrain.terrain_generator.num_rows = 10
     cfg.scene.terrain.max_init_terrain_level = 1
     cfg.curriculum.pop("command_vel", None)
     cfg.curriculum["terrain_levels"] = CurriculumTermCfg(
@@ -118,4 +123,23 @@ def lgdog1_blind_terrain_env_cfg(
       # comparisons.
       params={"max_velocity_error": 0.8} if reward_profile == "him_standard" else {},
     )
+    if reward_profile == "him_standard":
+      # HIMLoco-style performance curriculum: begin at half of the final
+      # range, then expand only after completed episodes track the commands.
+      initial = velocity_ranges_from_bounds(0.2, 0.4)
+      cfg.commands["twist"].ranges.lin_vel_x = initial["lin_vel_x"]
+      cfg.commands["twist"].ranges.lin_vel_y = initial["lin_vel_y"]
+      # HIMLoco keeps yaw at its configured envelope while planar speed grows.
+      cfg.commands["twist"].ranges.ang_vel_z = (-0.6, 0.6)
+      cfg.curriculum["command_vel"] = CurriculumTermCfg(
+        func=RewardBasedVelocityCurriculum,
+        params={
+          "command_name": "twist",
+          "linear_threshold": 0.8,
+          "linear_increment": 0.1,
+          "lin_vel_x_limit": (-0.4, 0.8),
+          "lin_vel_y_limit": (-0.3, 0.3),
+          "check_interval_s": 20.0,
+        },
+      )
   return cfg

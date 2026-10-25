@@ -44,9 +44,13 @@ def main():
       child.add_argument("--seed", type=int, default=42)
       child.add_argument("--run-name", default="")
       child.add_argument("--terrain-num-rows", type=int, default=None,
-                         help="地形课程行数；标准 HIM 默认 15")
+                         help="地形课程行数；标准 HIM 默认 10")
       child.add_argument("--terrain-difficulty-max", type=float, default=None,
                          help="最大地形难度倍率，默认 1.0")
+      child.add_argument("--velocity-min-abs", type=float, default=None,
+                         help="最低速度绝对值；训练命令下限会自动取负值")
+      child.add_argument("--velocity-max-abs", type=float, default=None,
+                         help="最高速度绝对值；训练命令上限会自动取正值")
       child.add_argument("--resume", action="store_true")
     if mode == "play":
       child.add_argument("--viewer", choices=("viser", "native"), default="viser")

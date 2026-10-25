@@ -30,11 +30,15 @@ python lgdog.py --python C:\path\to\training-env\Scripts\python.exe ui
 
 面板服务使用 Python 标准库，不依赖 torch、网页构建工具或 Node.js。实际操作由指定的训练 Python 执行，仍需要训练环境中的依赖。页面右侧会显示实际解释器路径。
 
+Ubuntu/GPUFree 部署使用工程内的 `install_ubuntu.sh`、`run_lgdog.sh` 和 `requirements-ubuntu.txt`。GPUFree 的 CUDA 驱动、数据盘、SSH 转发和显存检查记录见 [DEPLOYMENT_GPUFREE.md](DEPLOYMENT_GPUFREE.md)。安装缓存放在数据盘或工程 `.cache/`，不会进入 Git。
+
+右侧“GPU 状态”直接读取 `nvidia-smi`，显示显存、利用率、温度和功耗。Windows 没有 `nvidia-smi` 时会显示不可用，不影响面板的训练命令预览。
+
 ## 页面怎么用
 
-1. 先选择“算法 / 模型”和“场景”。HIM 提供 `Flat-HIM` 平地预训练和标准 Rough 续训；PPO 提供平地、温和 Rough、盲走 Rough 和带扫描 Rough。默认是 `standard`：标准 Rough + HIM，282 维历史输入。
+1. 先选择“算法 / 模型”和“场景”。训练任务由这两个选择自动决定；HIM-PPO 提供 Flat、标准 Rough 和温和 Rough，PPO 提供平地、温和 Rough、标准盲走 Rough、TerrainV4 和带扫描 Rough。两者共用 PPO 主优化流程，checkpoint 仍按输入合同独立保存。
 2. 切换训练、Play、Sim2Sim 或奖励。点击“快速检查”只填写 64 环境/2 轮，不会自动运行。
-3. Play 选择 `.pt`，Sim2Sim 选择 `.onnx`。也可填写自定义路径；没有模型时不能启动回放。Flat-HIM 和 Standard-HIM 使用相同的 6 帧历史合同，可以从平地模型续训到崎岖地形。
+3. Play 选择 `.pt`，Sim2Sim 选择 `.onnx`。也可填写自定义路径；没有模型时不能启动回放。续训只能选择当前算法和场景的 checkpoint，Flat 模型不能直接续训崎岖或障碍场景。
 4. 查看右侧的实际命令，再点击启动。页面下方显示进程 PID、运行状态和真实输出。
 5. 打开“查看奖励”后，可以看到当前方案的全部 reward。直接编辑权重或参数 JSON，取消勾选会把权重设为 0，点击“保存奖励修改”即可写入 `reward_cfg.py`。保存前会生成 `reward_cfg.py.bak`，修改需要重启训练进程才会生效。
 6. 奖励区支持名称筛选和“恢复基线”。黄色行表示当前 profile 有覆盖值；双击 reward 会显示实际函数源码和绑定位置。继承自 mjlab 的函数如果能在当前 Python 环境找到，也会直接显示依赖源码。
@@ -81,7 +85,7 @@ tail -n 40 logs/dashboard/history/train_runs.jsonl
 | 短名称 | 方案 |
 |---|---|
 | `standard` | HIM + 标准崎岖地形，无机身高度扫描 |
-| `him_flat` | HIM + 平地预训练，可续训到 `standard` |
+| `him_flat` | HIM + 平地训练，独立 checkpoint |
 | `him` | 原 V7/V7b 温和地形 HIM |
 | `terrain` | TerrainV4 |
 | `gentle` | 普通 PPO 温和地形盲走 |
@@ -95,6 +99,7 @@ python lgdog.py models standard
 python lgdog.py train standard --envs 64 --iterations 2 --dry-run
 python lgdog.py train standard --envs 1024 --iterations 16000 --run-name V8_him_standard_seed42
 python lgdog.py train standard --envs 1024 --iterations 16000 --terrain-num-rows 20
+python scripts/train.py LgDog1-Rough-Blind-HIM-Standard --velocity-min-abs 0.4 --velocity-max-abs 0.8
 python lgdog.py play standard --viewer viser
 python lgdog.py sim standard --map stairs --vx 0.4 --spawn-y 4
 python lgdog.py sim standard --map lgdog1 --map-file src/assets/terrains/lgdog1_testmap.xml --spawn-y 4
@@ -102,13 +107,16 @@ python lgdog.py rewards standard --term foot_clearance
 python lgdog.py curves
 ```
 
-标准 HIM 默认使用 15 行地形课程；面板里可以填写更大的训练行数和最大难度倍率。
-这表示扩大可探索的地形空间，课程仍会按成功和速度质量逐步升级。实验名称留空时，会按
+标准 HIM 默认使用 10 行地形课程；面板里可以填写训练行数和最大难度倍率。速度课程从填写范围的
+50% 开始，只有当完整回合的线速度跟踪分数达到 0.8 才会扩大一次，单次扩大 0.1，直到达到
+面板上限；偏航角速度保持配置的最终范围。面板输入正数，训练会把最低值转换为负向下限、最高值转换为正向上限，并同步横移
+范围。地形课程同时使用命令完成度、跟踪误差、存活时长和出生平台外暴露时间，满足条件才升级，
+摔倒或跟踪质量过低则降级。实验名称留空时，会按
 已有 `V` 编号自动递增。
 
 `--dry-run` 只显示命令。Play/Sim2Sim 默认从该任务独立实验目录中寻找最新已有模型，跳过尚无模型的 run。Flat/Rough 共用实验目录，必须显式选择对应模型：`python lgdog.py play flat --checkpoint /path/to/model.pt`。
 
-续训用 `python lgdog.py train standard --resume --checkpoint logs/rsl_rl/对应实验/某个run/model_100.pt`。标准 HIM 允许从兼容的 `him_flat` 实验目录选择 checkpoint，面板会使用显式绝对路径加载；其它观测维度或算法不同的模型仍会被拒绝。新标准 HIM 与 V7 的 critic 维度不同，不能通过此入口跨任务恢复完整 checkpoint。
+续训用 `python lgdog.py train standard --resume --checkpoint logs/rsl_rl/对应实验/某个run/model_100.pt`。面板会拒绝其它算法或场景的 checkpoint，避免把平地模型接到崎岖/障碍任务造成观测和动力学合同不一致。
 
 ## 目录整理说明
 
