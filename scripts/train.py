@@ -34,6 +34,7 @@ class TrainConfig:
   enable_nan_guard: bool = False
   terrain_num_rows: int | None = None
   terrain_difficulty_max: float | None = None
+  resume_checkpoint: str | None = None
   torchrunx_log_dir: str | None = None
   gpu_ids: list[int] | Literal["all"] | None = field(default_factory=lambda: [0])
 
@@ -119,10 +120,16 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
 
   resume_path: Path | None = None
   if cfg.agent.resume:
-      # Load checkpoint from local filesystem.
-      resume_path = get_checkpoint_path(
-        log_root_path, cfg.agent.load_run, cfg.agent.load_checkpoint
-      )
+      # Load from the current experiment, or from an explicitly compatible
+      # stage such as Flat-HIM -> Rough-HIM.
+      if cfg.resume_checkpoint:
+        resume_path = Path(cfg.resume_checkpoint).expanduser().resolve()
+        if not resume_path.is_file():
+          raise FileNotFoundError(f"Resume checkpoint not found: {resume_path}")
+      else:
+        resume_path = get_checkpoint_path(
+          log_root_path, cfg.agent.load_run, cfg.agent.load_checkpoint
+        )
 
   # Only record videos on rank 0 to avoid multiple workers writing to the same files.
   if cfg.video and rank == 0:

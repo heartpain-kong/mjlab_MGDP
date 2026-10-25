@@ -34,7 +34,7 @@ def main():
   models.add_argument("task", nargs="?", default="standard")
   for mode in ("train", "play", "sim", "rewards", "curves"):
     child = sub.add_parser(mode)
-    child.add_argument("task", nargs="?", default="standard", help="standard/him/terrain/gentle/blind/flat/rough")
+    child.add_argument("task", nargs="?", default="standard", help="standard/him_flat/him/terrain/gentle/blind/flat/rough")
     child.add_argument("--dry-run", action="store_true", help="仅显示命令，不执行")
     if mode in {"train", "play"}:
       child.add_argument("--envs", type=int, default=1024 if mode == "train" else 4)
@@ -53,11 +53,21 @@ def main():
     if mode == "sim":
       child.add_argument("--onnx", default="")
       child.add_argument("--map", default="flat")
+      child.add_argument("--map-file", default="", help="外部地形 XML，优先于 --map")
       child.add_argument("--vx", type=float, default=0.4)
       child.add_argument("--vy", type=float, default=0.0)
       child.add_argument("--wz", type=float, default=0.0)
+      child.add_argument("--spawn-x", type=float, default=0.0)
       child.add_argument("--spawn-y", type=float, default=0.0)
+      child.add_argument("--spawn-yaw", type=float, default=0.0)
       child.add_argument("--duration", type=float, default=20)
+      child.add_argument("--speed-x", type=float, default=1.0)
+      child.add_argument("--speed-y", type=float, default=0.5)
+      child.add_argument("--speed-yaw", type=float, default=1.0)
+      child.add_argument("--action-clip", type=float, default=1.0)
+      child.add_argument("--heading-hold", action="store_true", default=True)
+      child.add_argument("--no-heading-hold", dest="heading_hold", action="store_false")
+      child.add_argument("--check-obs", action="store_true")
       child.add_argument("--headless", action="store_true")
       child.add_argument("--keyboard", action="store_true")
     if mode == "rewards":

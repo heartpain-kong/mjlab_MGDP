@@ -7,7 +7,12 @@ from .env_cfgs import (
 )
 from .rl_cfg import lgdog1_ppo_runner_cfg
 from .blind_terrain_env_cfg import lgdog1_blind_terrain_env_cfg
-from .him_env_cfg import lgdog1_him_env_cfg, lgdog1_him_standard_env_cfg, lgdog1_him_runner_cfg
+from .him_env_cfg import (
+  lgdog1_him_env_cfg,
+  lgdog1_him_flat_env_cfg,
+  lgdog1_him_standard_env_cfg,
+  lgdog1_him_runner_cfg,
+)
 from src.tasks.velocity.rl.him import HIMRunner
 
 register_mjlab_task(
@@ -15,6 +20,14 @@ register_mjlab_task(
   env_cfg=lgdog1_him_standard_env_cfg(),
   play_env_cfg=lgdog1_him_standard_env_cfg(play=True),
   rl_cfg=lgdog1_him_runner_cfg("lgdog1_velocity_blind_him_standard_v1"),
+  runner_cls=HIMRunner,
+)
+
+register_mjlab_task(
+  task_id="LgDog1-Flat-Blind-HIM-Standard",
+  env_cfg=lgdog1_him_flat_env_cfg(),
+  play_env_cfg=lgdog1_him_flat_env_cfg(play=True),
+  rl_cfg=lgdog1_him_runner_cfg("lgdog1_velocity_flat_him_standard_v1"),
   runner_cls=HIMRunner,
 )
 

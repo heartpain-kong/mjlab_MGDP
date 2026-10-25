@@ -7,25 +7,29 @@ import shlex
 import subprocess
 import os
 
-from .catalog import resolve_task
+from .catalog import TASKS, resolve_task
 from .run_naming import next_run_name
 
 
 def discover_models(root, task_value="standard"):
-  _, task = resolve_task(task_value)
-  base = Path(root) / "logs/rsl_rl" / task["experiment"]
-  if not base.is_dir():
-    return []
+  alias, task = resolve_task(task_value)
+  aliases = [alias, *task.get("resume_sources", ())]
   result = []
-  for run in sorted((p for p in base.iterdir() if p.is_dir()), reverse=True):
-    files = [p for p in run.iterdir() if p.is_file() and (re.fullmatch(r"model_\d+\.pt", p.name) or p.name == "policy.onnx")]
-    files.sort(key=lambda p: int(p.stem.split("_")[-1]) if p.suffix == ".pt" else -1, reverse=True)
-    for path in files:
-      result.append({"path": str(path.relative_to(root)), "name": path.name,
-                     "run": run.name, "kind": "checkpoint" if path.suffix == ".pt" else "onnx",
-                     "bytes": path.stat().st_size})
-      if len(result) >= 500:
-        return result
+  for source_alias in aliases:
+    source_task = TASKS[source_alias]
+    base = Path(root) / "logs/rsl_rl" / source_task["experiment"]
+    if not base.is_dir():
+      continue
+    for run in sorted((p for p in base.iterdir() if p.is_dir()), reverse=True):
+      files = [p for p in run.iterdir() if p.is_file() and (re.fullmatch(r"model_\d+\.pt", p.name) or p.name == "policy.onnx")]
+      files.sort(key=lambda p: int(p.stem.split("_")[-1]) if p.suffix == ".pt" else -1, reverse=True)
+      for path in files:
+        result.append({"path": str(path.relative_to(root)), "name": path.name,
+                       "run": run.name, "kind": "checkpoint" if path.suffix == ".pt" else "onnx",
+                       "source": source_alias, "source_label": source_task["label"],
+                       "bytes": path.stat().st_size})
+        if len(result) >= 500:
+          return result
   return result
 
 
@@ -49,12 +53,13 @@ def number(value, name, low, high):
   return parsed
 
 
-def model_path(root, task_value, value, kind):
-  _, task = resolve_task(task_value)
+def model_path(root, task_value, value, kind, *, include_compatible=False):
+  alias, task = resolve_task(task_value)
   if not value:
     if task.get("shared"):
       raise ValueError("Flat/Rough 共用实验目录，请手动选择与任务匹配的模型")
-    candidates = [m for m in discover_models(root, task_value) if m["kind"] == kind]
+    candidates = [m for m in discover_models(root, task_value)
+                  if m["kind"] == kind and (include_compatible or m.get("source") == alias)]
     if not candidates:
       raise ValueError(f"该任务尚无{ ' checkpoint' if kind == 'checkpoint' else ' ONNX' }，请先训练或指定模型文件")
     value = candidates[0]["path"]
@@ -63,6 +68,17 @@ def model_path(root, task_value, value, kind):
   suffix = ".pt" if kind == "checkpoint" else ".onnx"
   if not path.is_file() or path.suffix != suffix:
     raise ValueError(f"模型文件不存在或类型不匹配（需要 {suffix}）：{path}")
+  return path
+
+
+def terrain_xml_path(root, value):
+  """Resolve an imported sim2sim terrain XML without invoking a shell."""
+  if not value:
+    return None
+  path = Path(value).expanduser()
+  path = (Path(root) / path).resolve() if not path.is_absolute() else path.resolve()
+  if not path.is_file() or path.suffix.lower() != ".xml":
+    raise ValueError(f"地形 XML 不存在或类型不匹配：{path}")
   return path
 
 
@@ -95,12 +111,19 @@ def build_command(root, python, options):
     auto_name = next_run_name(root / "logs/rsl_rl" / task["experiment"], seed)
     argv.append(f"--agent.run-name={name or auto_name}")
     if options.get("resume"):
-      checkpoint = model_path(root, task_value, options.get("checkpoint"), "checkpoint")
+      checkpoint = model_path(root, task_value, options.get("checkpoint"), "checkpoint", include_compatible=True)
       expected = (root / "logs/rsl_rl" / task["experiment"]).resolve()
-      if checkpoint.parent.parent != expected:
-        raise ValueError("续训请选择当前任务实验目录内的 checkpoint，不能跨任务直接恢复")
-      argv += ["--agent.resume=True", f"--agent.load-run={re.escape(checkpoint.parent.name)}$",
-               f"--agent.load-checkpoint={re.escape(checkpoint.name)}$"]
+      compatible = {expected}
+      for source_alias in task.get("resume_sources", ()):
+        compatible.add((root / "logs/rsl_rl" / TASKS[source_alias]["experiment"]).resolve())
+      if checkpoint.parent.parent not in compatible:
+        raise ValueError("续训请选择当前任务或兼容阶段的 checkpoint")
+      argv.append("--agent.resume=True")
+      if checkpoint.parent.parent == expected:
+        argv += [f"--agent.load-run={re.escape(checkpoint.parent.name)}$",
+                 f"--agent.load-checkpoint={re.escape(checkpoint.name)}$"]
+      else:
+        argv.append(f"--resume-checkpoint={checkpoint}")
     return argv
   if mode == "play":
     checkpoint = model_path(root, task_value, options.get("checkpoint"), "checkpoint")
@@ -120,6 +143,21 @@ def build_command(root, python, options):
             "--wz", str(number(options.get("wz", 0), "wz", -3, 3)),
             "--duration", str(number(options.get("duration", 20), "时长", 0.02, 3600)),
             "--spawn-y", str(number(options.get("spawn_y", 0), "出生 y", -30, 30))]
+    argv += ["--spawn-x", str(number(options.get("spawn_x", 0), "出生 x", -30, 30)),
+             "--spawn-yaw", str(number(options.get("spawn_yaw", 0), "出生朝向", -180, 180)),
+             "--speed-x", str(number(options.get("speed_x", 1.0), "键盘前进速度", 0.05, 3)),
+             "--speed-y", str(number(options.get("speed_y", 0.5), "键盘横移速度", 0.05, 3)),
+             "--speed-yaw", str(number(options.get("speed_yaw", 1.0), "键盘转向速度", 0.05, 3)),
+             "--action-clip", str(number(options.get("action_clip", 1.0), "动作裁剪上限", 0.05, 3))]
+    imported_map = terrain_xml_path(root, str(options.get("map_file", "")).strip())
+    if imported_map is not None:
+      argv.append(f"--map-file={imported_map}")
+    if options.get("check_obs", False):
+      argv.append("--check-obs")
+    if options.get("heading_hold", True):
+      argv.append("--heading-hold")
+    else:
+      argv.append("--no-heading-hold")
     if options.get("show_viewer", True):
       argv.append("--viewer")
     if not options.get("keyboard", False):

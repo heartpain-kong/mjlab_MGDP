@@ -53,7 +53,7 @@ class CommandTests(unittest.TestCase):
 
   def test_resume_rejects_other_task_and_uses_exact_run_pattern(self):
     old = self.checkpoint("lgdog1_velocity_blind_him_v1")
-    with self.assertRaisesRegex(ValueError, "跨任务"):
+    with self.assertRaisesRegex(ValueError, "兼容阶段"):
       build_command(self.root, sys.executable, {"mode":"train", "resume":True, "checkpoint":str(old)})
     new = self.checkpoint(run="2026-10-17_V8.a")
     command = build_command(self.root, sys.executable, {"mode":"train", "resume":True, "checkpoint":str(new)})
@@ -120,7 +120,10 @@ class HTTPTests(unittest.TestCase):
     self.assertIn("训练工作台", body.decode())
     status, body = self.request("GET", "/api/state")
     self.assertEqual(status, 200)
-    self.assertEqual(len(json.loads(body)["tasks"]), 7)
+    state = json.loads(body)
+    self.assertEqual(len(state["tasks"]), 8)
+    self.assertEqual({item["alias"] for item in state["algorithms"]}, {"him", "ppo"})
+    self.assertIn("lgdog1", {item["alias"] for item in state["sim2sim_maps"]})
     self.assertEqual(self.request("GET", "/assets/../../setup.py")[0], 404)
 
   def test_launch_requires_token_and_rejects_cross_origin(self):

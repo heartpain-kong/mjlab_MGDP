@@ -7,6 +7,8 @@ from mjlab.managers.observation_manager import ObservationGroupCfg, ObservationT
 from mjlab.rl import RslRlModelCfg, RslRlPpoAlgorithmCfg
 
 from .blind_terrain_env_cfg import lgdog1_blind_terrain_env_cfg
+from .env_cfgs import BASE_BODY, FOOT_SITES
+from .reward_cfg import make_lgdog_rewards
 from .rl_cfg import lgdog1_ppo_runner_cfg
 
 
@@ -27,6 +29,27 @@ def lgdog1_him_standard_env_cfg(play=False):
     play=play, reward_profile="him_standard", gentle_terrain=False,
     critic_height_scan=False,
   )
+  return _add_him_observations(cfg)
+
+
+def lgdog1_him_flat_env_cfg(play=False):
+  """Flat pretraining with the exact standard HIM observation contract."""
+  cfg = lgdog1_blind_terrain_env_cfg(
+    play=play, reward_profile="him_standard", gentle_terrain=False,
+    critic_height_scan=False,
+  )
+  assert cfg.scene.terrain is not None
+  cfg.scene.terrain.terrain_type = "plane"
+  cfg.scene.terrain.terrain_generator = None
+  cfg.scene.sensors = tuple(
+    sensor for sensor in (cfg.scene.sensors or ()) if sensor.name != "terrain_scan"
+  )
+  cfg.curriculum.pop("terrain_levels", None)
+  cfg.rewards = make_lgdog_rewards(
+    "flat", base_body=BASE_BODY, foot_sites=FOOT_SITES,
+  )
+  cfg.sim.nconmax = None if play else 35
+  cfg.sim.njmax = 300
   return _add_him_observations(cfg)
 
 

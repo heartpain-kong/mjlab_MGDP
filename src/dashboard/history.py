@@ -32,6 +32,7 @@ _ARG_PATTERNS = {
   "checkpoint": re.compile(r"^--checkpoint_file=(.*)$"),
   "onnx": re.compile(r"^--onnx=(.*)$"),
   "map": re.compile(r"^--map=?(.*)$"),
+  "map_file": re.compile(r"^--map-file=(.*)$"),
 }
 
 

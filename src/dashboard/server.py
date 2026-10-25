@@ -9,7 +9,7 @@ import threading
 from urllib.parse import parse_qs, urlparse
 import webbrowser
 
-from .catalog import TASKS, resolve_task
+from .catalog import ALGORITHMS, SCENES, SIM2SIM_MAPS, TASKS, resolve_task
 from .commands import build_command, discover_models, display_command
 from . import history
 from .jobs import JobManager
@@ -154,6 +154,9 @@ def create_server(root, python, host="127.0.0.1", port=8765):
         if parsed.path == "/api/state":
           return self.send({"token": token, "root": str(root), "python": str(python),
                             "tasks": [{"alias": alias, **task} for alias, task in TASKS.items()],
+                            "algorithms": [{"alias": alias, **item} for alias, item in ALGORITHMS.items()],
+                            "scenes": [{"alias": alias, **item} for alias, item in SCENES.items()],
+                            "sim2sim_maps": [{"alias": alias, **item} for alias, item in SIM2SIM_MAPS.items()],
                             "jobs": jobs.list(), "documents": [{"id": key, "label": value[0]} for key, value in DOCUMENTS.items()]})
         if parsed.path == "/api/models":
           return self.send({"models": discover_models(root, query.get("task", ["standard"])[0])})

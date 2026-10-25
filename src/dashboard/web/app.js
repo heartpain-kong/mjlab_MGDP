@@ -16,6 +16,35 @@ async function api(path, body) {
 function toast(text) { $("toast").textContent=text; $("toast").classList.remove("hidden"); clearTimeout(timer); timer=setTimeout(()=>$("toast").classList.add("hidden"),4500); }
 async function copy(text) { try { await navigator.clipboard.writeText(text); toast("已复制"); } catch { toast("浏览器不允许复制，请手动选择文本"); } }
 function task() { return state.tasks.find(t=>t.alias===$("task").value); }
+function matchingTasks() {
+  const algorithm=$("algorithm")?.value, scene=$("scene")?.value;
+  return state.tasks.filter(item=>(!algorithm||item.algorithm===algorithm)&&(!scene||item.scene===scene));
+}
+function renderModelSceneSelectors(preferredAlias=$("task")?.value||"standard") {
+  if(!state?.algorithms||!state?.scenes)return;
+  const current=state.tasks.find(item=>item.alias===preferredAlias)||state.tasks[0];
+  const algorithm=$("algorithm"), scene=$("scene"), taskSelect=$("task");
+  const algorithmValue=algorithm.value||current.algorithm||"him";
+  algorithm.replaceChildren(...state.algorithms.map(item=>new Option(`${item.label} · ${item.description}`,item.alias)));
+  algorithm.value=state.algorithms.some(item=>item.alias===algorithmValue)?algorithmValue:(current.algorithm||"him");
+  const availableScenes=state.scenes.filter(item=>state.tasks.some(taskItem=>taskItem.algorithm===algorithm.value&&taskItem.scene===item.alias));
+  const sceneValue=current.algorithm===algorithm.value?current.scene:(availableScenes[0]?.alias||"rough");
+  scene.replaceChildren(...availableScenes.map(item=>new Option(`${item.label} · ${item.description}`,item.alias)));
+  scene.value=availableScenes.some(item=>item.alias===sceneValue)?sceneValue:(availableScenes[0]?.alias||"");
+  const matches=matchingTasks();
+  taskSelect.replaceChildren(...matches.map(item=>new Option(item.label,item.alias)));
+  const defaults={"him|flat":"him_flat","him|rough":"standard","him|rough_gentle":"him","ppo|flat":"flat","ppo|rough":"blind","ppo|rough_gentle":"gentle","ppo|rough_scan":"rough"};
+  const fallback=defaults[`${algorithm.value}|${scene.value}`];
+  const selected=matches.some(item=>item.alias===preferredAlias)?preferredAlias:(matches.some(item=>item.alias===fallback)?fallback:(matches[0]?.alias||""));
+  taskSelect.value=selected;
+  return selected;
+}
+function syncSelectorsFromTask() {
+  const current=task();
+  if(!current)return;
+  if($("algorithm"))$("algorithm").value=current.algorithm||"ppo";
+  if($("scene"))$("scene").value=current.scene||"rough";
+}
 function collect() {
   const model = $("custom-model").value.trim() || $("model").value;
   return {mode, task:$("task").value, envs:$(mode==="play"?"play-envs":"train-envs").value,
@@ -23,26 +52,42 @@ function collect() {
     terrain_num_rows:$("terrain-num-rows")?.value || "",
     terrain_difficulty_max:$("terrain-difficulty-max")?.value || "",
     resume:$("resume").checked, checkpoint:model, onnx:model, viewer:$("viewer").value,
-    map:$("map").value, duration:$("duration").value, vx:$("vx").value, vy:$("vy").value,
-    wz:$("wz").value, spawn_y:$("spawn-y").value, show_viewer:$("show-viewer").checked,
+    map:$("map").value, map_file:$("map-file")?.value||"", duration:$("duration").value,
+    vx:$("vx").value, vy:$("vy").value, wz:$("wz").value,
+    spawn_x:$("spawn-x")?.value||"0", spawn_y:$("spawn-y").value, spawn_yaw:$("spawn-yaw")?.value||"0",
+    speed_x:$("speed-x")?.value||"1", speed_y:$("speed-y")?.value||"0.5", speed_yaw:$("speed-yaw")?.value||"1",
+    action_clip:$("action-clip")?.value||"1", heading_hold:$("heading-hold")?.checked??true,
+    check_obs:$("check-obs")?.checked??false, show_viewer:$("show-viewer").checked,
     keyboard:$("keyboard").checked, term:$("term")?.value || ""};
 }
 function updateTask() {
   const t=task();
+  if(!t)return;
   $("summary-task").textContent=t.label;
   $("summary-obs").textContent=`${t.obs} 维`;
   $("task-description").textContent=t.description;
   $("critic-chip").textContent=`critic ${t.critic} 维`;
   $("profile-chip").textContent=`reward: ${t.profile}`;
   $("experiment-path").textContent=`logs/rsl_rl/${t.experiment}`;
-  $("model-hint").textContent=t.shared?"Flat/Rough 共用目录，请手动选择与任务匹配的模型。":"模型来自当前任务的独立实验目录。";
+  $("model-hint").textContent=t.resume_sources?.length?"当前任务模型和兼容阶段模型都会显示；Flat-HIM checkpoint 可用于 Rough-HIM 续训。":(t.shared?"Flat/Rough 共用目录，请手动选择与任务匹配的模型。":"模型来自当前任务的独立实验目录。");
+}
+function renderMapInfo(){
+  const item=state?.sim2sim_maps?.find(mapItem=>mapItem.alias===$("map")?.value);
+  if(item&&$("sim-map-info"))$("sim-map-info").textContent=`${item.description} · 约 ${item.geoms} 个地形 geom · 推荐出生 y=${item.spawn_y} m`;
+}
+function renderSimMaps(){
+  if(!state?.sim2sim_maps||!$("map"))return;
+  const previous=$("map").value||"flat";
+  $("map").replaceChildren(...state.sim2sim_maps.map(item=>new Option(`${item.label} · ${item.geoms} geom`,item.alias)));
+  $("map").value=state.sim2sim_maps.some(item=>item.alias===previous)?previous:"flat";
+  renderMapInfo();
 }
 function fillModels() {
   const previous=$("model").value;
   const kind=mode==="sim"?"onnx":"checkpoint";
   const matching=models.filter(m=>m.kind===kind);
   $("model").replaceChildren(new Option(matching.length?"选择模型文件":"该任务尚无对应模型", ""));
-  for(const m of matching) $("model").add(new Option(`${m.run} / ${m.name}`,m.path));
+  for(const m of matching) $("model").add(new Option(`${m.source_label?`${m.source_label} · `:""}${m.run} / ${m.name}`,m.path));
   if(matching.some(m=>m.path===previous)) $("model").value=previous;
   else if(matching.length&&!task().shared) $("model").value=matching[0].path;
   $("summary-models").textContent=models.length;
@@ -199,6 +244,8 @@ function historyRunRow(run){
   if(run.envs)bits.push(`envs=${run.envs}`);
   if(run.iterations)bits.push(`iter=${run.iterations}`);
   if(run.seed!==undefined&&run.seed!==null)bits.push(`seed=${run.seed}`);
+  if(run.map)bits.push(`map=${run.map}`);
+  if(run.map_file)bits.push(`xml=${run.map_file}`);
   if(run.duration_s!=null)bits.push(`${run.duration_s}s`);
   what.textContent=bits.filter(Boolean).join(" · ");row.append(what);
   if(run.log){const log=document.createElement("small");log.className="hint";log.textContent=run.log;row.append(log);}
@@ -224,7 +271,7 @@ function historyText(data){
     }
   }
   for(const run of data.runs||[]){
-    lines.push(`[运行] ${run.started||run.ended} ${modeNames[run.mode]||run.mode} ${run.task} ${statuses[run.status]||run.status||""}${run.run_name?` run=${run.run_name}`:""}`);
+    lines.push(`[运行] ${run.started||run.ended} ${modeNames[run.mode]||run.mode} ${run.task} ${statuses[run.status]||run.status||""}${run.run_name?` run=${run.run_name}`:""}${run.map?` map=${run.map}`:""}${run.map_file?` xml=${run.map_file}`:""}`);
   }
   return lines.join("\n");
 }
@@ -238,11 +285,16 @@ async function showHistory(){
 async function start() {
   try {
     state=await api("/api/state");
-    $("task").replaceChildren(...state.tasks.map(t=>new Option(t.label,t.alias)));
-    $("task").value="standard";$("copy-root").textContent=state.root;$("python-path").textContent=state.python;
+    renderModelSceneSelectors("standard");
+    renderSimMaps();
+    $("copy-root").textContent=state.root;$("python-path").textContent=state.python;
     updateTask();await loadModels();showMode();await preview();renderJobs();await loadActionMetrics();await loadLog();
     document.querySelectorAll("[data-mode]").forEach(button=>button.addEventListener("click",()=>{mode=button.dataset.mode;showMode();preview();}));
-    $("task").addEventListener("change",async()=>{$("custom-model").value="";$("run-name").value="";updateTask();await loadModels();showMode();await loadActionMetrics();preview();});
+    const changeTask=async()=>{$("custom-model").value="";$("run-name").value="";updateTask();await loadModels();showMode();await loadActionMetrics();preview();};
+    $("task").addEventListener("change",async()=>{syncSelectorsFromTask();await changeTask();});
+    $("algorithm").addEventListener("change",async()=>{const alias=renderModelSceneSelectors($("task").value);if(alias)await changeTask();});
+    $("scene").addEventListener("change",async()=>{const alias=renderModelSceneSelectors($("task").value);if(alias)await changeTask();});
+    $("map").addEventListener("change",()=>{renderMapInfo();queuePreview();});
     $("resume").addEventListener("change",()=>{showMode();preview();});
     $("run-form").addEventListener("input",queuePreview);$("run-form").addEventListener("change",queuePreview);
     document.querySelectorAll("[data-preset]").forEach(button=>button.addEventListener("click",()=>{const smoke=button.dataset.preset==="smoke";$("train-envs").value=smoke?64:1024;$("iterations").value=smoke?2:16000;preview();}));

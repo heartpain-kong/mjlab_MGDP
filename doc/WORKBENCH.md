@@ -32,9 +32,9 @@ python lgdog.py --python C:\path\to\training-env\Scripts\python.exe ui
 
 ## 页面怎么用
 
-1. 选择训练方案，默认是 `standard`：标准 Rough + HIM，282 维历史输入。
+1. 先选择“算法 / 模型”和“场景”。HIM 提供 `Flat-HIM` 平地预训练和标准 Rough 续训；PPO 提供平地、温和 Rough、盲走 Rough 和带扫描 Rough。默认是 `standard`：标准 Rough + HIM，282 维历史输入。
 2. 切换训练、Play、Sim2Sim 或奖励。点击“快速检查”只填写 64 环境/2 轮，不会自动运行。
-3. Play 选择 `.pt`，Sim2Sim 选择 `.onnx`。也可填写自定义路径；没有模型时不能启动回放。
+3. Play 选择 `.pt`，Sim2Sim 选择 `.onnx`。也可填写自定义路径；没有模型时不能启动回放。Flat-HIM 和 Standard-HIM 使用相同的 6 帧历史合同，可以从平地模型续训到崎岖地形。
 4. 查看右侧的实际命令，再点击启动。页面下方显示进程 PID、运行状态和真实输出。
 5. 打开“查看奖励”后，可以看到当前方案的全部 reward。直接编辑权重或参数 JSON，取消勾选会把权重设为 0，点击“保存奖励修改”即可写入 `reward_cfg.py`。保存前会生成 `reward_cfg.py.bak`，修改需要重启训练进程才会生效。
 6. 奖励区支持名称筛选和“恢复基线”。黄色行表示当前 profile 有覆盖值；双击 reward 会显示实际函数源码和绑定位置。继承自 mjlab 的函数如果能在当前 Python 环境找到，也会直接显示依赖源码。
@@ -45,7 +45,7 @@ python lgdog.py --python C:\path\to\training-env\Scripts\python.exe ui
 > 完整流程和踩坑记录见 [REWARDS.md](REWARDS.md#★-面板调参试出来的值必须搬进-profile-再提交)。
 7. 停止按钮仅停止本次面板启动的对应进程。停止不会补存尚未保存的训练步，已存 checkpoint 保留。
 
-Play 默认使用 Viser 浏览器界面，启动后打开页面中的“机器人视图”（通常 `http://127.0.0.1:8080`，以日志输出为准）。也可以切换为原生 MuJoCo 窗口。Sim2Sim 使用普通 MuJoCo，勾选窗口时显示在运行服务的电脑上。
+Play 默认使用 Viser 浏览器界面，启动后打开页面中的“机器人视图”（通常 `http://127.0.0.1:8080`，以日志输出为准）。也可以切换为原生 MuJoCo 窗口。Sim2Sim 使用普通 MuJoCo，面板会显示每张内置地图的 geom 数量和推荐出生位置；填写外部 XML 路径后，会优先加载该地形，适合把测试地图移植到 sim2sim。面板还可以配置出生 x/y/朝向、朝向保持、动作裁剪和训练观测对拍。
 
 “启动 TensorBoard”使用当前训练 Python 和绝对日志目录，稍后点击“曲线页面”（默认端口 6006）。若端口已被其他服务占用，错误会显示在任务日志中。
 
@@ -81,6 +81,7 @@ tail -n 40 logs/dashboard/history/train_runs.jsonl
 | 短名称 | 方案 |
 |---|---|
 | `standard` | HIM + 标准崎岖地形，无机身高度扫描 |
+| `him_flat` | HIM + 平地预训练，可续训到 `standard` |
 | `him` | 原 V7/V7b 温和地形 HIM |
 | `terrain` | TerrainV4 |
 | `gentle` | 普通 PPO 温和地形盲走 |
@@ -96,6 +97,7 @@ python lgdog.py train standard --envs 1024 --iterations 16000 --run-name V8_him_
 python lgdog.py train standard --envs 1024 --iterations 16000 --terrain-num-rows 20
 python lgdog.py play standard --viewer viser
 python lgdog.py sim standard --map stairs --vx 0.4 --spawn-y 4
+python lgdog.py sim standard --map lgdog1 --map-file src/assets/terrains/lgdog1_testmap.xml --spawn-y 4
 python lgdog.py rewards standard --term foot_clearance
 python lgdog.py curves
 ```
@@ -106,7 +108,7 @@ python lgdog.py curves
 
 `--dry-run` 只显示命令。Play/Sim2Sim 默认从该任务独立实验目录中寻找最新已有模型，跳过尚无模型的 run。Flat/Rough 共用实验目录，必须显式选择对应模型：`python lgdog.py play flat --checkpoint /path/to/model.pt`。
 
-续训用 `python lgdog.py train standard --resume --checkpoint logs/rsl_rl/对应实验/某个run/model_100.pt`，模型必须属于当前任务的实验目录。新标准 HIM 与 V7 的 critic 维度不同，不能通过此入口跨任务恢复完整 checkpoint。
+续训用 `python lgdog.py train standard --resume --checkpoint logs/rsl_rl/对应实验/某个run/model_100.pt`。标准 HIM 允许从兼容的 `him_flat` 实验目录选择 checkpoint，面板会使用显式绝对路径加载；其它观测维度或算法不同的模型仍会被拒绝。新标准 HIM 与 V7 的 critic 维度不同，不能通过此入口跨任务恢复完整 checkpoint。
 
 ## 目录整理说明
 
