@@ -23,3 +23,34 @@
 .gpu-health{border-color:#dceae7}.gpu-health .hint{margin-top:15px}.gpu-health .health-pill.warning{color:#a45c4c;background:#f7e8e3}
 @media(max-width:900px){.history-body{grid-template-columns:1fr}}
 .selector-grid{margin-bottom:0}.compact-field{margin-top:0}.map-info{margin:-4px 0 15px;padding:10px 12px;border:1px solid #e1eeea;border-radius:7px;background:#f6faf9;color:#5c7c78;font-size:11px;line-height:1.6}
+
+/* Layout: keep the two workbench columns visually balanced.  The settings
+   form is one long workflow, while the diagnostics are independent cards;
+   using two responsive card columns avoids a tall single right rail. */
+.workspace-grid{align-items:stretch}
+.settings{height:100%;display:flex;flex-direction:column}
+.settings form{display:flex;flex-direction:column;min-height:100%}
+.settings .form-footer{margin-top:auto}
+.right-column{height:100%;align-content:start;align-items:stretch}
+
+@media(min-width:1101px){
+  .right-column{grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch}
+  .right-column .terrain-editor,
+  .right-column .command-card,
+  .right-column .environment{grid-column:1 / -1}
+}
+
+@media(max-width:1100px){
+  .workspace-grid{align-items:start}
+  .settings{height:auto}
+  .settings form{min-height:0}
+  .settings .form-footer{margin-top:22px}
+  .right-column{height:auto;align-items:stretch}
+  .right-column .terrain-editor,
+  .right-column .command-card,
+  .right-column .environment{grid-column:1 / -1}
+}
+
+@media(max-width:720px){
+  .right-column{grid-template-columns:1fr}
+}
