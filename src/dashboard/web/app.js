@@ -254,6 +254,18 @@ function showMode() {
   fillModels();
   if(mode==="rewards") loadRewards();
 }
+function setWorkspaceView(view){
+  const grid=document.querySelector(".workspace-grid");
+  if(!grid)return;
+  const monitor=view==="monitor";
+  grid.classList.toggle("workspace-monitor",monitor);
+  grid.classList.toggle("workspace-settings",!monitor);
+  $("settings-view")?.classList.toggle("selected",!monitor);
+  $("monitor-view")?.classList.toggle("selected",monitor);
+  $("settings-view")?.setAttribute("aria-pressed",String(!monitor));
+  $("monitor-view")?.setAttribute("aria-pressed",String(monitor));
+  try{localStorage.setItem("lgdog-workbench-view",monitor?"monitor":"settings");}catch{}
+}
 function renderRewards(){
   const list=$("reward-list"); list.replaceChildren();
   if(!rewardData?.rewards?.length){const empty=document.createElement("div");empty.className="empty";empty.textContent="没有读取到 reward。";list.append(empty);return;}
@@ -408,6 +420,9 @@ async function showHistory(){
 async function start() {
   try {
     state=await api("/api/state");
+    let savedView="settings";
+    try{savedView=localStorage.getItem("lgdog-workbench-view")||"settings";}catch{}
+    setWorkspaceView(savedView);
     renderModelSceneSelectors("standard");
     renderSimMaps();
     $("copy-root").textContent=state.root;$("python-path").textContent=state.python;
@@ -441,6 +456,8 @@ async function start() {
     $("history-refresh").addEventListener("click",showHistory);
     $("close-history").addEventListener("click",()=>$("history-dialog").close());
     $("copy-history").addEventListener("click",()=>{const text=$("copy-history").dataset.text||"";text?copy(text):toast("还没有可复制的记录");});
+    $("settings-view").addEventListener("click",()=>setWorkspaceView("settings"));
+    $("monitor-view").addEventListener("click",()=>setWorkspaceView("monitor"));
     setInterval(()=>refresh(),1800);
   }catch(error){toast(error.message);$("command").textContent="面板初始化失败，请检查服务终端。";}
 }

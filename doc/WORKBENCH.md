@@ -43,6 +43,7 @@ Ubuntu/GPUFree 部署使用工程内的 `install_ubuntu.sh`、`run_lgdog.sh` 和
 
 1. 先选择“算法 / 模型”和“场景”。训练任务由这两个选择自动决定；HIM-PPO 提供 Flat、标准 Rough 和温和 Rough，PPO 提供平地、温和 Rough、标准盲走 Rough、TerrainV4 和带扫描 Rough。两者共用 PPO 主优化流程，checkpoint 仍按输入合同独立保存。
 2. 切换训练、Play、Sim2Sim 或奖励。点击“快速检查”只填写 64 环境/2 轮，不会自动运行。
+   页面顶部的“运行设置 / 监控数据”可以切换界面：运行设置只保留任务和启动参数，监控数据单独显示策略健康、速度/地形课程、GPU、命令和地形编辑；训练参数/课程设置本身也可以折叠。
 3. Play 选择 `.pt`，Sim2Sim 选择 `.onnx`。也可填写自定义路径；没有模型时不能启动回放。续训只能选择当前算法和场景的 checkpoint，Flat 模型不能直接续训崎岖或障碍场景。
 4. 查看右侧的实际命令，再点击启动。页面下方显示进程 PID、运行状态和真实输出。
 5. 打开“查看奖励”后，可以看到当前方案的全部 reward。直接编辑权重或参数 JSON，取消勾选会把权重设为 0，点击“保存奖励修改”即可写入 `reward_cfg.py`。保存前会生成 `reward_cfg.py.bak`，修改需要重启训练进程才会生效。
@@ -121,7 +122,7 @@ python lgdog.py curves
 摔倒或跟踪质量过低则降级。实验名称留空时，会按
 已有 `V` 编号自动递增。
 
-LgDog 使用工程内的 [terrain_cfg.py](../src/tasks/velocity/config/lgdog1/terrain_cfg.py) 保存原生地形的隔离副本和本项目编辑值。
+LgDog 使用工程内的 [terrain_cfg.py](../src/tasks/velocity/config/lgdog1/terrain_cfg.py) 保存原生地形的隔离副本和本项目编辑值。工作台的“崎岖地形配置 / 编辑”就是修改这个文件；标准 Rough/HIM 会读取它，Flat 平地任务不会读取崎岖地形生成器。
 默认包含 7 类：`flat` 平地（20%）、`pyramid_stairs` 上台阶（20%，5–15 cm）、
 `pyramid_stairs_inv` 下台阶（20%，5–15 cm）、`hf_pyramid_slope` 上坡（10%，坡度 0–0.4）、
 `hf_pyramid_slope_inv` 下坡（10%，坡度 0–0.4）、`random_rough` 随机起伏（10%，噪声 0.02–0.10）、
