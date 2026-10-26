@@ -39,6 +39,8 @@ ACTION_METRIC_TAGS = {
   "mean_reward": "Train/mean_reward",
   "velocity_error_xy": "Metrics/twist/error_vel_xy",
   "velocity_error_yaw": "Metrics/twist/error_vel_yaw",
+  "velocity_tracking_score": "Episode_Metrics/velocity_tracking_score",
+  "velocity_tracking_active": "Episode_Metrics/velocity_tracking_active",
   "terrain_level": "Curriculum/terrain_levels/level_mean",
   "terrain_promote_fraction": "Curriculum/terrain_levels/promote_fraction",
   "terrain_demote_fraction": "Curriculum/terrain_levels/demote_fraction",

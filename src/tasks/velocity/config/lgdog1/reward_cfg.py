@@ -77,8 +77,22 @@ REWARD_PROFILES = {
   # 这里不再叠加世界坐标 z 的抬脚代价。写在这里而不是面板覆盖，免得面板覆盖
   # 静默压过后续对 profile 的修改。
   "him_standard": {
-    "weights": {"foot_clearance": 0.0, "action_rate_l2": -0.2},
+    # Give planar tracking enough gradient to win against the posture term.
+    # The action-rate cost stays moderate so acceleration is not suppressed.
+    "weights": {
+      "foot_clearance": 0.0,
+      "track_linear_velocity": 3.0,
+      "pose": 1.0,
+      "action_rate_l2": -0.1,
+    },
     "params": {
+      # A relative component makes a 40% under-speed error visible even when
+      # the absolute error is small at the early command stages.
+      "track_linear_velocity": {
+        "relative_weight": 0.35,
+        "relative_std": 0.5,
+        "min_command_speed": 0.2,
+      },
       "foot_clearance": {"target_height": 0.10},
       "leg_contact_force": {"sensor_name": "legs_ground_contact"},
     },

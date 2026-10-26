@@ -140,6 +140,8 @@ function renderActionMetrics(data){
 }
 function renderTrainingMetrics(data){
   const xy=metricValue(data,"velocity_error_xy"), yaw=metricValue(data,"velocity_error_yaw");
+  const activeScore=metricValue(data,"velocity_tracking_score");
+  const activeCommand=metricValue(data,"velocity_tracking_active");
   const score=metricValue(data,"command_linear_score");
   const vxMin=metricValue(data,"command_vx_min"), vxMax=metricValue(data,"command_vx_max");
   const level=metricValue(data,"terrain_level"), ratio=metricValue(data,"terrain_tracking_ratio");
@@ -149,6 +151,8 @@ function renderTrainingMetrics(data){
   const progressGate=metricValue(data,"terrain_progress_gate_fraction");
   $("metric-vel-xy").textContent=xy==null?"—":`${xy.toFixed(3)} m/s`;
   $("metric-vel-yaw").textContent=yaw==null?"—":`${yaw.toFixed(3)} rad/s`;
+  $("metric-active-track-score").textContent=activeScore==null?"—":activeScore.toFixed(3);
+  $("metric-active-command").textContent=activeCommand==null?"—":`${(activeCommand*100).toFixed(1)}%`;
   $("metric-command-score").textContent=score==null?"—":score.toFixed(3);
   $("metric-vx-range").textContent=vxMin==null||vxMax==null?"—":`[${vxMin.toFixed(2)}, ${vxMax.toFixed(2)}]`;
   $("metric-terrain-level").textContent=level==null?"—":level.toFixed(2);

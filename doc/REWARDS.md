@@ -77,6 +77,8 @@ python scripts/list_rewards.py LgDog1-Flat
 
 每个控制步的贡献是 `raw_reward × weight × step_dt`，本工程默认 `step_dt=0.02 s`。例如终止项返回 1 时贡献为 `-200 × 0.02 = -4`。连续接触力、二值碰撞与其他框架的奖励返回值可能不同，不能仅按 dt 换算权重。
 
+标准 HIM 对 `track_linear_velocity` 额外混合了相对欠速误差：默认权重为 `3.0`，其中 35% 使用“误差 / 目标平面速度”计算，最低归一化速度为 `0.2 m/s`；`pose` 调为 `1.0`、`action_rate_l2` 调为 `-0.1`，给加速和跟速留出梯度。普通 Flat/Rough/HIM 配置仍使用公共默认值。
+
 ## 添加新奖励
 
 1. 在 `src/tasks/velocity/mdp/rewards.py` 定义函数，返回 `[num_envs]` 张量。该模块通过 `mdp/__init__.py` 导出；若写在新的函数模块中，还需显式导出。

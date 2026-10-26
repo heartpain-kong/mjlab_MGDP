@@ -81,6 +81,20 @@ class CurriculumTests(unittest.TestCase):
       command_manager=NS(get_command=lambda _: command))
     torch.testing.assert_close(mdp.tracking_progress(env), torch.tensor([0., 0., .02, .01]))
 
+  def test_velocity_tracking_score_excludes_standing_commands(self):
+    command = torch.tensor([[0.4, 0.0, 0.0], [0.0, 0.0, 0.0]])
+    env = NS(
+      command_manager=NS(get_command=lambda _: command),
+      scene={"robot": NS(data=NS(
+        root_link_lin_vel_b=torch.tensor([[0.2, 0.0, 0.0], [0.0, 0.0, 0.0]])
+      ))},
+    )
+    active = mdp.velocity_tracking_active(env)
+    score = mdp.velocity_tracking_score(env)
+    torch.testing.assert_close(active, torch.tensor([1.0, 0.0]))
+    self.assertGreater(score[0].item(), 0.0)
+    self.assertEqual(score[1].item(), 0.0)
+
   def test_command_resampling_integrates_each_segment(self):
     command = torch.tensor([[1., 0., 0.]])
     env = NS(step_dt=1., command_manager=NS(get_command=lambda _: command),

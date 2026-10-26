@@ -69,6 +69,30 @@ def velocity_error_xy(env, command_name="twist"):
   return ops.velocity_error_xy(command, velocity)
 
 
+def velocity_tracking_active(env, command_name="twist", threshold=0.1):
+  """Return one for moving commands, excluding stand-still samples.
+
+  The command curriculum must not promote a faster range because the robot
+  learned to stand still.  This metric is accumulated per control step and is
+  paired with :func:`velocity_tracking_score` below.
+  """
+  command = env.command_manager.get_command(command_name)
+  return (torch.linalg.vector_norm(command[:, :2], dim=1) > threshold).float()
+
+
+def velocity_tracking_score(env, command_name="twist", std=0.5, threshold=0.1):
+  """Absolute XY tracking score for active commands only.
+
+  It uses the same kernel as the reward, but removes zero/standing commands
+  before the speed curriculum averages the score.  This prevents the standing
+  fraction from artificially inflating the promotion signal.
+  """
+  command = env.command_manager.get_command(command_name)
+  velocity = env.scene["robot"].data.root_link_lin_vel_b
+  active = velocity_tracking_active(env, command_name, threshold)
+  return ops.linear_velocity_tracking(command, velocity, std) * active
+
+
 def world_distance(env):
   return env.scene["robot"].data.root_link_lin_vel_w[:, :2].norm(dim=-1) * env.step_dt
 

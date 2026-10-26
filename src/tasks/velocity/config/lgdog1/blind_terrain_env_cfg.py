@@ -101,6 +101,10 @@ def lgdog1_blind_terrain_env_cfg(
     "tracking_progress": MetricsTermCfg(func=blind_mdp.tracking_progress),
     "outside_spawn_platform": MetricsTermCfg(func=blind_mdp.outside_spawn_platform),
     "velocity_error_xy_mps": MetricsTermCfg(func=blind_mdp.velocity_error_xy),
+    # Speed-curriculum diagnostics: score only moving commands so the
+    # stand-still fraction cannot make a weak tracker look successful.
+    "velocity_tracking_score": MetricsTermCfg(func=blind_mdp.velocity_tracking_score),
+    "velocity_tracking_active": MetricsTermCfg(func=blind_mdp.velocity_tracking_active),
   })
   # Keep the final envelope bounded; standard HIM starts at half this envelope
   # and expands it from completed-episode tracking quality.
@@ -108,6 +112,11 @@ def lgdog1_blind_terrain_env_cfg(
   twist.ranges.lin_vel_x = (-0.4, 0.8)
   twist.ranges.lin_vel_y = (-0.3, 0.3)
   twist.ranges.ang_vel_z = (-0.6, 0.6)
+  if reward_profile == "him_standard":
+    # Keep enough zero-command samples for standing recovery, but reserve most
+    # of the standard HIM batch for actual speed tracking.  Play keeps the
+    # larger standing fraction so a zero command remains easy to inspect.
+    twist.rel_standing_envs = 0.25 if play else 0.10
   if not play:
     if reward_profile == "him_standard":
       # Expand the available curriculum rows while keeping the initial reset
@@ -135,16 +144,17 @@ def lgdog1_blind_terrain_env_cfg(
         func=RewardBasedVelocityCurriculum,
         params={
           "command_name": "twist",
-          # V19 tracked stably around 0.71 but never expanded again under a
-          # strict 0.8 gate.  Use a small EMA + patience so speed can advance
-          # without reacting to one lucky rollout.
-          "linear_threshold": 0.70,
-          "linear_increment": 0.05,
-          "linear_patience": 2,
-          "linear_regress_threshold": 0.55,
-          "linear_regress_patience": 3,
+          # Promote from the active-command tracking score rather than the
+          # mixed reward.  This avoids standing samples masking under-speed.
+          "score_metric_name": "velocity_tracking_score",
+          "active_metric_name": "velocity_tracking_active",
+          "linear_threshold": 0.78,
+          "linear_increment": 0.025,
+          "linear_patience": 3,
+          "linear_regress_threshold": 0.62,
+          "linear_regress_patience": 2,
           "linear_regress_increment": 0.025,
-          "score_ema_alpha": 0.5,
+          "score_ema_alpha": 0.4,
           "lin_vel_x_limit": (-0.4, 0.8),
           "lin_vel_y_limit": (-0.3, 0.3),
           "check_interval_s": 20.0,

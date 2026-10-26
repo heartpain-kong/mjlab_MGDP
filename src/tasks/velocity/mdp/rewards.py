@@ -26,6 +26,9 @@ def track_linear_velocity(
   env: ManagerBasedRlEnv,
   std: float,
   command_name: str,
+  relative_weight: float = 0.0,
+  relative_std: float = 0.5,
+  min_command_speed: float = 0.2,
   asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
 ) -> torch.Tensor:
   """Reward for tracking the commanded base linear velocity.
@@ -36,7 +39,15 @@ def track_linear_velocity(
   command = env.command_manager.get_command(command_name)
   assert command is not None, f"Command '{command_name}' not found."
   actual = asset.data.root_link_lin_vel_b
-  return ops.linear_velocity_tracking(command, actual, std)
+  absolute = ops.linear_velocity_tracking(command, actual, std)
+  if relative_weight <= 0.0:
+    return absolute
+  if relative_weight > 1.0:
+    raise ValueError("relative_weight must be between 0 and 1")
+  relative = ops.linear_velocity_tracking_relative(
+    command, actual, relative_std, min_command_speed,
+  )
+  return (1.0 - relative_weight) * absolute + relative_weight * relative
 
 
 def track_angular_velocity(

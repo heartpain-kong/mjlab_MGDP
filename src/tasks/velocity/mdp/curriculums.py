@@ -102,6 +102,10 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
       params.get("linear_regress_increment", self.linear_increment * 0.5)
     )
     self.score_ema_alpha = float(params.get("score_ema_alpha", 0.5))
+    # Optional direct metrics make the promotion score independent of the
+    # reward mix and, most importantly, allow us to exclude standing commands.
+    self.score_metric_name = params.get("score_metric_name")
+    self.active_metric_name = params.get("active_metric_name")
     self.limits = {
       name: tuple(float(value) for value in params.get(f"{name}_limit", (-1.0, 1.0)))
       for name in self._range_names
@@ -136,6 +140,8 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
     self.scores = torch.zeros(2, device=self.device)
     self.score_ema = torch.zeros(2, device=self.device)
     self.has_score_ema = False
+    self.metric_score_sum = torch.zeros((), device=self.device)
+    self.metric_active_steps = torch.zeros((), device=self.device)
     self.promotion_streak = 0
     self.regression_streak = 0
 
@@ -152,6 +158,13 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
         sums[name][env_ids].sum() for name in self._reward_names
       ])
       self.episode_count += len(env_ids)
+      metric_sums = getattr(getattr(env, "metrics_manager", None), "_episode_sums", {})
+      if self.score_metric_name and self.active_metric_name:
+        score_values = metric_sums.get(self.score_metric_name)
+        active_values = metric_sums.get(self.active_metric_name)
+        if score_values is not None and active_values is not None:
+          self.metric_score_sum += score_values[env_ids].sum()
+          self.metric_active_steps += active_values[env_ids].sum()
     if (
       env.common_step_counter - self.last_check_step < self.check_interval_steps
       or self.episode_count == 0
@@ -167,7 +180,12 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
       if getattr(env.reward_manager, "_scale_by_dt", True)
       else env.max_episode_length
     )
-    self.scores.copy_(self.reward_sums / (weights * duration * self.episode_count))
+    reward_scores = self.reward_sums / (weights * duration * self.episode_count)
+    self.scores.copy_(reward_scores)
+    if float(self.metric_active_steps.item()) > 0.0:
+      # Replace only the linear score.  Angular score remains the legacy
+      # reward-normalized value because the curriculum expands planar speed.
+      self.scores[0] = self.metric_score_sum / self.metric_active_steps
     if not self.has_score_ema:
       self.score_ema.copy_(self.scores)
       self.has_score_ema = True
@@ -191,6 +209,8 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
       self._shrink("lin_vel_y", self.linear_regress_increment)
       self.regression_streak = 0
     self.reward_sums.zero_()
+    self.metric_score_sum.zero_()
+    self.metric_active_steps.zero_()
     self.episode_count = 0
     self.last_check_step = int(env.common_step_counter)
     return self._metrics()
@@ -236,6 +256,8 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
       "scores": self.scores.detach().cpu().clone(),
       "score_ema": self.score_ema.detach().cpu().clone(),
       "has_score_ema": self.has_score_ema,
+      "metric_score_sum": self.metric_score_sum.detach().cpu().clone(),
+      "metric_active_steps": self.metric_active_steps.detach().cpu().clone(),
       "promotion_streak": self.promotion_streak,
       "regression_streak": self.regression_streak,
     }
@@ -263,6 +285,21 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
       raise ValueError("Invalid velocity curriculum EMA statistics")
     self.score_ema.copy_(score_ema)
     self.has_score_ema = bool(state.get("has_score_ema", True))
+    metric_score_sum = torch.as_tensor(
+      state.get("metric_score_sum", 0.0), device=self.device
+    )
+    metric_active_steps = torch.as_tensor(
+      state.get("metric_active_steps", 0.0), device=self.device
+    )
+    if (
+      metric_score_sum.numel() != 1 or metric_active_steps.numel() != 1
+      or not torch.isfinite(metric_score_sum).all()
+      or not torch.isfinite(metric_active_steps).all()
+      or (metric_score_sum < 0).any() or (metric_active_steps < 0).any()
+    ):
+      raise ValueError("Invalid velocity curriculum direct metric statistics")
+    self.metric_score_sum.copy_(metric_score_sum.reshape(()))
+    self.metric_active_steps.copy_(metric_active_steps.reshape(()))
     self.promotion_streak = int(state.get("promotion_streak", 0))
     self.regression_streak = int(state.get("regression_streak", 0))
     if self.promotion_streak < 0 or self.regression_streak < 0:
@@ -282,6 +319,8 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
       setattr(self.command_term.cfg.ranges, name, bounds)
     self.last_check_step = int(self._env.common_step_counter)
     self.reward_sums.zero_()
+    self.metric_score_sum.zero_()
+    self.metric_active_steps.zero_()
     self.scores.zero_()
     self.episode_count = 0
     return True

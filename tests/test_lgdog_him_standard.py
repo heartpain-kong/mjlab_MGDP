@@ -88,8 +88,15 @@ class StandardHIMTests(unittest.TestCase):
     self.assertIs(cfg.curriculum["command_vel"].func, RewardBasedVelocityCurriculum)
     self.assertIs(cfg.curriculum["terrain_levels"].func, blind_mdp.terrain_levels_tracking)
     self.assertEqual(cfg.curriculum["terrain_levels"].params, {"max_velocity_error": 0.8})
-    self.assertEqual(cfg.curriculum["command_vel"].params["linear_threshold"], 0.7)
-    self.assertEqual(cfg.curriculum["command_vel"].params["linear_patience"], 2)
+    self.assertEqual(cfg.curriculum["command_vel"].params["linear_threshold"], 0.78)
+    self.assertEqual(cfg.curriculum["command_vel"].params["linear_patience"], 3)
+    self.assertEqual(
+      cfg.curriculum["command_vel"].params["score_metric_name"],
+      "velocity_tracking_score",
+    )
+    self.assertEqual(cfg.commands["twist"].rel_standing_envs, 0.10)
+    self.assertEqual(cfg.rewards["track_linear_velocity"].weight, 3.0)
+    self.assertEqual(cfg.rewards["track_linear_velocity"].params["relative_weight"], 0.35)
     self.assertIs(cfg.rewards["foot_clearance"].func, blind_mdp.feet_clearance_terrain)
     self.assertEqual(cfg.rewards["leg_contact_force"].params["sensor_name"], "legs_ground_contact")
     self.assertEqual(cfg.commands["twist"].ranges.lin_vel_x, (-0.2, 0.4))
