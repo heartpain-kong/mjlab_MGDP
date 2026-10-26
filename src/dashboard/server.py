@@ -20,6 +20,7 @@ from .run_naming import next_run_name
 from . import history
 from .jobs import JobManager
 from .reward_editor import read_rewards, reward_detail, save_rewards
+from .terrain_editor import read_terrain, save_terrain
 
 WEB = Path(__file__).parent / "web"
 DOCUMENTS = {
@@ -36,7 +37,20 @@ ACTION_METRIC_TAGS = {
   "policy_mean_std": "Policy/mean_std",
   "entropy": "Loss/entropy",
   "mean_reward": "Train/mean_reward",
+  "velocity_error_xy": "Metrics/twist/error_vel_xy",
+  "velocity_error_yaw": "Metrics/twist/error_vel_yaw",
   "terrain_level": "Curriculum/terrain_levels/level_mean",
+  "terrain_promote_fraction": "Curriculum/terrain_levels/promote_fraction",
+  "terrain_demote_fraction": "Curriculum/terrain_levels/demote_fraction",
+  "terrain_tracking_ratio": "Curriculum/terrain_levels/tracking_ratio",
+  "terrain_velocity_error": "Curriculum/terrain_levels/velocity_error_xy_mps",
+  "terrain_failure_fraction": "Curriculum/terrain_levels/reset_batch_failure_fraction",
+  "terrain_velocity_gate_fraction": "Curriculum/terrain_levels/velocity_gate_pass_fraction",
+  "terrain_progress_gate_fraction": "Curriculum/terrain_levels/progress_gate_pass_fraction",
+  "command_linear_score": "Curriculum/command_vel/linear_score",
+  "command_angular_score": "Curriculum/command_vel/angular_score",
+  "command_vx_min": "Curriculum/command_vel/curriculum_vx_min",
+  "command_vx_max": "Curriculum/command_vel/curriculum_vx_max",
 }
 
 
@@ -118,16 +132,29 @@ def create_server(root, python, host="127.0.0.1", port=8765):
       raw_max = metrics.get("raw_action_abs_max", {}).get("value")
       saturation = metrics.get("action_saturation_fraction", {}).get("value")
       policy_std = metrics.get("policy_mean_std", {}).get("value")
+      # Raw output clipping is an advisory signal.  It is not motor or torque
+      # saturation: V19 is stable in sim2sim while its normalized policy output
+      # still crosses the local ±1 execution clip.  Keep a hard warning only
+      # for a clearly divergent policy distribution.
+      advisories = []
       warnings = []
       if raw_max is not None and raw_max > 3.0:
-        warnings.append("原始动作幅值偏大")
+        advisories.append("策略原始输出超过 3（裁剪前观察项）")
       if saturation is not None and saturation > 0.05:
-        warnings.append("动作饱和率偏高")
+        advisories.append("策略裁剪比例超过 5%（不等于力矩饱和）")
       if policy_std is not None and policy_std > 3.0:
-        warnings.append("策略标准差偏大")
+        warnings.append("策略标准差异常，可能发生分布发散")
+      terrain_promote = metrics.get("terrain_promote_fraction", {}).get("value")
+      terrain_demote = metrics.get("terrain_demote_fraction", {}).get("value")
+      if terrain_promote is not None and terrain_demote is not None and terrain_demote > terrain_promote * 1.5:
+        advisories.append("地形降级明显多于升级")
+      status = "warning" if warnings else "observe" if advisories else "healthy"
       data = {"task": alias, "experiment": task["experiment"], "available": bool(metrics),
               "run": event_file.parent.name, "updated": stat.st_mtime, "metrics": metrics,
-              "warning": "；".join(warnings) if warnings else None}
+              "status": status,
+              "warning": "；".join(warnings) if warnings else None,
+              "advisory": "；".join(advisories) if advisories else None,
+              "note": "原始动作指标统计的是策略输出裁剪，不等于电机力矩饱和；请结合 sim2sim 和实际姿态判断。"}
     except ImportError:
       data = {"task": alias, "experiment": task["experiment"], "available": False,
               "run": event_file.parent.name, "updated": stat.st_mtime,
@@ -230,6 +257,8 @@ def create_server(root, python, host="127.0.0.1", port=8765):
         if parsed.path == "/api/rewards":
           alias, task = resolve_task(query.get("task", ["standard"])[0])
           return self.send({"task": alias, **read_rewards(root, task["profile"])})
+        if parsed.path == "/api/terrain":
+          return self.send(read_terrain(root))
         if parsed.path == "/api/reward-detail":
           alias, task = resolve_task(query.get("task", ["standard"])[0])
           return self.send({"task": alias, **reward_detail(root, task["profile"], query.get("name", [""])[0])})
@@ -278,6 +307,15 @@ def create_server(root, python, host="127.0.0.1", port=8765):
                                      after=after, source=result.get("source"),
                                      backup=result.get("backup"))
           return self.send({"task": alias, **result})
+        if self.path == "/api/terrain/save":
+          result = save_terrain(root, data)
+          return self.send(result)
+        if self.path == "/api/terrain/view":
+          script = root / "scripts" / "visualize_terrain.py"
+          if not script.is_file():
+            raise ValueError("找不到 scripts/visualize_terrain.py")
+          job = jobs.launch([str(python), str(script), "--lgdog"], "terrain", "terrain")
+          return self.send({"job": job, "url": "http://127.0.0.1:8080"})
         if self.path == "/api/stop":
           return self.send({"job": jobs.stop(str(data.get("id", "")))})
         return self.send({"error": "操作不存在"}, 404)

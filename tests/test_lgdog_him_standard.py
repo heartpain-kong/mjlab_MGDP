@@ -43,15 +43,16 @@ class StandardHIMTests(unittest.TestCase):
       })
       self.assertEqual(sum(name.endswith("_ground_ray") for name in sensors), 4)
 
-  def test_standard_generator_is_not_softened_or_polluted_by_legacy_gentle_task(self):
+  def test_standard_generator_uses_unitree_rough_profile_without_polluting_legacy_gentle(self):
     original = deepcopy(ROUGH_TERRAINS_CFG.sub_terrains)
     legacy = lgdog1_him_env_cfg()
     cfg = lgdog1_him_standard_env_cfg()
     terrain = cfg.scene.terrain.terrain_generator
-    self.assertEqual(terrain.sub_terrains, original)
+    self.assertNotEqual(terrain.sub_terrains, original)
     self.assertIsNot(terrain.sub_terrains, ROUGH_TERRAINS_CFG.sub_terrains)
     self.assertEqual(terrain.sub_terrains["flat"].proportion, 0.2)
-    self.assertEqual(terrain.sub_terrains["pyramid_stairs"].step_height_range, (0.0, 0.1))
+    self.assertEqual(terrain.sub_terrains["pyramid_stairs"].step_height_range, (0.05, 0.15))
+    self.assertEqual(terrain.sub_terrains["hf_pyramid_slope"].slope_range, (0.0, 0.4))
     self.assertEqual(legacy.scene.terrain.terrain_generator.sub_terrains["pyramid_stairs"].step_height_range, (0.0, 0.05))
     self.assertEqual(ROUGH_TERRAINS_CFG.sub_terrains, original)
 
@@ -75,7 +76,7 @@ class StandardHIMTests(unittest.TestCase):
   def test_stability_training_defaults_are_recorded_in_agent_config(self):
     cfg = load_rl_cfg(TASK)
     self.assertEqual(cfg.clip_actions, 1.0)
-    self.assertEqual(cfg.num_steps_per_env, 48)
+    self.assertEqual(cfg.num_steps_per_env, 50)
     self.assertEqual(cfg.algorithm.estimator_epochs, 5)
     env = lgdog1_him_standard_env_cfg()
     self.assertEqual(env.commands["twist"].resampling_time_range, (3.0, 5.0))
@@ -87,6 +88,8 @@ class StandardHIMTests(unittest.TestCase):
     self.assertIs(cfg.curriculum["command_vel"].func, RewardBasedVelocityCurriculum)
     self.assertIs(cfg.curriculum["terrain_levels"].func, blind_mdp.terrain_levels_tracking)
     self.assertEqual(cfg.curriculum["terrain_levels"].params, {"max_velocity_error": 0.8})
+    self.assertEqual(cfg.curriculum["command_vel"].params["linear_threshold"], 0.7)
+    self.assertEqual(cfg.curriculum["command_vel"].params["linear_patience"], 2)
     self.assertIs(cfg.rewards["foot_clearance"].func, blind_mdp.feet_clearance_terrain)
     self.assertEqual(cfg.rewards["leg_contact_force"].params["sensor_name"], "legs_ground_contact")
     self.assertEqual(cfg.commands["twist"].ranges.lin_vel_x, (-0.2, 0.4))

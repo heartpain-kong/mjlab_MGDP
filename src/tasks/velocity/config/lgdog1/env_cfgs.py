@@ -19,6 +19,7 @@ from mjlab.utils.noise import UniformNoiseCfg as Unoise
 
 from src.tasks.velocity.velocity_env_cfg import make_velocity_env_cfg
 from .reward_cfg import make_lgdog_rewards
+from .terrain_cfg import lgdog1_rough_terrain_cfg
 
 TerrainType = Literal["rough", "obstacles"]
 
@@ -57,6 +58,12 @@ def lgdog1_rough_env_cfg(
           随机起伏 0.02~0.10→0.02~0.06；波浪 0~0.2→0~0.1（占比之和仍为 1.0）。
   """
   cfg = make_velocity_env_cfg()
+
+  # Keep LgDog on the native Unitree/mjlab rough terrain distribution, while
+  # giving this project an isolated editable copy.  A change in terrain_cfg.py
+  # cannot mutate ROUGH_TERRAINS_CFG or another robot's task config.
+  if cfg.scene.terrain is not None and cfg.scene.terrain.terrain_generator is not None:
+    cfg.scene.terrain.terrain_generator = lgdog1_rough_terrain_cfg()
 
   cfg.sim.mujoco.ccd_iterations = 500
   cfg.sim.contact_sensor_maxmatch = 500

@@ -39,6 +39,7 @@ python lgdog.py
 
 ```bash
 python lgdog.py tasks                      # 看 8 个任务的短名称
+python lgdog.py web                        # 总览：环境/GPU/进程/轮次/日志一页看完（端口 8770）
 python lgdog.py kline                      # 曲线终端：把 TensorBoard 曲线当 K 线看（端口 8766）
 python lgdog.py train standard --envs 64 --iterations 2
 python lgdog.py play standard              # 自动选对应任务最新 checkpoint
@@ -47,6 +48,19 @@ python lgdog.py rewards standard --term foot_clearance
 ```
 
 正式训练示例：`python lgdog.py train standard --envs 1024 --iterations 16000 --run-name V8_him_standard_seed42`。环境数应按显存调整。面板本身仅用 Python 标准库；训练仍需要原来的 mjlab / MuJoCo / PyTorch 环境。
+
+## 一个网页看全部：mjlab 总览
+
+```bash
+python lgdog.py web        # 浏览器打开 http://127.0.0.1:8770
+bash run_web.sh            # Linux 等价入口（Python 解释器沿用 run_lgdog.sh 的规则）
+run_web.cmd                # Windows 双击
+```
+
+**训练状态、显卡、磁盘、环境版本、相关进程、全部训练轮次、日志尾巴**收在一页，并且默认顺手带起
+工作台（:8765）和曲线终端（:8766）—— 只记一个地址就够了。轮次表格直接读曲线终端解析好的指标，
+点「K线」跳到对应轮次的蜡烛图。页面只读系统状态，唯一的写操作是启停**本页启动的**子服务。
+细节和开机自启写法见 [doc/WEBHUB.md](doc/WEBHUB.md)。
 
 ## 看曲线：曲线战士（TensorBoard 转 K 线）
 
@@ -69,13 +83,16 @@ python lgdog.py kline            # 浏览器打开 http://127.0.0.1:8766
 | `logs/rsl_rl/` | 训练 checkpoint、ONNX、TorchScript 和配置快照 |
 | `logs/dashboard/` | 面板启动的进程记录与输出日志 |
 | `logs/kline_cache/` | 曲线终端的 event 解析缓存（可随时删，删了会重解析） |
+| `logs/web/` | 总览拉起的三个服务的输出日志 |
 | `src/kline/` | 曲线终端：event 解析、窗口聚合、只读 HTTP 服务与页面 |
+| `src/portal/` | mjlab 总览：环境/GPU/进程采集、服务管理、只读 HTTP 服务与页面 |
 | [doc/](doc/INDEX.md) | 使用与技术文档 |
 | `archive/` | 旧补丁、旧验证记录和历史清单 |
 
 每个 HIM checkpoint 会额外生成 `policy_jit.pt`（TorchScript 推理模型）；`policy.onnx` 仍保留用于现有 sim2sim 和部署链路。
 
 - [面板操作与目录迁移说明](doc/WORKBENCH.md)
+- [mjlab 总览（一个网页看全部）](doc/WEBHUB.md)
 - [曲线终端（TensorBoard 转 K 线）](doc/KLINE.md)
 - [标准地形 HIM 训练说明](doc/LGDOG_HIM_STANDARD.md)
 - [奖励调参](doc/REWARDS.md)

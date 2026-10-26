@@ -135,6 +135,7 @@ class Store:
     self.runs = {}
     self._lock = threading.Lock()
     self._run_locks = {}
+    self._threads = {}
     self._slots = threading.Semaphore(2)
     self.last_scan = 0.0
 
@@ -222,9 +223,21 @@ class Store:
       return self._run_locks.setdefault(run_id, threading.Lock())
 
   def _load_async(self, run):
+    """后台线程解析：请求线程只负责把活派出去，绝不在这里读几十 MB。
+
+    （这一条以前是直接在请求线程里跑的，导致 `/api/overview` 在冷缓存下
+    串行解析十几个 run、几十秒不返回。）
+    """
     if run.state == "loading":
       return
-    self._load(run, background=True)
+    with self._lock:
+      thread = self._threads.get(run.id)
+      if thread is not None and thread.is_alive():
+        return
+      thread = threading.Thread(target=self._load, args=(run, True), daemon=True,
+                                name=f"kline-load-{run.id}")
+      self._threads[run.id] = thread
+    thread.start()
 
   def _load(self, run, background=False):
     lock = self._run_lock(run.id)

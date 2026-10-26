@@ -93,6 +93,15 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
       raise ValueError(f"Velocity curriculum command not found: {self.command_name}")
     self.linear_threshold = float(params.get("linear_threshold", 0.8))
     self.linear_increment = float(params.get("linear_increment", 0.1))
+    self.linear_patience = max(1, int(params.get("linear_patience", 1)))
+    self.linear_regress_threshold = float(
+      params.get("linear_regress_threshold", max(0.0, self.linear_threshold - 0.2))
+    )
+    self.linear_regress_patience = max(1, int(params.get("linear_regress_patience", 3)))
+    self.linear_regress_increment = float(
+      params.get("linear_regress_increment", self.linear_increment * 0.5)
+    )
+    self.score_ema_alpha = float(params.get("score_ema_alpha", 0.5))
     self.limits = {
       name: tuple(float(value) for value in params.get(f"{name}_limit", (-1.0, 1.0)))
       for name in self._range_names
@@ -102,19 +111,33 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
       raise ValueError("Velocity curriculum check_interval_s must be positive")
     if not 0.0 <= self.linear_threshold <= 1.0:
       raise ValueError("Velocity curriculum linear_threshold must be between 0 and 1")
+    if not 0.0 <= self.linear_regress_threshold <= self.linear_threshold:
+      raise ValueError("Velocity curriculum regress threshold must be below linear threshold")
     if not math.isfinite(self.linear_increment) or self.linear_increment <= 0.0:
       raise ValueError("Velocity curriculum linear_increment must be positive")
+    if not math.isfinite(self.linear_regress_increment) or self.linear_regress_increment <= 0.0:
+      raise ValueError("Velocity curriculum regress increment must be positive")
+    if not 0.0 < self.score_ema_alpha <= 1.0:
+      raise ValueError("Velocity curriculum score_ema_alpha must be in (0, 1]")
     for name, (low, high) in self.limits.items():
       if not math.isfinite(low) or not math.isfinite(high) or low > high:
         raise ValueError(f"Invalid velocity curriculum limit for {name}")
       initial_low, initial_high = getattr(self.command_term.cfg.ranges, name)
       if not low <= initial_low <= initial_high <= high:
         raise ValueError(f"Initial {name} range is outside its curriculum limits")
+    self.initial_ranges = {
+      name: tuple(float(value) for value in getattr(self.command_term.cfg.ranges, name))
+      for name in self._range_names
+    }
     self.check_interval_steps = max(1, math.ceil(interval_s / env.step_dt))
     self.last_check_step = int(env.common_step_counter)
     self.episode_count = 0
     self.reward_sums = torch.zeros(2, device=self.device)
     self.scores = torch.zeros(2, device=self.device)
+    self.score_ema = torch.zeros(2, device=self.device)
+    self.has_score_ema = False
+    self.promotion_streak = 0
+    self.regression_streak = 0
 
   def __call__(self, env, env_ids, **params):
     del params
@@ -145,26 +168,56 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
       else env.max_episode_length
     )
     self.scores.copy_(self.reward_sums / (weights * duration * self.episode_count))
-    if self.scores[0] > self.linear_threshold:
-      self._expand("lin_vel_x")
-      self._expand("lin_vel_y")
+    if not self.has_score_ema:
+      self.score_ema.copy_(self.scores)
+      self.has_score_ema = True
+    else:
+      self.score_ema.lerp_(self.scores, self.score_ema_alpha)
+    if self.score_ema[0] >= self.linear_threshold:
+      self.promotion_streak += 1
+      self.regression_streak = 0
+    elif self.score_ema[0] < self.linear_regress_threshold:
+      self.regression_streak += 1
+      self.promotion_streak = 0
+    else:
+      self.promotion_streak = 0
+      self.regression_streak = 0
+    if self.promotion_streak >= self.linear_patience:
+      self._expand("lin_vel_x", self.linear_increment)
+      self._expand("lin_vel_y", self.linear_increment)
+      self.promotion_streak = 0
+    elif self.regression_streak >= self.linear_regress_patience:
+      self._shrink("lin_vel_x", self.linear_regress_increment)
+      self._shrink("lin_vel_y", self.linear_regress_increment)
+      self.regression_streak = 0
     self.reward_sums.zero_()
     self.episode_count = 0
     self.last_check_step = int(env.common_step_counter)
     return self._metrics()
 
-  def _expand(self, name):
+  def _expand(self, name, increment):
     low, high = getattr(self.command_term.cfg.ranges, name)
     limit_low, limit_high = self.limits[name]
     setattr(self.command_term.cfg.ranges, name, (
-      round(max(low - self.linear_increment, limit_low), 10),
-      round(min(high + self.linear_increment, limit_high), 10),
+      round(max(low - increment, limit_low), 10),
+      round(min(high + increment, limit_high), 10),
+    ))
+
+  def _shrink(self, name, decrement):
+    low, high = getattr(self.command_term.cfg.ranges, name)
+    initial_low, initial_high = self.initial_ranges[name]
+    setattr(self.command_term.cfg.ranges, name, (
+      round(min(low + decrement, initial_low), 10),
+      round(max(high - decrement, initial_high), 10),
     ))
 
   def _metrics(self):
     return {
       "linear_score": self.scores[0],
       "angular_score": self.scores[1],
+      "linear_score_ema": self.score_ema[0],
+      "promotion_streak": float(self.promotion_streak),
+      "regression_streak": float(self.regression_streak),
       "curriculum_vx_max": float(self.command_term.cfg.ranges.lin_vel_x[1]),
       "curriculum_vx_min": float(self.command_term.cfg.ranges.lin_vel_x[0]),
     }
@@ -181,6 +234,10 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
       "episode_count": self.episode_count,
       "reward_sums": self.reward_sums.detach().cpu().clone(),
       "scores": self.scores.detach().cpu().clone(),
+      "score_ema": self.score_ema.detach().cpu().clone(),
+      "has_score_ema": self.has_score_ema,
+      "promotion_streak": self.promotion_streak,
+      "regression_streak": self.regression_streak,
     }
 
   def load_state_dict(self, state):
@@ -201,6 +258,15 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
       setattr(self.command_term.cfg.ranges, name, bounds)
     self.reward_sums.copy_(reward_sums)
     self.scores.copy_(scores)
+    score_ema = torch.as_tensor(state.get("score_ema", scores), device=self.device)
+    if score_ema.shape != (2,) or not torch.isfinite(score_ema).all() or (score_ema < 0).any():
+      raise ValueError("Invalid velocity curriculum EMA statistics")
+    self.score_ema.copy_(score_ema)
+    self.has_score_ema = bool(state.get("has_score_ema", True))
+    self.promotion_streak = int(state.get("promotion_streak", 0))
+    self.regression_streak = int(state.get("regression_streak", 0))
+    if self.promotion_streak < 0 or self.regression_streak < 0:
+      raise ValueError("Invalid velocity curriculum streak state")
     self.episode_count = int(state.get("episode_count", 0))
     self.last_check_step = min(int(state.get("last_check_step", 0)), int(self._env.common_step_counter))
 

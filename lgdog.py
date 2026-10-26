@@ -29,6 +29,12 @@ def main():
   kline.add_argument("--logdir", action="append", default=None,
                      help="event 目录，可给多次；默认 logs/rsl_rl")
   kline.add_argument("--no-browser", action="store_true")
+  web = sub.add_parser("web", help="启动 mjlab 总览：环境/GPU/进程/轮次一页看完，并带起工作台和曲线终端")
+  web.add_argument("--port", type=int, default=8770)
+  web.add_argument("--host", default="127.0.0.1", help="默认只绑 127.0.0.1；0.0.0.0 允许局域网访问")
+  web.add_argument("--logdir", action="append", default=None, help="额外的 event 目录，可给多次")
+  web.add_argument("--no-autostart", action="store_true", help="不自动带起工作台和曲线终端")
+  web.add_argument("--no-browser", action="store_true")
   sub.add_parser("tasks", help="查看短任务名，无需加载训练依赖")
   models = sub.add_parser("models", help="列出任务的模型")
   models.add_argument("task", nargs="?", default="standard")
@@ -91,6 +97,10 @@ def main():
       from src.kline.server import serve as serve_kline
       serve_kline(ROOT, args.logdir, port=args.port, open_browser=not args.no_browser)
       return 0
+    if args.mode == "web":
+      from src.portal.server import serve as serve_portal
+      return serve_portal(ROOT, python, args.logdir, port=args.port, host=args.host,
+                          autostart=not args.no_autostart, open_browser=not args.no_browser) or 0
     if args.mode == "tasks":
       for alias, task in TASKS.items():
         print(f"{alias:10} {task['id']}\n           {task['description']}")

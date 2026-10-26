@@ -1,5 +1,8 @@
 # 本地训练工作台
 
+> 只想「看一眼现在什么情况」（训练在不在跑、GPU、最新轮次、日志尾巴）而不是来起任务的话，
+> 用 `python lgdog.py web` 打开 [mjlab 总览](WEBHUB.md)（:8770）：它会顺手把本页和曲线终端带起来。
+
 现在主工程只有一层目录：`E:\mjlab\unitree_rl_mjlab_lgdog`。打开面板后，可用同一套界面选择方案、训练、play、sim2sim 和查看奖励。
 
 ## 启动
@@ -33,6 +36,8 @@ python lgdog.py --python C:\path\to\training-env\Scripts\python.exe ui
 Ubuntu/GPUFree 部署使用工程内的 `install_ubuntu.sh`、`run_lgdog.sh` 和 `requirements-ubuntu.txt`。GPUFree 的 CUDA 驱动、数据盘、SSH 转发和显存检查记录见 [DEPLOYMENT_GPUFREE.md](DEPLOYMENT_GPUFREE.md)。安装缓存放在数据盘或工程 `.cache/`，不会进入 Git。
 
 右侧“GPU 状态”直接读取 `nvidia-smi`，显示显存、利用率、温度和功耗。Windows 没有 `nvidia-smi` 时会显示不可用，不影响面板的训练命令预览。
+
+“策略输出 / 控制健康”把原始动作最大值和策略裁剪比例标成“观察”项；它们统计的是策略输出，不等于电机力矩饱和。强告警只针对策略标准差发散。旁边的“速度追踪 / 地形课程”显示 XY/Yaw 误差、速度课程分数和当前 `vx` 范围，以及地形等级、tracking ratio、升级/降级、速度门和进度门通过率。地形降级多于升级时先检查课程难度和回合失败，不要只根据原始动作裁剪率判断策略失败。
 
 ## 页面怎么用
 
@@ -107,12 +112,31 @@ python lgdog.py rewards standard --term foot_clearance
 python lgdog.py curves
 ```
 
-标准 HIM 默认使用 10 行地形课程；面板里可以填写训练行数和最大难度倍率。速度课程从填写范围的
-50% 开始，只有当完整回合的线速度跟踪分数达到 0.8 才会扩大一次，单次扩大 0.1，直到达到
+标准 HIM 默认使用 Unitree/mjlab 原生 `ROUGH_TERRAINS_CFG`，10 行是难度等级、20 列是地形类型；面板里可以填写训练行数和最大难度倍率。
+速度课程从填写范围的
+50% 开始，线速度跟踪分数达到 0.70 并连续两次检查才会扩大一次，单次扩大 0.05；连续三次低于
+0.55 才会回退 0.025，直到达到
 面板上限；偏航角速度保持配置的最终范围。面板输入正数，训练会把最低值转换为负向下限、最高值转换为正向上限，并同步横移
 范围。地形课程同时使用命令完成度、跟踪误差、存活时长和出生平台外暴露时间，满足条件才升级，
 摔倒或跟踪质量过低则降级。实验名称留空时，会按
 已有 `V` 编号自动递增。
+
+LgDog 使用工程内的 [terrain_cfg.py](../src/tasks/velocity/config/lgdog1/terrain_cfg.py) 保存原生地形的隔离副本和本项目编辑值。
+默认包含 7 类：`flat` 平地（20%）、`pyramid_stairs` 上台阶（20%，5–15 cm）、
+`pyramid_stairs_inv` 下台阶（20%，5–15 cm）、`hf_pyramid_slope` 上坡（10%，坡度 0–0.4）、
+`hf_pyramid_slope_inv` 下坡（10%，坡度 0–0.4）、`random_rough` 随机起伏（10%，噪声 0.02–0.10）、
+`wave_terrain` 波浪（10%，振幅 0–0.20，4 个波）。
+课程模式下，列分配地形类型，行表示 difficulty；修改 `proportion` 会改变列分配，修改
+`step_height_range`、`slope_range`、`noise_range` 或 `amplitude_range` 会改变对应地形的难度范围。
+例如把原生上台阶最大高度改成 15 cm：
+
+```python
+cfg = lgdog1_rough_terrain_cfg()
+cfg.sub_terrains["pyramid_stairs"].step_height_range = (0.0, 0.15)
+```
+
+实际项目中直接编辑 `terrain_cfg.py` 的返回函数即可；修改地形后必须新开训练 run，旧 checkpoint 的课程状态不能代表新地形能力。
+工作台“打开 3D 查看器”会执行 `python scripts/visualize_terrain.py --lgdog`，Viser 页面默认在 `http://127.0.0.1:8080`；也可以在终端直接运行这条命令。查看器修改滑块只影响预览，工作台“保存当前地形修改”才会写入 `terrain_cfg.py`。
 
 `--dry-run` 只显示命令。Play/Sim2Sim 默认从该任务独立实验目录中寻找最新已有模型，跳过尚无模型的 run。Flat/Rough 共用实验目录，必须显式选择对应模型：`python lgdog.py play flat --checkpoint /path/to/model.pt`。
 

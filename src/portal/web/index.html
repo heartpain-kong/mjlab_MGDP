@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mjlab 总览 · 本机</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<div class="shell">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">m</span>
+      <span>mjlab 总览<small>LOCAL CONSOLE</small></span>
+    </div>
+    <div class="host"><span id="host">读取中…</span><span id="root" class="root"></span></div>
+    <div class="actions">
+      <label class="select-label">刷新
+        <select id="refresh">
+          <option value="2000">2 秒</option>
+          <option value="5000" selected>5 秒</option>
+          <option value="15000">15 秒</option>
+          <option value="30000">30 秒</option>
+        </select>
+      </label>
+      <button id="reload" class="secondary">↻ 刷新</button>
+      <span class="clock" id="clock">--:--:--</span>
+    </div>
+  </header>
+
+  <section class="summary" id="summary">
+    <div><small>训练状态</small><strong id="stat-training">读取中…</strong><em id="stat-training-detail"></em></div>
+    <div><small>显卡</small><strong id="stat-gpu">读取中…</strong><em id="stat-gpu-detail"></em></div>
+    <div><small>磁盘</small><strong id="stat-disk">读取中…</strong><em id="stat-disk-detail"></em></div>
+    <div><small>归档轮次</small><strong id="stat-runs">读取中…</strong><em id="stat-runs-detail"></em></div>
+  </section>
+
+  <section class="services" id="services"></section>
+
+  <section class="card runs-card">
+    <div class="card-head">
+      <h2>训练轮次</h2>
+      <span class="hint" id="runs-hint"></span>
+    </div>
+    <div class="table-wrap"><table id="runs"></table></div>
+  </section>
+
+  <div class="grid">
+    <section class="card">
+      <div class="card-head"><h2>环境</h2><span class="hint" id="env-hint"></span></div>
+      <div id="env" class="kv"></div>
+    </section>
+    <section class="card">
+      <div class="card-head"><h2>显卡</h2><span class="hint" id="gpu-hint"></span></div>
+      <div id="gpu"></div>
+    </section>
+    <section class="card">
+      <div class="card-head"><h2>相关进程</h2><span class="hint" id="proc-hint"></span></div>
+      <div id="procs" class="procs"></div>
+    </section>
+    <section class="card">
+      <div class="card-head"><h2>最近的操作</h2><span class="hint">来自 logs/dashboard/history</span></div>
+      <div id="history" class="history"></div>
+    </section>
+  </div>
+
+  <section class="card log-card">
+    <div class="card-head">
+      <h2>日志</h2>
+      <select id="log-source" class="log-source"></select>
+      <label class="check"><input type="checkbox" id="log-follow" checked> 自动滚动</label>
+      <span class="hint" id="log-hint"></span>
+    </div>
+    <pre id="log" aria-live="off"></pre>
+  </section>
+
+  <footer>
+    <span>只读系统状态；启动/停止只作用于本页启动的子服务。</span>
+    <span id="footer-dirs"></span>
+  </footer>
+</div>
+<div id="toast" class="toast hidden"></div>
+<script src="/assets/app.js"></script>
+</body>
+</html>

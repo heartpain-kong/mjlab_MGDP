@@ -13,6 +13,7 @@ import time
 import unittest
 from array import array
 from pathlib import Path
+from unittest.mock import patch
 
 from src.kline import aggregate
 from src.kline.labels import describe, describe_all
@@ -212,6 +213,30 @@ class StoreTests(unittest.TestCase):
     store = Store([self.root / "nowhere"], self.cache)
     self.assertEqual(store.scan(), {})
 
+  def test_ensure_does_not_block_on_parsing(self):
+    """ensure() 必须立刻返回：解析是后台线程干的。
+
+    以前这里是同步解析，冷缓存下 /api/overview 会把十几个 run 串行读完才返回，
+    前端直接超时。用「解析函数睡 0.6 秒」把这条行为钉住。
+    """
+    store = Store([self.root / "logs/rsl_rl"], self.cache)
+    store.scan()
+    run = next(iter(store.runs.values()))
+
+    def slow_parse(_directory):
+      time.sleep(0.6)
+      return {"Train/mean_reward": make_series([0, 1], [1.0, 2.0])}
+
+    started = time.monotonic()
+    with patch("src.kline.store._parse_event_dir", side_effect=slow_parse):
+      store.ensure(run.id)
+      elapsed = time.monotonic() - started
+      self.assertLess(elapsed, 0.3, f"ensure() 阻塞了 {elapsed:.2f}s")
+      deadline = time.monotonic() + 5
+      while run.state != "ready" and time.monotonic() < deadline:
+        time.sleep(0.05)
+      self.assertEqual(run.state, "ready", run.error)
+
 
 class HTTPTests(unittest.TestCase):
   def setUp(self):
@@ -247,6 +272,16 @@ class HTTPTests(unittest.TestCase):
     self.assertEqual(status, 200, body[:200])
     return json.loads(body)
 
+  def wait_ready(self, run_id, timeout=15):
+    """页面就是这么做的：/api/run 先返回 loading，然后轮询到 ready。"""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+      meta = self.json(f"/api/run?id={run_id}")
+      if meta["state"] in {"ready", "error"}:
+        return meta
+      time.sleep(0.05)
+    self.fail("run 一直没解析完")
+
   def test_page_and_assets_are_served(self):
     status, body = self.request("/")
     self.assertEqual(status, 200)
@@ -259,6 +294,8 @@ class HTTPTests(unittest.TestCase):
     self.assertEqual(self.request("/api/state", headers={"Host": "unrelated.example"})[0], 403)
 
   def test_state_lists_the_run(self):
+    if not HAS_TENSORBOARD:
+      self.skipTest("当前 Python 没装 tensorboard，无法生成 event 文件")
     data = self.json("/api/state")
     self.assertEqual(len(data["runs"]), 1)
     self.assertEqual(data["runs"][0]["label"], "V8_x")
@@ -267,7 +304,7 @@ class HTTPTests(unittest.TestCase):
   @unittest.skipUnless(HAS_TENSORBOARD, "当前 Python 没装 tensorboard")
   def test_run_series_health_export_and_dict(self):
     run_id = self.json("/api/state")["runs"][0]["id"]
-    meta = self.json(f"/api/run?id={run_id}")
+    meta = self.wait_ready(run_id)
     self.assertEqual(meta["state"], "ready", meta.get("error"))
     self.assertEqual(meta["default_tag"], "Train/mean_reward")
     self.assertIn("mid", meta["plan"])

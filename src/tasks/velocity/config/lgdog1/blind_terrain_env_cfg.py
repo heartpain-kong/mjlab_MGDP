@@ -135,8 +135,16 @@ def lgdog1_blind_terrain_env_cfg(
         func=RewardBasedVelocityCurriculum,
         params={
           "command_name": "twist",
-          "linear_threshold": 0.8,
-          "linear_increment": 0.1,
+          # V19 tracked stably around 0.71 but never expanded again under a
+          # strict 0.8 gate.  Use a small EMA + patience so speed can advance
+          # without reacting to one lucky rollout.
+          "linear_threshold": 0.70,
+          "linear_increment": 0.05,
+          "linear_patience": 2,
+          "linear_regress_threshold": 0.55,
+          "linear_regress_patience": 3,
+          "linear_regress_increment": 0.025,
+          "score_ema_alpha": 0.5,
           "lin_vel_x_limit": (-0.4, 0.8),
           "lin_vel_y_limit": (-0.3, 0.3),
           "check_interval_s": 20.0,

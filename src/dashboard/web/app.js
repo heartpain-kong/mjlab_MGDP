@@ -2,7 +2,7 @@
 const $ = id => document.getElementById(id);
 let state = null, mode = "train", models = [], rewardData = null, selectedJob = null, previewVersion = 0, timer = null, runNameVersion = 0;
 let lastCommand = "";
-const modeNames = {train:"训练", play:"Play 回放", sim:"Sim2Sim", rewards:"查看奖励", curves:"训练曲线"};
+const modeNames = {train:"训练", play:"Play 回放", sim:"Sim2Sim", rewards:"查看奖励", curves:"训练曲线", terrain:"地形查看"};
 const statuses = {running:"运行中", stopping:"停止中", completed:"已完成", failed:"失败", stopped:"已停止", unknown:"历史·状态未知"};
 const rewardLabels = {track_linear_velocity:"线速度跟踪",track_angular_velocity:"角速度跟踪",body_orientation_l2:"机身姿态",pose:"关节姿态",foot_gait:"足端步态",body_ang_vel:"机身角速度",angular_momentum:"角动量",joint_acc_l2:"关节加速度",joint_pos_limits:"关节限位",action_rate_l2:"动作变化率",foot_clearance:"抬脚高度",foot_slip:"足端滑移",soft_landing:"落足冲击",feet_stumble:"足端绊倒",feet_air_time:"足端滞空",leg_contact_force:"腿部接触力",stand_still:"静止站立",is_terminated:"终止惩罚"};
 
@@ -113,6 +113,13 @@ function fillModels() {
 }
 async function loadModels() { const alias=$("task").value; if(!alias){models=[];fillModels();return;} const data=await api(`/api/models?task=${encodeURIComponent(alias)}`); if(alias!==$("task").value)return; models=data.models;fillModels(); }
 function metricValue(data,name){return data?.metrics?.[name]?.value;}
+function healthText(status){return {healthy:"正常",observe:"观察",warning:"需要检查"}[status]||"等待数据";}
+function setHealthPill(element,status){
+  if(!element)return;
+  element.classList.toggle("warning",status==="warning");
+  element.classList.toggle("observe",status==="observe");
+  element.textContent=healthText(status);
+}
 function renderActionMetrics(data){
   const rawMax=metricValue(data,"raw_action_abs_max"), saturation=metricValue(data,"action_saturation_fraction"), policyStd=metricValue(data,"policy_mean_std"), reward=metricValue(data,"mean_reward");
   $("metric-raw-max").textContent=rawMax==null?"—":rawMax.toFixed(2);
@@ -120,14 +127,49 @@ function renderActionMetrics(data){
   $("metric-policy-std").textContent=policyStd==null?"—":policyStd.toFixed(2);
   $("metric-reward").textContent=reward==null?"—":reward.toFixed(2);
   const status=$("action-health-status");
-  status.classList.toggle("warning",Boolean(data?.warning));
-  status.textContent=data?.warning?"需要检查":data?.available?"正常":"等待数据";
-  if(data?.warning){
-    $("action-health-detail").textContent=`${data.warning} · ${data.run||"未命名 run"} · step ${data.metrics?.raw_action_abs_max?.step??"—"}`;
+  const state=data?.available?(data.status|| (data.warning?"warning":"healthy")):"waiting";
+  setHealthPill(status,state);
+  if(data?.warning||data?.advisory){
+    $("action-health-detail").textContent=`${data.warning||data.advisory} · ${data.note||""} · ${data.run||"未命名 run"} · step ${data.metrics?.raw_action_abs_max?.step??"—"}`;
   }else if(data?.available){
-    $("action-health-detail").textContent=`${data.run||"未命名 run"} · 最新 step ${data.metrics?.raw_action_abs_max?.step??data.metrics?.mean_reward?.step??"—"} · 原始动作在裁剪前统计`;
+    $("action-health-detail").textContent=`${data.run||"未命名 run"} · 最新 step ${data.metrics?.raw_action_abs_max?.step??data.metrics?.mean_reward?.step??"—"} · 原始动作在裁剪前统计，不代表力矩饱和`;
   }else{
     $("action-health-detail").textContent=data?.warning||"训练启动后自动读取最新 TensorBoard 记录。";
+  }
+  renderTrainingMetrics(data);
+}
+function renderTrainingMetrics(data){
+  const xy=metricValue(data,"velocity_error_xy"), yaw=metricValue(data,"velocity_error_yaw");
+  const score=metricValue(data,"command_linear_score");
+  const vxMin=metricValue(data,"command_vx_min"), vxMax=metricValue(data,"command_vx_max");
+  const level=metricValue(data,"terrain_level"), ratio=metricValue(data,"terrain_tracking_ratio");
+  const promote=metricValue(data,"terrain_promote_fraction"), demote=metricValue(data,"terrain_demote_fraction");
+  const failure=metricValue(data,"terrain_failure_fraction");
+  const velocityGate=metricValue(data,"terrain_velocity_gate_fraction");
+  const progressGate=metricValue(data,"terrain_progress_gate_fraction");
+  $("metric-vel-xy").textContent=xy==null?"—":`${xy.toFixed(3)} m/s`;
+  $("metric-vel-yaw").textContent=yaw==null?"—":`${yaw.toFixed(3)} rad/s`;
+  $("metric-command-score").textContent=score==null?"—":score.toFixed(3);
+  $("metric-vx-range").textContent=vxMin==null||vxMax==null?"—":`[${vxMin.toFixed(2)}, ${vxMax.toFixed(2)}]`;
+  $("metric-terrain-level").textContent=level==null?"—":level.toFixed(2);
+  $("metric-terrain-track").textContent=ratio==null?"—":ratio.toFixed(3);
+  $("metric-terrain-balance").textContent=promote==null||demote==null?"—":`${(promote*100).toFixed(1)}% / ${(demote*100).toFixed(1)}%`;
+  $("metric-terrain-failure").textContent=failure==null?"—":`${(failure*100).toFixed(1)}%`;
+  $("metric-velocity-gate").textContent=velocityGate==null?"—":`${(velocityGate*100).toFixed(1)}%`;
+  $("metric-progress-gate").textContent=progressGate==null?"—":`${(progressGate*100).toFixed(1)}%`;
+  const status=$("training-health-status");
+  const terrainObserve=promote!=null&&demote!=null&&demote>promote*1.5;
+  const terrainWarning=failure!=null&&failure>0.35;
+  const state=terrainWarning?"warning":terrainObserve?"observe":data?.available?"healthy":"waiting";
+  setHealthPill(status,state);
+  if(!data?.available){
+    $("training-health-detail").textContent="训练启动后自动读取速度追踪和地形课程指标。";
+  }else if(terrainWarning){
+    $("training-health-detail").textContent="回合失败率偏高，先检查接触终止、速度追踪和地形难度。";
+  }else if(terrainObserve){
+    $("training-health-detail").textContent="地形降级多于升级；速度误差可以正常，但课程还没有稳定向上。";
+  }else{
+    $("training-health-detail").textContent=`${data.run||"未命名 run"} · 速度课程分数达到阈值后才会扩大指令范围。`;
   }
 }
 function renderGpu(data){
@@ -154,6 +196,45 @@ async function loadActionMetrics(){
   const alias=$("task").value;
   try{const data=await api(`/api/metrics?task=${encodeURIComponent(alias)}`);if(alias===$("task").value)renderActionMetrics(data);}
   catch(error){renderActionMetrics({available:false,warning:error.message,metrics:{}});}
+}
+let terrainData=null;
+function renderTerrainEditor(data){
+  terrainData=data;
+  $("terrain-editor-path").textContent=`${data.path||"terrain_cfg.py"} · 修改后需重启训练`;
+  const list=$("terrain-editor-list");list.replaceChildren();
+  const global=document.createElement("div");global.className="terrain-global-fields";
+  global.innerHTML='<label>地形行数<input data-terrain-global="rows" type="number" min="2" max="100"></label><label>地形列数<input data-terrain-global="cols" type="number" min="1" max="100"></label>';
+  global.querySelector('[data-terrain-global="rows"]').value=data.rows;
+  global.querySelector('[data-terrain-global="cols"]').value=data.cols;
+  list.append(global);
+  for(const item of data.terrains||[]){
+    const row=document.createElement("div");row.className="terrain-row";row.dataset.terrain=item.name;
+    const range=item.field?`<label>最小<input data-field="min" type="number" step="0.01" value="${item.min}"></label><label>最大<input data-field="max" type="number" step="0.01" value="${item.max}"></label>`:"<span></span><span></span>";
+    row.innerHTML=`<div class="terrain-row-title"><strong>${item.label}</strong><small>${item.name} · ${item.description}</small></div><label>比例<input data-field="proportion" type="number" min="0" max="1" step="0.01" value="${item.proportion}"></label>${range}`;
+    list.append(row);
+  }
+  $("terrain-editor-detail").textContent="比例总和必须为 1.0；保存后重启训练才会使用新地形。";
+}
+async function loadTerrainEditor(){
+  try{renderTerrainEditor(await api("/api/terrain"));}
+  catch(error){$("terrain-editor-detail").textContent=error.message;toast(error.message);}
+}
+function collectTerrain(){
+  const rows=Number(document.querySelector('[data-terrain-global="rows"]').value);
+  const cols=Number(document.querySelector('[data-terrain-global="cols"]').value);
+  const terrains=[...document.querySelectorAll(".terrain-row")].map(row=>{
+    const value=name=>{const input=row.querySelector(`[data-field="${name}"]`);return input?Number(input.value):null;};
+    return {name:row.dataset.terrain,proportion:value("proportion"),min:value("min"),max:value("max")};
+  });
+  return {rows,cols,terrains};
+}
+async function saveTerrainEditor(){
+  try{const data=await api("/api/terrain/save",collectTerrain());renderTerrainEditor(data);toast("地形配置已保存；重启训练后生效");}
+  catch(error){toast(error.message);}
+}
+async function openTerrainViewer(){
+  try{const data=await api("/api/terrain/view",{});window.open(data.url,"_blank","noopener");toast("3D 地形查看器已启动，浏览器将打开 Viser 页面");await refresh();}
+  catch(error){toast(error.message);}
 }
 function showMode() {
   document.querySelectorAll("[data-section]").forEach(el=>{
@@ -326,7 +407,7 @@ async function start() {
     renderModelSceneSelectors("standard");
     renderSimMaps();
     $("copy-root").textContent=state.root;$("python-path").textContent=state.python;
-    updateTask();renderGpu(state.gpu);await updateRunNameHint();await loadModels();showMode();await preview();renderJobs();await loadActionMetrics();await loadLog();
+    updateTask();renderGpu(state.gpu);await updateRunNameHint();await loadModels();showMode();await preview();renderJobs();await loadActionMetrics();await loadTerrainEditor();await loadLog();
     document.querySelectorAll("[data-mode]").forEach(button=>button.addEventListener("click",()=>{mode=button.dataset.mode;showMode();preview();}));
     const changeTask=async()=>{$("custom-model").value="";$("run-name").value="";updateTask();await updateRunNameHint();await loadModels();showMode();await loadActionMetrics();preview();};
     $("task").addEventListener("change",async()=>{syncSelectorsFromTask();await changeTask();});
@@ -344,6 +425,9 @@ async function start() {
     $("stop").addEventListener("click",async()=>{try{$("stop").disabled=true;await api("/api/stop",{id:selectedJob});await refresh();toast("停止指令已执行，已保存的 checkpoint 保留");}catch(error){toast(error.message);}});
     $("curves").addEventListener("click",async()=>{try{const data=await api("/api/run",{mode:"curves",task:$("task").value,port:6006});selectedJob=data.job.id;await refresh();toast("TensorBoard 正在启动，稍后点击曲线页面");}catch(error){toast(error.message);}});
     $("refresh").addEventListener("click",async()=>{await refresh(true);preview();});
+    $("terrain-reload").addEventListener("click",loadTerrainEditor);
+    $("terrain-save").addEventListener("click",saveTerrainEditor);
+    $("terrain-view").addEventListener("click",openTerrainViewer);
     $("copy-command").addEventListener("click",()=>lastCommand?copy(lastCommand):toast("当前没有可复制的命令"));
     $("copy-root").addEventListener("click",()=>copy(state.root));
     document.querySelectorAll("[data-doc]").forEach(button=>button.addEventListener("click",()=>showDocument(button.dataset.doc)));

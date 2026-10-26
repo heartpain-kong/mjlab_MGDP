@@ -5,11 +5,13 @@ Configurations and parameters are dynamically loaded from mjlab.terrains.config.
 
 Run with:
   uv run src/mjlab/scripts/visualize_terrain.py
+  python scripts/visualize_terrain.py --lgdog
 """
 
 from __future__ import annotations
 
 import dataclasses
+import argparse
 import re
 import time
 from typing import Any, List, TypedDict
@@ -89,20 +91,29 @@ class _AppState(TypedDict):
 
 
 def main():
+  parser = argparse.ArgumentParser(description="Viser terrain visualizer")
+  parser.add_argument("--lgdog", action="store_true", help="显示工程内的 LgDog 地形配置")
+  args = parser.parse_args()
   server = viser.ViserServer()
 
   # Load available terrains from config.
-  available_presets = ALL_TERRAINS_CFG.sub_terrains
-  preset_names = ["All Terrains"] + list(available_presets.keys())
+  if args.lgdog:
+    from src.tasks.velocity.config.lgdog1.terrain_cfg import lgdog1_rough_terrain_cfg
+    terrain_base_cfg = lgdog1_rough_terrain_cfg()
+  else:
+    terrain_base_cfg = ALL_TERRAINS_CFG
+  available_presets = terrain_base_cfg.sub_terrains
+  preset_names = (["Current LgDog", "All Terrains"] if args.lgdog else ["All Terrains"])
+  preset_names += list(available_presets.keys())
 
   # State management.
   state: _AppState = {
     "preset_name": preset_names[0],
     "robot_name": "None",
     "seed": 42,
-    "size": ALL_TERRAINS_CFG.size,
+    "size": terrain_base_cfg.size,
     "params": {},
-    "rows": 10,
+    "rows": terrain_base_cfg.num_rows,
     "cols": 1,
     "difficulty_range": (0.0, 1.0),
     "robot_handles": [],
@@ -207,7 +218,14 @@ def main():
     nonlocal terrain_handle
     status_label.content = "**Status:** Generating terrain..."
 
-    if state["preset_name"] == "All Terrains":
+    if state["preset_name"] == "Current LgDog":
+      # Display the exact project proportions and column count.
+      sub_terrains = {
+        name: dataclasses.replace(cfg) for name, cfg in available_presets.items()
+      }
+      num_cols = terrain_base_cfg.num_cols
+      num_rows = state["rows"]
+    elif state["preset_name"] == "All Terrains":
       # Create a copy with equal proportions to ensure all are shown once.
       sub_terrains = {}
       for name, cfg in available_presets.items():
@@ -316,7 +334,7 @@ def main():
       control.remove()
     param_controls.clear()
 
-    if state["preset_name"] == "All Terrains":
+    if state["preset_name"] in {"All Terrains", "Current LgDog"}:
       with gui_params_folder:
         md = server.gui.add_markdown(
           "_Parameters not available for 'All Terrains' mode._"
