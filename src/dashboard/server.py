@@ -243,7 +243,7 @@ def create_server(root, python, host="127.0.0.1", port=8765):
                             "algorithms": [{"alias": alias, **item} for alias, item in ALGORITHMS.items()],
                             "scenes": [{"alias": alias, **item} for alias, item in SCENES.items()],
                             "sim2sim_maps": [{"alias": alias, **item} for alias, item in SIM2SIM_MAPS.items()],
-                            "gpu": gpu_info(), "jobs": jobs.list(),
+                            "gpu": gpu_info(), "jobs": jobs.list(), "job_counts": jobs.counts(),
                             "documents": [{"id": key, "label": value[0]} for key, value in DOCUMENTS.items()]})
         if parsed.path == "/api/gpu":
           return self.send(gpu_info())
@@ -267,7 +267,17 @@ def create_server(root, python, host="127.0.0.1", port=8765):
         if parsed.path == "/api/log":
           return self.send({"text": jobs.tail(query.get("id", [""])[0])})
         if parsed.path == "/api/history":
-          return self.send(history.read_history(root, query.get("limit", [history.DEFAULT_LIMIT])[0]))
+          jobs.list()  # Refresh exits before reading the lifecycle events.
+          result = history.read_history(root, query.get("limit", [history.DEFAULT_LIMIT])[0])
+          with jobs.lock:
+            for run in result["runs"]:
+              pair = jobs.jobs.get(run["id"])
+              if pair:
+                record = pair[0]
+                run.update(status=record["status"], can_delete=record.get("can_delete", False))
+              else:
+                run["can_delete"] = True  # History-only record, no managed process.
+          return self.send(result)
         if parsed.path == "/api/document":
           document = DOCUMENTS.get(query.get("id", [""])[0])
           if not document:
@@ -319,7 +329,11 @@ def create_server(root, python, host="127.0.0.1", port=8765):
           job = jobs.launch([str(python), str(script), "--lgdog"], "terrain", "terrain")
           return self.send({"job": job, "url": "http://127.0.0.1:8080"})
         if self.path == "/api/stop":
-          return self.send({"job": jobs.stop(str(data.get("id", "")))})
+          return self.send({"job": jobs.stop(str(data.get("id", "")), force=data.get("force") is True)})
+        if self.path == "/api/jobs/delete":
+          return self.send(jobs.delete(str(data.get("id", ""))))
+        if self.path == "/api/jobs/clear-finished":
+          return self.send(jobs.clear_finished())
         return self.send({"error": "操作不存在"}, 404)
       except (ValueError, OSError) as error:
         return self.send({"error": str(error)}, 400)

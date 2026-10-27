@@ -3,7 +3,9 @@ const $ = id => document.getElementById(id);
 let state = null, mode = "train", models = [], rewardData = null, selectedJob = null, previewVersion = 0, timer = null, runNameVersion = 0;
 let lastCommand = "";
 const modeNames = {train:"训练", play:"Play 回放", sim:"Sim2Sim", rewards:"查看奖励", curves:"训练曲线", terrain:"地形查看"};
-const statuses = {running:"运行中", stopping:"停止中", completed:"已完成", failed:"失败", stopped:"已停止", unknown:"历史·状态未知"};
+const statuses = {running:"运行中", stopping:"停止中", completed:"已完成", failed:"失败", stopped:"已停止", finished:"已结束", unknown:"历史·未接管"};
+const pendingStops = new Set();
+let pendingDelete = null, deletingJobs = false;
 const rewardLabels = {track_linear_velocity:"线速度跟踪",track_angular_velocity:"角速度跟踪",body_orientation_l2:"机身姿态",pose:"关节姿态",foot_gait:"足端步态",body_ang_vel:"机身角速度",angular_momentum:"角动量",joint_acc_l2:"关节加速度",joint_pos_limits:"关节限位",action_rate_l2:"动作变化率",foot_clearance:"抬脚高度",foot_slip:"足端滑移",soft_landing:"落足冲击",feet_stumble:"足端绊倒",feet_air_time:"足端滞空",leg_contact_force:"腿部接触力",stand_still:"静止站立",is_terminated:"终止惩罚"};
 
 async function api(path, body) {
@@ -306,9 +308,21 @@ let previewTimer;
 function queuePreview() {clearTimeout(previewTimer);previewTimer=setTimeout(preview,180);}
 function renderJobs() {
   const list=$("jobs");
-  $("job-count").textContent=state.jobs.length;
-  $("summary-running").textContent=state.jobs.filter(j=>j.can_stop).length;
-  if(!state.jobs.length)return;
+  const counts=state.job_counts;
+  $("job-count").textContent=counts?.total??state.jobs.length;
+  $("job-count").title=counts?.total>state.jobs.length?`列表显示最近 ${state.jobs.length} 条；历史记录可查看更早任务`:"运行记录数量";
+  $("summary-running").textContent=counts?.active??state.jobs.filter(j=>["running","stopping"].includes(j.status)).length;
+  const clearable=counts?.clearable??state.jobs.filter(j=>j.can_delete&&["completed","failed","stopped","finished"].includes(j.status)).length;
+  $("clear-finished").disabled=deletingJobs||!clearable;
+  if(!state.jobs.length){
+    selectedJob=null;
+    list.innerHTML='<div class="empty">还没有运行记录。<br>选择方案和参数后，点击启动。</div>';
+    $("log-title").textContent="运行日志";$("logs").textContent="没有选中的运行记录。";
+    $("stop").disabled=true;$("force-stop").disabled=true;$("delete-job").disabled=true;
+    $("stop").textContent="停止任务";$("job-control-detail").classList.remove("control-error");
+    $("job-control-detail").textContent="删除记录只清理面板记录与启动日志；训练数据和模型保留。";
+    return;
+  }
   if(!selectedJob||!state.jobs.some(j=>j.id===selectedJob))selectedJob=state.jobs[0].id;
   list.replaceChildren();
   for(const job of state.jobs) {
@@ -321,8 +335,50 @@ function renderJobs() {
     row.append(top,detail);row.addEventListener("click",()=>{selectedJob=job.id;renderJobs();loadLog();});list.append(row);
   }
   const active=state.jobs.find(j=>j.id===selectedJob);
-  $("stop").disabled=!active?.can_stop;
+  const stopping=active?.status==="stopping"||pendingStops.has(active?.id);
+  $("stop").disabled=!active?.can_stop||stopping;
+  $("stop").textContent=stopping?"正在停止…":"停止任务";
+  $("force-stop").disabled=!active?.can_stop||stopping;
+  $("delete-job").disabled=!active?.can_delete||stopping||deletingJobs;
+  $("job-control-detail").textContent=active?.stop_error?`停止失败：${active.stop_error}；可重试或强制结束。`:stopping?"正在结束进程及子进程，核验退出后才会显示已停止。":active?.stop_reason||(active?.recovered?"已核验并恢复旧任务控制；可停止进程及其子进程。":"删除记录只清理面板记录与启动日志；训练数据和模型保留。");
+  $("job-control-detail").classList.toggle("control-error",Boolean(active?.stop_error));
   $("log-title").textContent=active?`${modeNames[active.mode]||active.mode} · ${active.id}`:"运行日志";
+}
+async function stopJob(force=false){
+  const id=selectedJob;
+  if(!id||pendingStops.has(id))return;
+  pendingStops.add(id);renderJobs();
+  try{
+    const data=await api("/api/stop",{id,force});
+    toast(data.job.status==="stopping"?"任务正在停止，请稍候":"任务进程已结束，已保存的 checkpoint 保留");
+  }catch(error){toast(error.message);}
+  finally{pendingStops.delete(id);await refresh();}
+}
+function requestDeleteJob(id){
+  const job=state?.jobs.find(j=>j.id===id);
+  if(job&&!job.can_delete){toast("请先停止任务再删除记录");return;}
+  pendingDelete={id};
+  $("delete-record-title").textContent="删除这条运行记录？";
+  $("delete-record-detail").textContent=`将删除 ${job?`${modeNames[job.mode]||job.mode} · `:""}${id} 的面板记录、启动日志和历史运行条目。训练数据、checkpoint、ONNX 和奖励修改记录都会保留。`;
+  $("confirm-delete-record").disabled=false;$("delete-record-dialog").showModal();
+}
+function requestClearFinished(){
+  pendingDelete={all:true};
+  $("delete-record-title").textContent="清理已结束的运行记录？";
+  $("delete-record-detail").textContent="清理已完成、失败、已停止和已结束任务的面板记录与启动日志。运行中、停止中及身份未核验的旧任务会保留；训练数据、模型和奖励修改记录不会删除。";
+  $("confirm-delete-record").disabled=false;$("delete-record-dialog").showModal();
+}
+async function confirmDeleteRecords(){
+  if(!pendingDelete||deletingJobs)return;
+  deletingJobs=true;$("confirm-delete-record").disabled=true;renderJobs();
+  try{
+    const data=pendingDelete.all?await api("/api/jobs/clear-finished",{}):await api("/api/jobs/delete",{id:pendingDelete.id});
+    if(data.deleted.includes(selectedJob))selectedJob=null;
+    $("delete-record-dialog").close();pendingDelete=null;
+    await refresh();if($("history-dialog").open)await showHistory();
+    toast(`已删除 ${data.deleted.length} 条运行记录，训练数据和模型保留`);
+  }catch(error){toast(error.message);}
+  finally{deletingJobs=false;$("confirm-delete-record").disabled=false;renderJobs();}
 }
 async function loadLog() {
   if(!selectedJob)return;
@@ -372,7 +428,10 @@ function historyRunRow(run){
   const top=document.createElement("div");top.className="history-row-top";
   const when=document.createElement("span");when.textContent=formatTime(run.started||run.ended);
   const status=document.createElement("span");status.className=`history-chip status-${run.status||"unknown"}`;status.textContent=statuses[run.status]||run.status||"未知";
-  top.append(when,status);row.append(top);
+  const actions=document.createElement("div");actions.className="history-row-actions";
+  const remove=document.createElement("button");remove.type="button";remove.className="small-button danger-button";remove.textContent="删除记录";remove.disabled=run.can_delete===false;
+  remove.addEventListener("click",()=>requestDeleteJob(run.id));actions.append(status,remove);
+  top.append(when,actions);row.append(top);
   const what=document.createElement("code");what.className="history-change";
   const bits=[modeNames[run.mode]||run.mode,run.task];
   if(run.run_name)bits.push(`run=${run.run_name}`);
@@ -441,7 +500,12 @@ async function start() {
     $("reload-rewards").addEventListener("click",loadRewards);
     $("reset-rewards").addEventListener("click",resetRewards);
     $("reward-filter").addEventListener("input",filterRewards);
-    $("stop").addEventListener("click",async()=>{try{$("stop").disabled=true;await api("/api/stop",{id:selectedJob});await refresh();toast("停止指令已执行，已保存的 checkpoint 保留");}catch(error){toast(error.message);}});
+    $("stop").addEventListener("click",()=>stopJob());
+    $("force-stop").addEventListener("click",()=>stopJob(true));
+    $("delete-job").addEventListener("click",()=>requestDeleteJob(selectedJob));
+    $("clear-finished").addEventListener("click",requestClearFinished);
+    $("confirm-delete-record").addEventListener("click",confirmDeleteRecords);
+    $("cancel-delete-record").addEventListener("click",()=>$("delete-record-dialog").close());
     $("curves").addEventListener("click",async()=>{try{const data=await api("/api/run",{mode:"curves",task:$("task").value,port:6006});selectedJob=data.job.id;await refresh();toast("TensorBoard 正在启动，稍后点击曲线页面");}catch(error){toast(error.message);}});
     $("refresh").addEventListener("click",async()=>{await refresh(true);preview();});
     $("terrain-reload").addEventListener("click",loadTerrainEditor);

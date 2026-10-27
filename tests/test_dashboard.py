@@ -101,8 +101,7 @@ class ProcessTests(unittest.TestCase):
         manager.stop(sleeper["id"])
       restored = JobManager(directory)
       self.assertTrue(all(not item["can_stop"] for item in restored.list()))
-      with self.assertRaisesRegex(ValueError, "历史记录"):
-        restored.stop(done["id"])
+      self.assertEqual(restored.stop(done["id"])["status"], "completed")
 
 
 class HTTPTests(unittest.TestCase):
@@ -162,6 +161,36 @@ class HTTPTests(unittest.TestCase):
       self.assertEqual(status, 200)
       self.assertIn("list_rewards.py", launch.call_args.args[0][1])
       self.assertIn("foot_clearance", launch.call_args.args[0])
+
+  def test_delete_endpoints_require_token_and_refuse_running_job(self):
+    self.assertEqual(self.request("POST", "/api/jobs/delete", {"id": "a" * 12})[0], 403)
+    self.assertEqual(self.request("POST", "/api/jobs/clear-finished", {})[0], 403)
+    token = json.loads(self.request("GET", "/api/state")[1])["token"]
+    headers = {"X-LgDog-Token": token}
+    job = self.server.jobs.launch([sys.executable, "-c", "import time; time.sleep(60)"], "train", "standard")
+    try:
+      self.assertEqual(self.request("POST", "/api/jobs/delete", {"id": job["id"]}, headers)[0], 400)
+      status, body = self.request("POST", "/api/jobs/clear-finished", {}, headers)
+      self.assertEqual((status, json.loads(body)["deleted"]), (200, []))
+      status, body = self.request("POST", "/api/stop", {"id": job["id"], "force": True}, headers)
+      self.assertEqual(status, 200, body)
+      self.assertEqual(json.loads(body)["job"]["status"], "stopped")
+      runs = json.loads(self.request("GET", "/api/history")[1])["runs"]
+      self.assertTrue(runs[0]["can_delete"])
+      status, body = self.request("POST", "/api/jobs/delete", {"id": job["id"]}, headers)
+      self.assertEqual((status, json.loads(body)["deleted"]), (200, [job["id"]]))
+      self.assertEqual(json.loads(self.request("GET", "/api/state")[1])["jobs"], [])
+      self.assertEqual(json.loads(self.request("GET", "/api/history")[1])["runs"], [])
+    finally:
+      if job["id"] in self.server.jobs.jobs:
+        self.server.jobs.stop(job["id"], force=True)
+
+  def test_stop_reports_failure_instead_of_false_success(self):
+    token = json.loads(self.request("GET", "/api/state")[1])["token"]
+    with patch.object(self.server.jobs, "stop", side_effect=ValueError("停止失败：driver busy")):
+      status, body = self.request("POST", "/api/stop", {"id": "a" * 12}, {"X-LgDog-Token": token})
+    self.assertEqual(status, 400)
+    self.assertIn("driver busy", json.loads(body)["error"])
 
 
 if __name__ == "__main__":

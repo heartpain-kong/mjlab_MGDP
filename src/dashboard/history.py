@@ -1,4 +1,4 @@
-"""Append-only records for reward edits and training runs.
+"""Durable records for reward edits and training runs.
 
 每文件一行 JSON，写在 `logs/dashboard/history/` 下：
 
@@ -138,6 +138,33 @@ def record_run_event(root, event, record):
   else:
     payload.update(summary)
   return _append(root, RUN_LOG, payload)
+
+
+def delete_run_records(root, job_ids):
+  """Remove only the specified run events, preserving reward edits and files.
+
+  Hold the same lock used by append so a concurrently finishing task cannot
+  lose its lifecycle event during the atomic rewrite.
+  """
+  job_ids = set(job_ids)
+  if not job_ids:
+    return
+  path = _directory(root) / RUN_LOG
+  with _LOCK:
+    if not path.is_file():
+      return
+    keep = []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+      try:
+        item = json.loads(line)
+      except ValueError:
+        keep.append(line)
+        continue
+      if not isinstance(item, dict) or item.get("id") not in job_ids:
+        keep.append(line)
+    temp = path.with_suffix(".tmp")
+    temp.write_text("".join(line + "\n" for line in keep), encoding="utf-8")
+    temp.replace(path)
 
 
 def read_history(root, limit=DEFAULT_LIMIT):
