@@ -6,7 +6,9 @@ from unittest.mock import patch
 from src.tasks.velocity.config.lgdog1.env_cfgs import lgdog1_flat_env_cfg, lgdog1_rough_env_cfg
 from src.tasks.velocity.config.lgdog1.blind_terrain_env_cfg import lgdog1_blind_terrain_env_cfg
 from src.tasks.velocity.config.lgdog1.him_env_cfg import lgdog1_him_env_cfg
-from src.tasks.velocity.config.lgdog1.reward_cfg import REWARD_PROFILES, make_lgdog_rewards
+from src.tasks.velocity.config.lgdog1.reward_cfg import (
+  DASHBOARD_REWARD_OVERRIDES, REWARD_PROFILES, make_lgdog_rewards,
+)
 
 
 class RewardProfileTests(unittest.TestCase):
@@ -44,6 +46,12 @@ class RewardProfileTests(unittest.TestCase):
     with patch.dict(REWARD_PROFILES["him"]["weights"], {"typo_reward": -1.0}):
       with self.assertRaisesRegex(ValueError, "Unknown reward names"):
         make_lgdog_rewards("him", **kwargs)
+
+  def test_positive_clearance_from_old_dashboard_override_fails_before_training(self):
+    with patch.dict(DASHBOARD_REWARD_OVERRIDES["him_standard"]["weights"], {"foot_clearance": 1.0}):
+      from src.tasks.velocity.config.lgdog1.him_env_cfg import lgdog1_him_standard_env_cfg
+      with self.assertRaisesRegex(ValueError, "foot_clearance.*非负代价"):
+        lgdog1_him_standard_env_cfg()
 
 
 if __name__ == "__main__":

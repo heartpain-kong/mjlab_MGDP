@@ -15,6 +15,7 @@ from mjlab.managers.reward_manager import RewardTermCfg
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 
 from src.tasks.velocity import mdp
+from src.reward_semantics import validate_reward_weights
 from . import blind_mdp
 
 
@@ -73,23 +74,23 @@ REWARD_PROFILES = {
     },
   },
   # 新标准崎岖地形任务独立调参；不会覆盖 V7 的 him 配置。
-  # foot_clearance 关闭 + action_rate_l2 加强（2026-10-24）：抬脚高度由足下射线奖励处理，
-  # 这里不再叠加世界坐标 z 的抬脚代价。写在这里而不是面板覆盖，免得面板覆盖
-  # 静默压过后续对 profile 的修改。
+  # V21 regression recovery (2026-10-27): restore the V19 reward baseline.
+  # Clearance is a nonnegative error cost; zero disables it.  Foot rays still
+  # supply critic clearance labels, but no clearance reward runs at weight 0.
   "him_standard": {
-    # Give planar tracking enough gradient to win against the posture term.
-    # The action-rate cost stays moderate so acceleration is not suppressed.
     "weights": {
       "foot_clearance": 0.0,
-      "track_linear_velocity": 3.0,
-      "pose": 1.0,
+      "feet_stumble": -0.5,
+      "feet_air_time": 1.0,
+      "soft_landing": -0.002,
+      "track_linear_velocity": 2.0,
+      "pose": 1.5,
       "action_rate_l2": -0.1,
     },
     "params": {
-      # A relative component makes a 40% under-speed error visible even when
-      # the absolute error is small at the early command stages.
+      # Keep relative shaping available for a separate controlled experiment.
       "track_linear_velocity": {
-        "relative_weight": 0.35,
+        "relative_weight": 0.0,
         "relative_std": 0.5,
         "min_command_speed": 0.2,
       },
@@ -127,6 +128,7 @@ def make_lgdog_rewards(profile, *, base_body, foot_sites, terrain_ray_names=()):
   if unknown:
     raise ValueError(f"Unknown reward names in {profile!r}: {sorted(unknown)}")
   weights = {**COMMON_WEIGHTS, **settings["weights"]}
+  validate_reward_weights(weights)
 
   def term(name, func, **params):
     params.update(settings["params"].get(name, {}))

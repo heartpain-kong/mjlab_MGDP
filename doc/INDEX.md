@@ -8,6 +8,7 @@
 | 一个网页看全部：环境 / GPU / 进程 / 轮次 / 日志（总览） | [WEBHUB.md](WEBHUB.md) |
 | 把训练曲线当 K 线看（曲线终端） | [KLINE.md](KLINE.md) |
 | 调整奖励、查看最终权重和函数位置 | [REWARDS.md](REWARDS.md) |
+| V21/V19 行走退化、奖励方向与速度课程门限 | [TRAINING_DATA_ANALYSIS_2026-10-27.md](TRAINING_DATA_ANALYSIS_2026-10-27.md) |
 | V2/V8 训练 run、课程和动作数据分析 | [TRAINING_DATA_ANALYSIS_2026-10-20.md](TRAINING_DATA_ANALYSIS_2026-10-20.md) |
 | V2 日志分析与 V3 文献调参 | [REWARD_LITERATURE_V3.md](REWARD_LITERATURE_V3.md) |
 | 标准 Rough + HIM 新任务 | [LGDOG_HIM_STANDARD.md](LGDOG_HIM_STANDARD.md) |

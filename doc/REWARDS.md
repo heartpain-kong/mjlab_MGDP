@@ -77,7 +77,11 @@ python scripts/list_rewards.py LgDog1-Flat
 
 每个控制步的贡献是 `raw_reward × weight × step_dt`，本工程默认 `step_dt=0.02 s`。例如终止项返回 1 时贡献为 `-200 × 0.02 = -4`。连续接触力、二值碰撞与其他框架的奖励返回值可能不同，不能仅按 dt 换算权重。
 
-标准 HIM 对 `track_linear_velocity` 额外混合了相对欠速误差：默认权重为 `3.0`，其中 35% 使用“误差 / 目标平面速度”计算，最低归一化速度为 `0.2 m/s`；`pose` 调为 `1.0`、`action_rate_l2` 调为 `-0.1`，给加速和跟速留出梯度。普通 Flat/Rough/HIM 配置仍使用公共默认值。
+2026-10-27：根据 [V21 与 V19 对比](TRAINING_DATA_ANALYSIS_2026-10-27.md)，标准 HIM 恢复 V19 实际奖励基线：`track_linear_velocity=2.0`、`pose=1.5`、`action_rate_l2=-0.1`、`foot_clearance=0`、`feet_stumble=-0.5`、`feet_air_time=1.0`、`soft_landing=-0.002`。相对欠速项的 `relative_weight=0`，保留实现供后续单独实验。其他 profile 的权重不随此改动。
+
+`foot_clearance`、`feet_stumble`、`foot_slip`、`action_rate_l2` 等函数返回非负代价，应使用负权重惩罚、0 关闭。正权重会奖励误差或碰撞，不能把“启用”理解为填写 +1。工作台显示各项语义，输入正代价时标红；面板保存和奖励配置构建会拒绝这类值。`feet_air_time`、`foot_gait` 和速度跟踪属于正向奖励。
+
+旧面板覆盖仍可以读取并修正。更新训练机后，在奖励区点击“恢复基线”再“保存奖励修改”，核对实际 `env.yaml`；只修改 profile 或拉取代码不能保证消除本地覆盖。修改后重启训练，先用新 run 验证，CPU 测试不能证明步态已改善。
 
 ## 添加新奖励
 

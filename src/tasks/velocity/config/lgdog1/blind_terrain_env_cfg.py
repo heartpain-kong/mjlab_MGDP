@@ -113,10 +113,8 @@ def lgdog1_blind_terrain_env_cfg(
   twist.ranges.lin_vel_y = (-0.3, 0.3)
   twist.ranges.ang_vel_z = (-0.6, 0.6)
   if reward_profile == "him_standard":
-    # Keep enough zero-command samples for standing recovery, but reserve most
-    # of the standard HIM batch for actual speed tracking.  Play keeps the
-    # larger standing fraction so a zero command remains easy to inspect.
-    twist.rel_standing_envs = 0.25 if play else 0.10
+    # Restore V19's standing coverage while diagnosing the V21 regression.
+    twist.rel_standing_envs = 0.25
   if not play:
     if reward_profile == "him_standard":
       # Expand the available curriculum rows while keeping the initial reset
@@ -155,6 +153,10 @@ def lgdog1_blind_terrain_env_cfg(
           "linear_regress_patience": 2,
           "linear_regress_increment": 0.025,
           "score_ema_alpha": 0.4,
+          "min_episode_fraction": 0.80,
+          "max_failure_fraction": 0.25,
+          "regress_min_episode_fraction": 0.65,
+          "regress_max_failure_fraction": 0.35,
           "lin_vel_x_limit": (-0.4, 0.8),
           "lin_vel_y_limit": (-0.3, 0.3),
           "check_interval_s": 20.0,

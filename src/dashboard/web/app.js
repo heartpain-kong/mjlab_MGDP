@@ -145,6 +145,9 @@ function renderTrainingMetrics(data){
   const activeScore=metricValue(data,"velocity_tracking_score");
   const activeCommand=metricValue(data,"velocity_tracking_active");
   const score=metricValue(data,"command_linear_score");
+  const survival=metricValue(data,"command_episode_fraction");
+  const commandFailure=metricValue(data,"command_failure_fraction");
+  const promotionAllowed=metricValue(data,"command_promotion_allowed");
   const vxMin=metricValue(data,"command_vx_min"), vxMax=metricValue(data,"command_vx_max");
   const level=metricValue(data,"terrain_level"), ratio=metricValue(data,"terrain_tracking_ratio");
   const promote=metricValue(data,"terrain_promote_fraction"), demote=metricValue(data,"terrain_demote_fraction");
@@ -156,6 +159,9 @@ function renderTrainingMetrics(data){
   $("metric-active-track-score").textContent=activeScore==null?"—":activeScore.toFixed(3);
   $("metric-active-command").textContent=activeCommand==null?"—":`${(activeCommand*100).toFixed(1)}%`;
   $("metric-command-score").textContent=score==null?"—":score.toFixed(3);
+  $("metric-command-survival").textContent=survival==null?"—":`${(survival*100).toFixed(1)}%`;
+  $("metric-command-failure").textContent=commandFailure==null?"—":`${(commandFailure*100).toFixed(1)}%`;
+  $("metric-command-gate").textContent=promotionAllowed==null?"—":promotionAllowed>0?"通过":"暂缓扩速";
   $("metric-vx-range").textContent=vxMin==null||vxMax==null?"—":`[${vxMin.toFixed(2)}, ${vxMax.toFixed(2)}]`;
   $("metric-terrain-level").textContent=level==null?"—":level.toFixed(2);
   $("metric-terrain-track").textContent=ratio==null?"—":ratio.toFixed(3);
@@ -174,6 +180,8 @@ function renderTrainingMetrics(data){
     $("training-health-detail").textContent="回合失败率偏高，先检查接触终止、速度追踪和地形难度。";
   }else if(terrainObserve){
     $("training-health-detail").textContent="地形降级多于升级；速度误差可以正常，但课程还没有稳定向上。";
+  }else if(promotionAllowed===0){
+    $("training-health-detail").textContent="速度课程暂缓扩速：存活、失败率或移动指令样本尚未满足条件。";
   }else{
     $("training-health-detail").textContent=`${data.run||"未命名 run"} · 速度课程分数达到阈值后才会扩大指令范围。`;
   }
@@ -277,13 +285,21 @@ function renderRewards(){
     const name=document.createElement("label");name.textContent=rewardLabels[reward.name]||reward.name;const code=document.createElement("small");code.textContent=`${reward.name}${reward.changed?" · 已覆盖":""}`;name.append(code);
     const weight=document.createElement("input");weight.type="number";weight.step="any";weight.value=reward.weight;weight.setAttribute("aria-label",`${reward.name} 权重`);weight.title=`基线：${reward.baseline}`;
     const params=document.createElement("textarea");params.value=JSON.stringify(reward.params||{});params.setAttribute("aria-label",`${reward.name} 参数 JSON`);params.placeholder="参数 JSON（例如 {\"target_height\":0.1}）";
+    const semantics=document.createElement("small");name.append(semantics);
+    const updateSignHint=()=>{
+      const invalid=reward.kind==="cost"&&enabled.checked&&Number(weight.value)>0;
+      row.classList.toggle("sign-error",invalid);
+      semantics.textContent=invalid?"方向错误：正数会奖励误差/碰撞，请用 0 或负数":reward.weight_hint||"";
+      semantics.className=invalid?"reward-sign-warning":"reward-weight-hint";
+    };
+    weight.addEventListener("input",updateSignHint);enabled.addEventListener("change",updateSignHint);updateSignHint();
     row.append(enabled,name,weight,params);list.append(row);
   }
   $("reward-source").textContent=`${rewardData.profile} · ${rewardData.source}`;
   filterRewards();
 }
 function filterRewards(){const query=($("reward-filter")?.value||"").trim().toLowerCase();document.querySelectorAll(".reward-row").forEach(row=>{row.classList.toggle("hidden",Boolean(query&&!row.dataset.search.includes(query)));});}
-function resetRewards(){if(!rewardData?.rewards)return;document.querySelectorAll(".reward-row").forEach(row=>{const reward=rewardData.rewards.find(item=>item.name===row.dataset.reward);const inputs=row.querySelectorAll("input,textarea");inputs[0].checked=reward.baseline!==0;inputs[1].value=reward.baseline;inputs[2].value=JSON.stringify(reward.baseline_params||{});row.classList.remove("changed");});toast("已恢复本方案基线，点击保存后才会写入文件");}
+function resetRewards(){if(!rewardData?.rewards)return;document.querySelectorAll(".reward-row").forEach(row=>{const reward=rewardData.rewards.find(item=>item.name===row.dataset.reward);const inputs=row.querySelectorAll("input,textarea");inputs[0].checked=reward.baseline!==0;inputs[1].value=reward.baseline;inputs[2].value=JSON.stringify(reward.baseline_params||{});inputs[1].dispatchEvent(new Event("input"));row.classList.remove("changed");});toast("已恢复本方案基线，点击保存后才会写入文件");}
 async function loadRewards(){try{const alias=$("task").value;rewardData=await api(`/api/rewards?task=${encodeURIComponent(alias)}`);if(alias===$("task").value)renderRewards();}catch(error){$("reward-list").textContent=error.message;toast(error.message);}}
 async function showRewardDetail(name){try{const data=await api(`/api/reward-detail?task=${encodeURIComponent($("task").value)}&name=${encodeURIComponent(name)}`);$("document-title").textContent=`奖励实现 · ${data.name}`;$("document-path").textContent=`${data.source}${data.line?`:${data.line}`:""} · ${data.binding}`;$("document-text").textContent=data.text;$("document-dialog").showModal();}catch(error){toast(error.message);}}
 function collectRewards(){

@@ -11,6 +11,8 @@ import re
 import shutil
 import sys
 
+from src.reward_semantics import reward_semantics, validate_reward_weights
+
 
 SOURCE_RELATIVE = Path("src/tasks/velocity/config/lgdog1/reward_cfg.py")
 BEGIN = "# BEGIN LGDOG DASHBOARD OVERRIDES"
@@ -79,6 +81,7 @@ def read_rewards(root, profile):
     "profile": profile,
     "source": str(path),
     "rewards": [{"name": name, "weight": weights[name], "baseline": baseline_weights[name],
+                 **reward_semantics(name, weights[name]),
                  "changed": weights[name] != baseline_weights[name] or params.get(name, {}) != baseline_params.get(name, {}),
                  "enabled": weights[name] != 0, "params": params.get(name, {}),
                  "baseline_params": baseline_params.get(name, {})} for name in common],
@@ -148,6 +151,7 @@ def _validate_changes(common, profiles, profile, changes):
       raise ValueError(f"{name} 的权重必须是数字") from None
     if not math.isfinite(value) or abs(value) > NUMBER_LIMIT:
       raise ValueError(f"{name} 的权重需在 -{NUMBER_LIMIT:g} 到 {NUMBER_LIMIT:g} 之间")
+    validate_reward_weights({name: value})
     params = item.get("params", {})
     if not isinstance(params, dict):
       raise ValueError(f"{name} 的参数必须是 JSON 对象")
@@ -181,6 +185,8 @@ def save_rewards(root, profile, changes):
       params[name] = item["params"]
   overrides = dict(overrides)
   overrides[profile] = {"weights": weights, "params": params}
+  effective_weights = {**common, **profiles[profile].get("weights", {}), **weights}
+  validate_reward_weights(effective_weights)
   block = f"{BEGIN}\nDASHBOARD_REWARD_OVERRIDES = {pformat(overrides, width=100, sort_dicts=False)}\n{END}"
   pattern = re.compile(re.escape(BEGIN) + r".*?" + re.escape(END), re.S)
   if pattern.search(source):

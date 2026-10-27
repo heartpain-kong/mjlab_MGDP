@@ -79,6 +79,7 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
   aggregate full-episode tracking scores, and widen the planar command range
   only when the linear score clears the configured threshold.  The final
   bounds remain the positive/negative limits selected in the workbench.
+  Active-command scores can additionally require survival and failure gates.
   """
 
   _range_names = ("lin_vel_x", "lin_vel_y")
@@ -106,6 +107,24 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
     # reward mix and, most importantly, allow us to exclude standing commands.
     self.score_metric_name = params.get("score_metric_name")
     self.active_metric_name = params.get("active_metric_name")
+    if bool(self.score_metric_name) != bool(self.active_metric_name):
+      raise ValueError("Velocity curriculum needs both score_metric_name and active_metric_name")
+    # Defaults preserve callers which do not opt into safety gates.  Standard
+    # HIM config enables them explicitly; a high active-step score alone must
+    # not promote a policy whose episodes mostly end in failure.
+    self.min_episode_fraction = float(params.get("min_episode_fraction", 0.0))
+    self.max_failure_fraction = float(params.get("max_failure_fraction", 1.0))
+    self.regress_min_episode_fraction = float(params.get("regress_min_episode_fraction", 0.0))
+    self.regress_max_failure_fraction = float(params.get("regress_max_failure_fraction", 1.0))
+    for name in ("min_episode_fraction", "max_failure_fraction",
+                 "regress_min_episode_fraction", "regress_max_failure_fraction"):
+      value = getattr(self, name)
+      if not math.isfinite(value) or not 0.0 <= value <= 1.0:
+        raise ValueError(f"Velocity curriculum {name} must be between 0 and 1")
+    if self.regress_min_episode_fraction > self.min_episode_fraction:
+      raise ValueError("Velocity curriculum regression survival gate exceeds promotion gate")
+    if self.regress_max_failure_fraction < self.max_failure_fraction:
+      raise ValueError("Velocity curriculum regression failure gate is below promotion gate")
     self.limits = {
       name: tuple(float(value) for value in params.get(f"{name}_limit", (-1.0, 1.0)))
       for name in self._range_names
@@ -142,6 +161,11 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
     self.has_score_ema = False
     self.metric_score_sum = torch.zeros((), device=self.device)
     self.metric_active_steps = torch.zeros((), device=self.device)
+    self.episode_steps_sum = torch.zeros((), device=self.device)
+    self.failed_episode_count = torch.zeros((), device=self.device)
+    self.episode_fraction = torch.zeros((), device=self.device)
+    self.failure_fraction = torch.zeros((), device=self.device)
+    self.promotion_allowed = False
     self.promotion_streak = 0
     self.regression_streak = 0
 
@@ -158,13 +182,18 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
         sums[name][env_ids].sum() for name in self._reward_names
       ])
       self.episode_count += len(env_ids)
+      self.episode_steps_sum += env.episode_length_buf[env_ids].clamp(
+        max=env.max_episode_length
+      ).sum()
+      self.failed_episode_count += env.termination_manager.terminated[env_ids].sum()
       metric_sums = getattr(getattr(env, "metrics_manager", None), "_episode_sums", {})
       if self.score_metric_name and self.active_metric_name:
         score_values = metric_sums.get(self.score_metric_name)
         active_values = metric_sums.get(self.active_metric_name)
-        if score_values is not None and active_values is not None:
-          self.metric_score_sum += score_values[env_ids].sum()
-          self.metric_active_steps += active_values[env_ids].sum()
+        if score_values is None or active_values is None:
+          raise ValueError("Velocity curriculum tracking metrics are missing; check env.metrics")
+        self.metric_score_sum += score_values[env_ids].sum()
+        self.metric_active_steps += active_values[env_ids].sum()
     if (
       env.common_step_counter - self.last_check_step < self.check_interval_steps
       or self.episode_count == 0
@@ -186,15 +215,29 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
       # Replace only the linear score.  Angular score remains the legacy
       # reward-normalized value because the curriculum expands planar speed.
       self.scores[0] = self.metric_score_sum / self.metric_active_steps
+    self.episode_fraction.copy_(
+      (self.episode_steps_sum / (env.max_episode_length * self.episode_count)).clamp(0.0, 1.0)
+    )
+    self.failure_fraction.copy_(self.failed_episode_count / self.episode_count)
+    has_moving_samples = not self.score_metric_name or bool(self.metric_active_steps > 0)
+    self.promotion_allowed = (
+      has_moving_samples
+      and bool(self.episode_fraction >= self.min_episode_fraction)
+      and bool(self.failure_fraction <= self.max_failure_fraction)
+    )
+    unsafe = (
+      bool(self.episode_fraction < self.regress_min_episode_fraction)
+      or bool(self.failure_fraction > self.regress_max_failure_fraction)
+    )
     if not self.has_score_ema:
       self.score_ema.copy_(self.scores)
       self.has_score_ema = True
     else:
       self.score_ema.lerp_(self.scores, self.score_ema_alpha)
-    if self.score_ema[0] >= self.linear_threshold:
+    if self.score_ema[0] >= self.linear_threshold and self.promotion_allowed:
       self.promotion_streak += 1
       self.regression_streak = 0
-    elif self.score_ema[0] < self.linear_regress_threshold:
+    elif self.score_ema[0] < self.linear_regress_threshold or unsafe:
       self.regression_streak += 1
       self.promotion_streak = 0
     else:
@@ -208,10 +251,7 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
       self._shrink("lin_vel_x", self.linear_regress_increment)
       self._shrink("lin_vel_y", self.linear_regress_increment)
       self.regression_streak = 0
-    self.reward_sums.zero_()
-    self.metric_score_sum.zero_()
-    self.metric_active_steps.zero_()
-    self.episode_count = 0
+    self._reset_window()
     self.last_check_step = int(env.common_step_counter)
     return self._metrics()
 
@@ -238,13 +278,16 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
       "linear_score_ema": self.score_ema[0],
       "promotion_streak": float(self.promotion_streak),
       "regression_streak": float(self.regression_streak),
+      "episode_fraction": self.episode_fraction,
+      "failure_fraction": self.failure_fraction,
+      "promotion_allowed": float(self.promotion_allowed),
       "curriculum_vx_max": float(self.command_term.cfg.ranges.lin_vel_x[1]),
       "curriculum_vx_min": float(self.command_term.cfg.ranges.lin_vel_x[0]),
     }
 
   def state_dict(self):
     return {
-      "version": 1,
+      "version": 2,
       "command_name": self.command_name,
       "ranges": {
         name: tuple(getattr(self.command_term.cfg.ranges, name))
@@ -258,12 +301,16 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
       "has_score_ema": self.has_score_ema,
       "metric_score_sum": self.metric_score_sum.detach().cpu().clone(),
       "metric_active_steps": self.metric_active_steps.detach().cpu().clone(),
+      "episode_steps_sum": self.episode_steps_sum.detach().cpu().clone(),
+      "failed_episode_count": self.failed_episode_count.detach().cpu().clone(),
+      "episode_fraction": self.episode_fraction.detach().cpu().clone(),
+      "failure_fraction": self.failure_fraction.detach().cpu().clone(),
       "promotion_streak": self.promotion_streak,
       "regression_streak": self.regression_streak,
     }
 
   def load_state_dict(self, state):
-    if state.get("version") != 1 or state.get("command_name") != self.command_name:
+    if state.get("version") not in (1, 2) or state.get("command_name") != self.command_name:
       raise ValueError("Incompatible velocity curriculum checkpoint state")
     ranges = self._checked_ranges(state.get("ranges", {}))
     reward_sums = torch.as_tensor(state.get("reward_sums"), device=self.device)
@@ -306,6 +353,38 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
       raise ValueError("Invalid velocity curriculum streak state")
     self.episode_count = int(state.get("episode_count", 0))
     self.last_check_step = min(int(state.get("last_check_step", 0)), int(self._env.common_step_counter))
+    if state["version"] == 1:
+      # Old partial windows have no survival statistics.  Keep their restored
+      # ranges, but require a fresh window and fresh streaks for the new gates.
+      self._reset_window()
+      self.promotion_streak = self.regression_streak = 0
+      self.last_check_step = int(self._env.common_step_counter)
+      self.episode_fraction.zero_()
+      self.failure_fraction.zero_()
+    else:
+      for name in ("episode_steps_sum", "failed_episode_count", "episode_fraction", "failure_fraction"):
+        if state.get(name) is None:
+          raise ValueError("Missing velocity curriculum survival statistics")
+        value = torch.as_tensor(state.get(name), device=self.device)
+        if value.numel() != 1 or not torch.isfinite(value).all() or (value < 0).any():
+          raise ValueError("Invalid velocity curriculum survival statistics")
+        if name in {"episode_fraction", "failure_fraction"} and (value > 1).any():
+          raise ValueError("Invalid velocity curriculum survival fraction")
+        getattr(self, name).copy_(value.reshape(()))
+      if self.failed_episode_count > self.episode_count:
+        raise ValueError("Invalid velocity curriculum failure count")
+      if self.episode_steps_sum > self.episode_count * self._env.max_episode_length:
+        raise ValueError("Invalid velocity curriculum episode step count")
+    # Re-evaluate the permission against the next actual completed window.
+    self.promotion_allowed = False
+
+  def _reset_window(self):
+    self.reward_sums.zero_()
+    self.metric_score_sum.zero_()
+    self.metric_active_steps.zero_()
+    self.episode_steps_sum.zero_()
+    self.failed_episode_count.zero_()
+    self.episode_count = 0
 
   def restore_legacy_ranges(self, saved_env_cfg: dict) -> bool:
     """Restore the last range from a checkpoint made with step-based stages."""
@@ -318,11 +397,14 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
     for name, bounds in ranges.items():
       setattr(self.command_term.cfg.ranges, name, bounds)
     self.last_check_step = int(self._env.common_step_counter)
-    self.reward_sums.zero_()
-    self.metric_score_sum.zero_()
-    self.metric_active_steps.zero_()
+    self._reset_window()
     self.scores.zero_()
-    self.episode_count = 0
+    self.score_ema.zero_()
+    self.has_score_ema = False
+    self.episode_fraction.zero_()
+    self.failure_fraction.zero_()
+    self.promotion_streak = self.regression_streak = 0
+    self.promotion_allowed = False
     return True
 
   def _checked_ranges(self, ranges: dict) -> dict[str, tuple[float, float]]:

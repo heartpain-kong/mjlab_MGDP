@@ -51,6 +51,9 @@ ACTION_METRIC_TAGS = {
   "terrain_progress_gate_fraction": "Curriculum/terrain_levels/progress_gate_pass_fraction",
   "command_linear_score": "Curriculum/command_vel/linear_score",
   "command_angular_score": "Curriculum/command_vel/angular_score",
+  "command_episode_fraction": "Curriculum/command_vel/episode_fraction",
+  "command_failure_fraction": "Curriculum/command_vel/failure_fraction",
+  "command_promotion_allowed": "Curriculum/command_vel/promotion_allowed",
   "command_vx_min": "Curriculum/command_vel/curriculum_vx_min",
   "command_vx_max": "Curriculum/command_vel/curriculum_vx_max",
 }
