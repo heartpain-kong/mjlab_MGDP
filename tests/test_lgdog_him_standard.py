@@ -104,6 +104,10 @@ class StandardHIMTests(unittest.TestCase):
     self.assertEqual(cfg.rewards["soft_landing"].weight, -0.002)
     self.assertEqual(cfg.curriculum["command_vel"].params["min_episode_fraction"], 0.8)
     self.assertEqual(cfg.curriculum["command_vel"].params["max_failure_fraction"], 0.25)
+    self.assertEqual(cfg.curriculum["command_vel"].params["progress_metric_name"], "tracking_progress")
+    self.assertEqual(cfg.curriculum["command_vel"].params["distance_metric_name"], "commanded_distance")
+    self.assertEqual(cfg.curriculum["command_vel"].params["min_progress_ratio"], 0.6)
+    self.assertEqual(cfg.curriculum["command_vel"].params["regress_min_progress_ratio"], 0.4)
     self.assertIs(cfg.rewards["foot_clearance"].func, blind_mdp.feet_clearance_terrain)
     self.assertEqual(cfg.rewards["leg_contact_force"].params["sensor_name"], "legs_ground_contact")
     self.assertEqual(cfg.commands["twist"].ranges.lin_vel_x, (-0.2, 0.4))
@@ -114,6 +118,7 @@ class StandardHIMTests(unittest.TestCase):
     self.assertNotIn("terrain_levels", cfg.curriculum)
     self.assertIs(cfg.curriculum["command_vel"].func, RewardBasedVelocityCurriculum)
     self.assertEqual(cfg.commands["twist"].ranges.lin_vel_x, (-0.2, 0.4))
+    self.assertEqual(cfg.curriculum["command_vel"].params["min_progress_ratio"], 0.6)
 
 
 if __name__ == "__main__":

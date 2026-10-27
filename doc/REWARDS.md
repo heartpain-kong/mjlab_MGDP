@@ -83,6 +83,8 @@ python scripts/list_rewards.py LgDog1-Flat
 
 旧面板覆盖仍可以读取并修正。更新训练机后，在奖励区点击“恢复基线”再“保存奖励修改”，核对实际 `env.yaml`；只修改 profile 或拉取代码不能保证消除本地覆盖。修改后重启训练，先用新 run 验证，CPU 测试不能证明步态已改善。
 
+`relative_weight=0` 时 `relative_std` 和 `min_command_speed` 不参与奖励计算；后者不是最低训练速度。速度课程的绝对评分与奖励参数独立，修改相对奖励不会自动修改扩速判据。课程现额外检查实际指令进度，见 [VELOCITY_CURRICULUM.md](VELOCITY_CURRICULUM.md)。
+
 ## 添加新奖励
 
 1. 在 `src/tasks/velocity/mdp/rewards.py` 定义函数，返回 `[num_envs]` 张量。该模块通过 `mdp/__init__.py` 导出；若写在新的函数模块中，还需显式导出。

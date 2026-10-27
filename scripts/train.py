@@ -25,6 +25,7 @@ from src.tasks.velocity.mdp.curriculums import (
   velocity_ranges_from_bounds,
 )
 from src.dashboard.run_naming import resolve_run_name
+from src.tasks.velocity.config.lgdog1.terrain_curriculum import configure_terrain_curriculum
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,11 @@ class TrainConfig:
   enable_nan_guard: bool = False
   terrain_num_rows: int | None = None
   terrain_difficulty_max: float | None = None
+  terrain_curriculum: Literal["manual", "uniform", "lp_acrl"] = "manual"
+  lp_temperature: float = 2.0
+  lp_uniform_mix: float = 0.1
+  lp_min_episodes: int = 32
+  lp_update_interval_s: float = 100.0
   velocity_min_abs: float | None = None
   velocity_max_abs: float | None = None
   resume_checkpoint: str | None = None
@@ -87,6 +93,15 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
       lower, _ = generator.difficulty_range
       generator.difficulty_range = (lower, float(cfg.terrain_difficulty_max))
       print(f"[INFO] Terrain difficulty range: {generator.difficulty_range}")
+
+  if cfg.terrain_curriculum != "manual" and int(os.environ.get("WORLD_SIZE", "1")) > 1:
+    raise ValueError("当前自动地形课程仅支持单GPU；多GPU训练请使用 manual")
+  configure_terrain_curriculum(
+    cfg.env, cfg.terrain_curriculum, temperature=cfg.lp_temperature,
+    uniform_mix=cfg.lp_uniform_mix, min_episodes=cfg.lp_min_episodes,
+    update_interval_s=cfg.lp_update_interval_s,
+    status_path=log_dir / "curriculum" / "terrain_sampling.json",
+  )
 
   if cfg.velocity_min_abs is not None or cfg.velocity_max_abs is not None:
     min_abs = 0.4 if cfg.velocity_min_abs is None else float(cfg.velocity_min_abs)

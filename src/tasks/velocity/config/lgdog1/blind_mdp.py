@@ -159,7 +159,10 @@ def terrain_levels_tracking(env, env_ids, max_velocity_error=None):
   else:
     velocity_gate_pass = eligible
   full_episode = eligible & (elapsed >= 0.9 * env.max_episode_length_s)
-  progress_gate = eligible & (ratio >= 0.75) & (progress >= 2.0)
+  ratio_gate = eligible & (ratio >= 0.75)
+  distance_gate = eligible & (progress >= 2.0)
+  exposure_gate = eligible & (exposure >= 1.0)
+  progress_gate = ratio_gate & distance_gate
   return {
     "level_mean": terrain.terrain_levels.float().mean(),
     "promote_fraction": up.float().sum() / count,
@@ -177,6 +180,9 @@ def terrain_levels_tracking(env, env_ids, max_velocity_error=None):
     "velocity_gate_pass_fraction": velocity_gate_pass.float().sum() / count,
     "full_episode_fraction": full_episode.float().sum() / count,
     "progress_gate_pass_fraction": progress_gate.float().sum() / count,
+    "ratio_gate_pass_fraction": ratio_gate.float().sum() / count,
+    "distance_gate_pass_fraction": distance_gate.float().sum() / count,
+    "exposure_gate_pass_fraction": exposure_gate.float().sum() / count,
   }
 
 

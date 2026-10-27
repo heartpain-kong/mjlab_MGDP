@@ -106,12 +106,27 @@ def build_command(root, python, options):
       velocity_max = number(velocity_max, "最高速度绝对值", 0.05, 3.0)
     if velocity_min and velocity_max and velocity_min > velocity_max:
       raise ValueError("最低速度绝对值不能大于最高速度绝对值")
+    curriculum = options.get("terrain_curriculum", "manual")
+    if curriculum not in {"manual", "uniform", "lp_acrl"}:
+      raise ValueError("未知地形课程；可选 manual、uniform、lp_acrl")
+    curriculum_flags = []
+    if curriculum != "manual":
+      if task.get("scene") == "flat":
+        raise ValueError("平地任务不支持自动地形课程，请选择崎岖地形")
+      temperature = number(options.get("lp_temperature", 2.0), "LP温度", 0.000001, 10000)
+      mix = number(options.get("lp_uniform_mix", 0.1), "LP均匀探索比例", 0, 1)
+      minimum = integer(options.get("lp_min_episodes", 32), "LP最少回合数", 1, 100000)
+      interval = number(options.get("lp_update_interval_s", 100), "LP更新间隔", 0.02, 3600)
+      curriculum_flags = [f"--terrain-curriculum={curriculum}", f"--lp-temperature={temperature}",
+                          f"--lp-uniform-mix={mix}", f"--lp-min-episodes={minimum}",
+                          f"--lp-update-interval-s={interval}"]
     name = str(options.get("run_name", "")).strip()
     if name and not re.fullmatch(r"[a-zA-Z0-9_.-]{1,80}", name):
       raise ValueError("实验名只能使用 1–80 位英文字母、数字、下划线、点和短横线")
     argv = [str(python), str(scripts / "train.py"), task["id"],
             f"--env.scene.num-envs={envs}", f"--agent.max-iterations={iterations}",
             "--agent.logger=tensorboard", f"--agent.seed={seed}", "--enable-nan-guard", "True"]
+    argv += curriculum_flags
     if terrain_rows != "":
       argv.append(f"--terrain-num-rows={terrain_rows}")
     if terrain_difficulty != "":

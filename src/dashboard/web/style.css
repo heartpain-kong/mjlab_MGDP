@@ -99,3 +99,5 @@
   .view-switch .secondary{flex:1}
   .settings-section summary span{float:none;display:block;margin:4px 0 0 19px}
 }
+
+.lp-curriculum{grid-column:1/-1}.lp-task-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:12px}.lp-task-tile{padding:12px;border-radius:8px;border:1px solid #dbe8e4;overflow-wrap:anywhere}.lp-task-tile strong,.lp-task-tile small{display:block;font-size:11px}.lp-task-tile b{display:block;font-size:21px;margin:6px 0}.lp-task-tile small{color:#35574e}.lp-curriculum summary{cursor:pointer;font-weight:600}

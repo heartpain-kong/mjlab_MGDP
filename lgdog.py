@@ -46,6 +46,11 @@ def main():
       child.add_argument("--envs", type=int, default=1024 if mode == "train" else 4)
       child.add_argument("--checkpoint", default="")
     if mode == "train":
+      child.add_argument("--terrain-curriculum", choices=("manual", "uniform", "lp_acrl"), default="manual")
+      child.add_argument("--lp-temperature", type=float, default=2.0)
+      child.add_argument("--lp-uniform-mix", type=float, default=0.1)
+      child.add_argument("--lp-min-episodes", type=int, default=32)
+      child.add_argument("--lp-update-interval-s", type=float, default=100.0)
       child.add_argument("--iterations", type=int, default=16000)
       child.add_argument("--seed", type=int, default=42)
       child.add_argument("--run-name", default="")

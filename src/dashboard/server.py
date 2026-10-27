@@ -4,6 +4,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import csv
 import hmac
 import json
+import math
 import os
 from pathlib import Path
 import secrets
@@ -41,16 +42,24 @@ ACTION_METRIC_TAGS = {
   "velocity_error_yaw": "Metrics/twist/error_vel_yaw",
   "velocity_tracking_score": "Episode_Metrics/velocity_tracking_score",
   "velocity_tracking_active": "Episode_Metrics/velocity_tracking_active",
-  "terrain_level": "Curriculum/terrain_levels/level_mean",
+  "terrain_level": ("Curriculum/terrain_levels/level_mean", "Curriculum/terrain_sampling/level_mean"),
   "terrain_promote_fraction": "Curriculum/terrain_levels/promote_fraction",
   "terrain_demote_fraction": "Curriculum/terrain_levels/demote_fraction",
-  "terrain_tracking_ratio": "Curriculum/terrain_levels/tracking_ratio",
+  "terrain_tracking_ratio": ("Curriculum/terrain_levels/tracking_ratio", "Curriculum/terrain_sampling/tracking_ratio"),
   "terrain_velocity_error": "Curriculum/terrain_levels/velocity_error_xy_mps",
-  "terrain_failure_fraction": "Curriculum/terrain_levels/reset_batch_failure_fraction",
+  "terrain_failure_fraction": ("Curriculum/terrain_levels/reset_batch_failure_fraction", "Curriculum/terrain_sampling/reset_batch_failure_fraction"),
   "terrain_velocity_gate_fraction": "Curriculum/terrain_levels/velocity_gate_pass_fraction",
   "terrain_progress_gate_fraction": "Curriculum/terrain_levels/progress_gate_pass_fraction",
+  "terrain_ratio_gate_fraction": "Curriculum/terrain_levels/ratio_gate_pass_fraction",
+  "terrain_distance_gate_fraction": "Curriculum/terrain_levels/distance_gate_pass_fraction",
+  "terrain_exposure_gate_fraction": "Curriculum/terrain_levels/exposure_gate_pass_fraction",
   "command_linear_score": "Curriculum/command_vel/linear_score",
+  "command_linear_score_ema": "Curriculum/command_vel/linear_score_ema",
   "command_angular_score": "Curriculum/command_vel/angular_score",
+  "command_progress_ratio": "Curriculum/command_vel/progress_ratio",
+  "command_progress_threshold": "Curriculum/command_vel/min_progress_ratio",
+  "command_progress_gate": "Curriculum/command_vel/progress_gate_pass",
+  "command_score_gate": "Curriculum/command_vel/score_gate_pass",
   "command_episode_fraction": "Curriculum/command_vel/episode_fraction",
   "command_failure_fraction": "Curriculum/command_vel/failure_fraction",
   "command_promotion_allowed": "Curriculum/command_vel/promotion_allowed",
@@ -110,6 +119,30 @@ def gpu_info():
           "reason": None if gpus else "nvidia-smi 没有返回 GPU 数据"}
 
 
+def read_terrain_curriculum_status(run_directory):
+  path = Path(run_directory) / "curriculum" / "terrain_sampling.json"
+  try:
+    if path.stat().st_size > 1024 * 1024:
+      return None
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if (not isinstance(data, dict) or data.get("version") != 1
+        or data.get("mode") not in {"lp_acrl", "uniform"}
+        or not isinstance(data.get("tasks"), list) or len(data["tasks"]) > 2000):
+      return None
+    for task in data["tasks"]:
+      if not isinstance(task.get("name"), str) or not isinstance(task.get("terrain"), str):
+        return None
+      probability = float(task["probability"])
+      if not math.isfinite(probability) or not 0 <= probability <= 1:
+        return None
+      for name in ("learning_progress", "mean_return", "failure_fraction", "progress_ratio"):
+        if task.get(name) is not None and not math.isfinite(float(task[name])):
+          return None
+    return data
+  except (OSError, ValueError, KeyError, TypeError, AttributeError):
+    return None
+
+
 def create_server(root, python, host="127.0.0.1", port=8765):
   if host not in {"127.0.0.1", "localhost"}:
     raise ValueError("本地面板只允许绑定 127.0.0.1 或 localhost")
@@ -127,8 +160,10 @@ def create_server(root, python, host="127.0.0.1", port=8765):
       accumulator.Reload()
       available_tags = set(accumulator.Tags().get("scalars", []))
       metrics = {}
-      for name, tag in ACTION_METRIC_TAGS.items():
-        if tag not in available_tags:
+      for name, candidates in ACTION_METRIC_TAGS.items():
+        candidates = (candidates,) if isinstance(candidates, str) else candidates
+        tag = next((tag for tag in candidates if tag in available_tags), None)
+        if tag is None:
           continue
         points = accumulator.Scalars(tag)
         if points:
@@ -189,19 +224,22 @@ def create_server(root, python, host="127.0.0.1", port=8765):
     event_file = event_files[0]
     stat = event_file.stat()
     signature = (str(event_file), stat.st_mtime_ns, stat.st_size)
+    terrain_status = read_terrain_curriculum_status(event_file.parent)
     with metrics_lock:
       cached = metrics_cache.get(alias)
       if cached and cached["signature"] == signature:
         if cached.get("loading"):
           return {"task": alias, "experiment": task["experiment"], "available": False,
                   "run": event_file.parent.name, "updated": stat.st_mtime,
-                  "metrics": {}, "warning": "正在读取最新 TensorBoard 记录…"}
-        return cached["data"]
+                  "metrics": {}, "warning": "正在读取最新 TensorBoard 记录…",
+                  "terrain_curriculum": terrain_status}
+        return {**cached["data"], "terrain_curriculum": terrain_status}
       metrics_cache[alias] = {"signature": signature, "loading": True}
     threading.Thread(target=parse_metrics, args=(alias, task, event_file, stat, signature), daemon=True).start()
     return {"task": alias, "experiment": task["experiment"], "available": False,
             "run": event_file.parent.name, "updated": stat.st_mtime,
-            "metrics": {}, "warning": "正在读取最新 TensorBoard 记录…"}
+            "metrics": {}, "warning": "正在读取最新 TensorBoard 记录…",
+            "terrain_curriculum": terrain_status}
 
   class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):

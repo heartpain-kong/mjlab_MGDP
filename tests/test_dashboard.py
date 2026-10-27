@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 from src.dashboard.commands import build_command, discover_models
 from src.dashboard.jobs import JobManager
-from src.dashboard.server import create_server
+from src.dashboard.server import create_server, read_terrain_curriculum_status
 
 
 class CommandTests(unittest.TestCase):
@@ -48,6 +48,31 @@ class CommandTests(unittest.TestCase):
       build_command(self.root, sys.executable, {
         "mode": "train", "velocity_min_abs": "0.9", "velocity_max_abs": "0.8",
       })
+
+  def test_automatic_terrain_flags_are_validated_and_flat_is_rejected(self):
+    for mode in ('uniform','lp_acrl'):
+      argv=build_command(self.root,sys.executable,{'mode':'train','terrain_curriculum':mode,
+                                                'lp_temperature':'2','lp_uniform_mix':'0'})
+      self.assertIn('--terrain-curriculum='+mode,argv)
+      self.assertIn('--lp-temperature=2.0',argv)
+      self.assertIn('--lp-uniform-mix=0.0',argv)
+    for options in ({'terrain_curriculum':'bad'},
+                    {'terrain_curriculum':'lp_acrl','task':'him_flat'},
+                    {'terrain_curriculum':'lp_acrl','lp_temperature':'nan'},
+                    {'terrain_curriculum':'lp_acrl','lp_min_episodes':'0'}):
+      with self.subTest(options=options),self.assertRaises(ValueError):
+        build_command(self.root,sys.executable,{'mode':'train',**options})
+
+  def test_status_parser_accepts_own_schema_and_ignores_partial_or_bad_data(self):
+    p=self.root/'curriculum/terrain_sampling.json';p.parent.mkdir()
+    valid={'version':1,'mode':'lp_acrl','tasks':[{'name':'flat','terrain':'flat',
+                                               'probability':1.,'learning_progress':0.}]}
+    p.write_text(json.dumps(valid),encoding='utf-8')
+    self.assertEqual(read_terrain_curriculum_status(self.root),valid)
+    for text in ['{',json.dumps({**valid,'mode':'bad'}),
+                 json.dumps({**valid,'tasks':[{'name':'flat','terrain':'flat','probability':float('nan')}]})]:
+      p.write_text(text,encoding='utf-8')
+      self.assertIsNone(read_terrain_curriculum_status(self.root))
 
   def test_latest_numeric_checkpoint_skips_new_empty_run(self):
     self.checkpoint(name="model_99.pt")
@@ -135,6 +160,7 @@ class HTTPTests(unittest.TestCase):
     self.assertIn("策略裁剪比例", body.decode())
     self.assertIn("打开 3D 查看器", body.decode())
     self.assertIn("当前地形 / 编辑", body.decode())
+    self.assertIn("LP-ACRL 自动地形采样", body.decode())
     status, body = self.request("GET", "/api/state")
     self.assertEqual(status, 200)
     state = json.loads(body)
@@ -142,6 +168,34 @@ class HTTPTests(unittest.TestCase):
     self.assertEqual({item["alias"] for item in state["algorithms"]}, {"him", "ppo"})
     self.assertIn("lgdog1", {item["alias"] for item in state["sim2sim_maps"]})
     self.assertEqual(self.request("GET", "/assets/../../setup.py")[0], 404)
+
+  def test_lp_metrics_fallback_and_status_file_refresh_over_http(self):
+    from tensorboard.compat.proto.event_pb2 import Event
+    from tensorboard.compat.proto.summary_pb2 import Summary
+    from tensorboard.summary.writer.event_file_writer import EventFileWriter
+    run=Path(self.temp.name)/'logs/rsl_rl/lgdog1_velocity_blind_him_standard_v1/run'
+    run.mkdir(parents=True)
+    writer=EventFileWriter(str(run))
+    writer.add_event(Event(step=10,summary=Summary(value=[
+      Summary.Value(tag='Curriculum/terrain_sampling/level_mean',simple_value=2.)])))
+    writer.flush();writer.close()
+    p=run/'curriculum/terrain_sampling.json';p.parent.mkdir()
+    data={'version':1,'mode':'lp_acrl','updates':1,
+          'tasks':[{'name':'flat/row_all','terrain':'flat','probability':1.,'learning_progress':0.}]}
+    p.write_text(json.dumps(data),encoding='utf-8')
+    result={};deadline=time.monotonic()+5
+    while time.monotonic()<deadline:
+      status,body=self.request('GET','/api/metrics?task=standard')
+      self.assertEqual(status,200)
+      result=json.loads(body)
+      if result.get('available'):break
+      time.sleep(.05)
+    self.assertEqual(result['metrics']['terrain_level']['value'],2.)
+    self.assertEqual(result['terrain_curriculum']['mode'],'lp_acrl')
+    data['updates']=2;p.write_text(json.dumps(data),encoding='utf-8')
+    # No new event required: the cached scalar response must read fresh LP status.
+    result=json.loads(self.request('GET','/api/metrics?task=standard')[1])
+    self.assertEqual(result['terrain_curriculum']['updates'],2)
 
   def test_launch_requires_token_and_rejects_cross_origin(self):
     self.assertEqual(self.request("POST", "/api/run", {"mode":"train"})[0], 403)

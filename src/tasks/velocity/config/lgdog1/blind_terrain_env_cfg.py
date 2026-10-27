@@ -146,6 +146,13 @@ def lgdog1_blind_terrain_env_cfg(
           # mixed reward.  This avoids standing samples masking under-speed.
           "score_metric_name": "velocity_tracking_score",
           "active_metric_name": "velocity_tracking_active",
+          # Absolute scores can be high while barely moving at low commands.
+          # Require actual command-aligned progress before widening speed.
+          "progress_metric_name": "tracking_progress",
+          "distance_metric_name": "commanded_distance",
+          "min_progress_ratio": 0.60,
+          "regress_min_progress_ratio": 0.40,
+          "min_commanded_distance": 1.0,
           "linear_threshold": 0.78,
           "linear_increment": 0.025,
           "linear_patience": 3,

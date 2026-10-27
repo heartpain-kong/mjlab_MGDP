@@ -49,8 +49,13 @@ function collect() {
   const model = $("custom-model").value.trim() || $("model").value;
   return {mode, task:$("task").value, envs:$(mode==="play"?"play-envs":"train-envs").value,
     iterations:$("iterations").value, seed:$("seed").value, run_name:$("run-name").value,
-    terrain_num_rows:$("terrain-num-rows")?.value || "",
-    terrain_difficulty_max:$("terrain-difficulty-max")?.value || "",
+    terrain_num_rows:$("terrain-num-rows")?.disabled?"":$("terrain-num-rows")?.value || "",
+    terrain_difficulty_max:$("terrain-difficulty-max")?.disabled?"":$("terrain-difficulty-max")?.value || "",
+    terrain_curriculum:$("terrain-curriculum")?.value||"manual",
+    lp_temperature:$("lp-temperature")?.value||"2",
+    lp_uniform_mix:$("lp-uniform-mix")?.value??"0.1",
+    lp_min_episodes:$("lp-min-episodes")?.value||"32",
+    lp_update_interval_s:$("lp-update-interval")?.value||"100",
     velocity_min_abs:$("velocity-min-abs")?.value || "",
     velocity_max_abs:$("velocity-max-abs")?.value || "",
     resume:$("resume").checked, checkpoint:model, onnx:model, viewer:$("viewer").value,
@@ -64,6 +69,7 @@ function collect() {
 }
 function updateTask() {
   const t=task();
+  updateCurriculumOptions();
   if(!t){
     $("summary-task").textContent="未注册任务";
     $("summary-obs").textContent="—";
@@ -81,6 +87,16 @@ function updateTask() {
   $("experiment-path").textContent=`logs/rsl_rl/${t.experiment}`;
   $("model-hint").textContent=t.shared?"Flat/Rough 共用目录，请手动选择与任务匹配的模型。":"续训只能使用当前算法和场景的 checkpoint。";
   updateRunNameHint();
+}
+function updateCurriculumOptions(){
+  const select=$("terrain-curriculum");if(!select)return;
+  const unsupported=!task()||task().scene==="flat";
+  select.disabled=unsupported;if(unsupported)select.value="manual";
+  $("terrain-num-rows").disabled=unsupported;
+  $("terrain-difficulty-max").disabled=unsupported;
+  const automatic=select.value!=="manual";
+  $("lp-options").classList.toggle("hidden",!automatic);
+  $("terrain-curriculum-hint").textContent=unsupported?"平地任务不使用地形采样课程。":automatic?"自动模式固定使用填写的速度包络，关闭原地形升降与扩速；先固定奖励做对照。":"手工模式按已有进度、存活与跟踪质量升降地形和扩速。";
 }
 async function updateRunNameHint(){
   const hint=$("run-name-hint"), input=$("run-name");
@@ -141,24 +157,37 @@ function renderActionMetrics(data){
   renderTrainingMetrics(data);
 }
 function renderTrainingMetrics(data){
+  renderTerrainCurriculum(data?.terrain_curriculum);
   const xy=metricValue(data,"velocity_error_xy"), yaw=metricValue(data,"velocity_error_yaw");
   const activeScore=metricValue(data,"velocity_tracking_score");
   const activeCommand=metricValue(data,"velocity_tracking_active");
-  const score=metricValue(data,"command_linear_score");
+  const score=metricValue(data,"command_linear_score_ema")??metricValue(data,"command_linear_score");
+  const commandProgress=metricValue(data,"command_progress_ratio");
+  const commandProgressThreshold=metricValue(data,"command_progress_threshold");
+  const commandProgressGate=metricValue(data,"command_progress_gate");
+  const commandScoreGate=metricValue(data,"command_score_gate");
   const survival=metricValue(data,"command_episode_fraction");
   const commandFailure=metricValue(data,"command_failure_fraction");
   const promotionAllowed=metricValue(data,"command_promotion_allowed");
-  const vxMin=metricValue(data,"command_vx_min"), vxMax=metricValue(data,"command_vx_max");
+  const fixedRanges=data?.terrain_curriculum?.fixed_velocity_ranges;
+  const fixedX=(fixedRanges?.fields||fixedRanges)?.lin_vel_x;
+  const vxMin=metricValue(data,"command_vx_min")??fixedX?.[0], vxMax=metricValue(data,"command_vx_max")??fixedX?.[1];
   const level=metricValue(data,"terrain_level"), ratio=metricValue(data,"terrain_tracking_ratio");
   const promote=metricValue(data,"terrain_promote_fraction"), demote=metricValue(data,"terrain_demote_fraction");
   const failure=metricValue(data,"terrain_failure_fraction");
   const velocityGate=metricValue(data,"terrain_velocity_gate_fraction");
   const progressGate=metricValue(data,"terrain_progress_gate_fraction");
+  const ratioGate=metricValue(data,"terrain_ratio_gate_fraction");
+  const distanceGate=metricValue(data,"terrain_distance_gate_fraction");
+  const exposureGate=metricValue(data,"terrain_exposure_gate_fraction");
   $("metric-vel-xy").textContent=xy==null?"—":`${xy.toFixed(3)} m/s`;
   $("metric-vel-yaw").textContent=yaw==null?"—":`${yaw.toFixed(3)} rad/s`;
   $("metric-active-track-score").textContent=activeScore==null?"—":activeScore.toFixed(3);
   $("metric-active-command").textContent=activeCommand==null?"—":`${(activeCommand*100).toFixed(1)}%`;
   $("metric-command-score").textContent=score==null?"—":score.toFixed(3);
+  $("metric-command-progress").textContent=commandProgress==null?"—":`${(commandProgress*100).toFixed(1)}%${commandProgressThreshold==null?"":` / ≥${(commandProgressThreshold*100).toFixed(0)}%`}`;
+  $("metric-command-progress-gate").textContent=commandProgressGate==null?"—":commandProgressGate>0?"通过":"未通过";
+  $("metric-command-score-gate").textContent=commandScoreGate==null?"—":commandScoreGate>0?"通过":"未通过";
   $("metric-command-survival").textContent=survival==null?"—":`${(survival*100).toFixed(1)}%`;
   $("metric-command-failure").textContent=commandFailure==null?"—":`${(commandFailure*100).toFixed(1)}%`;
   $("metric-command-gate").textContent=promotionAllowed==null?"—":promotionAllowed>0?"通过":"暂缓扩速";
@@ -169,21 +198,50 @@ function renderTrainingMetrics(data){
   $("metric-terrain-failure").textContent=failure==null?"—":`${(failure*100).toFixed(1)}%`;
   $("metric-velocity-gate").textContent=velocityGate==null?"—":`${(velocityGate*100).toFixed(1)}%`;
   $("metric-progress-gate").textContent=progressGate==null?"—":`${(progressGate*100).toFixed(1)}%`;
+  $("metric-ratio-gate").textContent=ratioGate==null?"—":`${(ratioGate*100).toFixed(1)}%`;
+  $("metric-distance-gate").textContent=distanceGate==null?"—":`${(distanceGate*100).toFixed(1)}%`;
+  $("metric-exposure-gate").textContent=exposureGate==null?"—":`${(exposureGate*100).toFixed(1)}%`;
   const status=$("training-health-status");
   const terrainObserve=promote!=null&&demote!=null&&demote>promote*1.5;
   const terrainWarning=failure!=null&&failure>0.35;
-  const state=terrainWarning?"warning":terrainObserve?"observe":data?.available?"healthy":"waiting";
+  const progressBlocked=commandProgressGate===0;
+  const state=terrainWarning?"warning":terrainObserve||progressBlocked||commandScoreGate===0?"observe":data?.available?"healthy":"waiting";
   setHealthPill(status,state);
   if(!data?.available){
     $("training-health-detail").textContent="训练启动后自动读取速度追踪和地形课程指标。";
   }else if(terrainWarning){
     $("training-health-detail").textContent="回合失败率偏高，先检查接触终止、速度追踪和地形难度。";
+  }else if(data?.terrain_curriculum){
+    $("training-health-detail").textContent="自动地形采样已启用：等级均值允许回访下降，请结合任务概率、学习进度和固定评估判断表现。";
+  }else if(progressBlocked){
+    $("training-health-detail").textContent=`速度课程暂缓扩速：有效指令进度${commandProgress==null?"尚无数据":`仅${(commandProgress*100).toFixed(1)}%`}，或窗口内移动距离不足；绝对误差分数高不代表移动达标。`;
   }else if(terrainObserve){
     $("training-health-detail").textContent="地形降级多于升级；速度误差可以正常，但课程还没有稳定向上。";
   }else if(promotionAllowed===0){
     $("training-health-detail").textContent="速度课程暂缓扩速：存活、失败率或移动指令样本尚未满足条件。";
+  }else if(commandScoreGate===0){
+    $("training-health-detail").textContent="速度课程暂缓扩速：跟踪分数 EMA 尚未达到阈值。";
   }else{
-    $("training-health-detail").textContent=`${data.run||"未命名 run"} · 速度课程分数达到阈值后才会扩大指令范围。`;
+    $("training-health-detail").textContent=`${data.run||"未命名 run"} · 扩速要求跟踪分数、有效进度、存活和失败率连续达标。`;
+  }
+}
+function renderTerrainCurriculum(data){
+  const card=$("lp-status-card");if(!card)return;
+  card.classList.toggle("hidden",!data?.tasks?.length);
+  if(!data?.tasks?.length)return;
+  $("lp-status-summary").textContent=`${data.mode==="lp_acrl"?"LP-ACRL 地形采样":"均匀任务采样对照"} · ${data.tasks.length} 个任务 · 更新 ${data.updates??0} 次 · 控制步 ${data.control_step??0}`;
+  const list=$("lp-task-grid");list.replaceChildren();
+  const maximum=Math.max(...data.tasks.map(t=>Number(t.probability)),1e-9);
+  for(const task of data.tasks){
+    const tile=document.createElement("div");tile.className="lp-task-tile";
+    const probability=Math.min(1,Math.max(0,Number(task.probability)||0));
+    tile.style.background=`rgba(8,127,119,${.05+.35*probability/maximum})`;
+    const label=document.createElement("strong");label.textContent=task.name;
+    const value=document.createElement("b");value.textContent=`${(probability*100).toFixed(2)}%`;
+    const detail=document.createElement("small");
+    detail.textContent=`LP ${(Number(task.learning_progress)||0).toFixed(3)} · 回报 ${task.mean_return==null?"待采样":Number(task.mean_return).toFixed(2)} · n=${task.samples??0}`;
+    tile.title=`${task.terrain} · 行 ${task.rows?.join(",")||"—"} · 待统计 ${task.pending_samples??0} 回合 · 失败率 ${task.failure_fraction==null?"—":`${(task.failure_fraction*100).toFixed(1)}%`}`;
+    tile.append(label,value,detail);list.append(tile);
   }
 }
 function renderGpu(data){
@@ -509,6 +567,7 @@ async function start() {
     $("scene").addEventListener("change",async()=>{renderModelSceneSelectors($("task").value);await changeTask();});
     $("map").addEventListener("change",()=>{renderMapInfo();queuePreview();});
     $("resume").addEventListener("change",()=>{showMode();preview();});
+    $("terrain-curriculum").addEventListener("change",()=>{updateCurriculumOptions();queuePreview();});
     $("run-form").addEventListener("input",event=>{if(event.target.id==="seed")updateRunNameHint();queuePreview();});$("run-form").addEventListener("change",queuePreview);
     document.querySelectorAll("[data-preset]").forEach(button=>button.addEventListener("click",()=>{const smoke=button.dataset.preset==="smoke";$("train-envs").value=smoke?64:1024;$("iterations").value=smoke?2:16000;preview();}));
     $("run-form").addEventListener("submit",async event=>{event.preventDefault();$("launch").disabled=true;try{const data=await api("/api/run",collect());selectedJob=data.job.id;toast("已启动，查看下方真实日志");await refresh();}catch(error){toast(error.message);}finally{preview();}});

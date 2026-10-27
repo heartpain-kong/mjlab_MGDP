@@ -7,6 +7,9 @@
 | 使用浏览器面板、短命令、了解目录迁移 | [WORKBENCH.md](WORKBENCH.md) |
 | 一个网页看全部：环境 / GPU / 进程 / 轮次 / 日志（总览） | [WEBHUB.md](WEBHUB.md) |
 | 把训练曲线当 K 线看（曲线终端） | [KLINE.md](KLINE.md) |
+| LP-ACRL地形自动采样、参数与对照实验 | [LP_ACRL_INTEGRATION.md](LP_ACRL_INTEGRATION.md) |
+| 速度扩张条件、进度门与旧 checkpoint 迁移 | [VELOCITY_CURRICULUM.md](VELOCITY_CURRICULUM.md) |
+| V23地形为0：进度门与扩速判据诊断 | [TRAINING_DATA_ANALYSIS_V23_2026-10-27.md](TRAINING_DATA_ANALYSIS_V23_2026-10-27.md) |
 | 调整奖励、查看最终权重和函数位置 | [REWARDS.md](REWARDS.md) |
 | V21/V19 行走退化、奖励方向与速度课程门限 | [TRAINING_DATA_ANALYSIS_2026-10-27.md](TRAINING_DATA_ANALYSIS_2026-10-27.md) |
 | V2/V8 训练 run、课程和动作数据分析 | [TRAINING_DATA_ANALYSIS_2026-10-20.md](TRAINING_DATA_ANALYSIS_2026-10-20.md) |

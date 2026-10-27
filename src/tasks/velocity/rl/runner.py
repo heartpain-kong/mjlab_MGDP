@@ -13,6 +13,7 @@ from mjlab.rl.exporter_utils import (
 )
 from mjlab.rl.runner import MjlabOnPolicyRunner
 from src.tasks.velocity.mdp.curriculums import RewardBasedVelocityCurriculum
+from src.tasks.velocity.mdp.lp_terrain import LPTerrainCurriculum
 
 
 class VelocityOnPolicyRunner(MjlabOnPolicyRunner):
@@ -54,11 +55,22 @@ class PPOHIMRunner(MjlabOnPolicyRunner):
     term = manager.get_term_cfg("command_vel").func
     return term if isinstance(term, RewardBasedVelocityCurriculum) else None
 
+  def _terrain_curriculum(self):
+    manager = getattr(getattr(self.env, "unwrapped", None), "curriculum_manager", None)
+    if manager is None or "terrain_sampling" not in getattr(manager, "active_terms", ()):
+      return None
+    term = manager.get_term_cfg("terrain_sampling").func
+    return term if isinstance(term, LPTerrainCurriculum) else None
+
   def save(self, path: str, infos=None):
     infos = {**(infos or {})}
     curriculum = self._velocity_curriculum()
     if curriculum is not None:
       infos["him_velocity_curriculum"] = curriculum.state_dict()
+    terrain_curriculum = self._terrain_curriculum()
+    if terrain_curriculum is not None:
+      infos["terrain_task_curriculum"] = terrain_curriculum.state_dict()
+      terrain_curriculum.write_status()
     super().save(path, infos)
     policy_dir = Path(path).parent
     self.export_policy_to_onnx(str(policy_dir), "policy.onnx")
@@ -82,6 +94,15 @@ class PPOHIMRunner(MjlabOnPolicyRunner):
       else:
         self._restore_legacy_velocity_ranges(curriculum, path)
       # Refresh command samples after restoring mutable curriculum ranges.
+      with torch.inference_mode():
+        self.env.reset()
+    terrain_curriculum = self._terrain_curriculum()
+    if terrain_curriculum is not None:
+      state = (infos or {}).get("terrain_task_curriculum") if isinstance(infos, dict) else None
+      if state is not None:
+        terrain_curriculum.load_state_dict(state)
+      else:
+        warnings.warn("Checkpoint has no terrain sampler state; starting fresh LP statistics")
       with torch.inference_mode():
         self.env.reset()
     return infos

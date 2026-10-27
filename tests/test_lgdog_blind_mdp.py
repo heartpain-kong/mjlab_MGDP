@@ -125,6 +125,24 @@ class CurriculumTests(unittest.TestCase):
     self.assertEqual(result["episode_progress_m"].item(), 5.)
     self.assertEqual(env.metrics_manager._episode_sums["tracking_progress"][0].item(), 5.)
 
+  def test_separate_terrain_gate_metrics_do_not_change_upgrade_decisions(self):
+    selected=[]
+    terrain=NS(terrain_levels=torch.zeros(4), update_env_origins=lambda ids, up, down:
+               selected.append((up.tolist(), down.tolist())))
+    env=NS(metrics_manager=NS(_episode_sums={
+      "commanded_distance":torch.tensor([4.,2.,4.,4.]),
+      "tracking_progress":torch.tensor([2.,1.8,4.,4.]),
+      "outside_spawn_platform":torch.tensor([2.,2.,0.,2.])}),
+      termination_manager=NS(terminated=torch.zeros(4,dtype=torch.bool)),
+      episode_length_buf=torch.full((4,),1000),step_dt=.02,max_episode_length_s=20.,
+      scene=NS(terrain=terrain))
+    result=mdp.terrain_levels_tracking(env,torch.arange(4))
+    self.assertEqual(selected[0][0],[False,False,False,True])
+    self.assertEqual(float(result["ratio_gate_pass_fraction"]),.75)
+    self.assertEqual(float(result["distance_gate_pass_fraction"]),.75)
+    self.assertEqual(float(result["exposure_gate_pass_fraction"]),.75)
+    self.assertEqual(float(result["progress_gate_pass_fraction"]),.5)
+
   def test_velocity_gate_uses_control_step_mean(self):
     selected = []
     terrain = NS(terrain_levels=torch.tensor([1.]),

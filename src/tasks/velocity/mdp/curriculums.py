@@ -79,7 +79,8 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
   aggregate full-episode tracking scores, and widen the planar command range
   only when the linear score clears the configured threshold.  The final
   bounds remain the positive/negative limits selected in the workbench.
-  Active-command scores can additionally require survival and failure gates.
+  Active-command scores can additionally require actual tracking progress,
+  survival and failure gates.
   """
 
   _range_names = ("lin_vel_x", "lin_vel_y")
@@ -109,6 +110,17 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
     self.active_metric_name = params.get("active_metric_name")
     if bool(self.score_metric_name) != bool(self.active_metric_name):
       raise ValueError("Velocity curriculum needs both score_metric_name and active_metric_name")
+    self.progress_metric_name = params.get("progress_metric_name")
+    self.distance_metric_name = params.get("distance_metric_name")
+    if bool(self.progress_metric_name) != bool(self.distance_metric_name):
+      raise ValueError("Velocity curriculum needs both progress_metric_name and distance_metric_name")
+    self.min_progress_ratio = float(params.get("min_progress_ratio", 0.0))
+    self.regress_min_progress_ratio = float(params.get("regress_min_progress_ratio", 0.0))
+    self.min_commanded_distance = float(params.get("min_commanded_distance", 1.0))
+    if not math.isfinite(self.min_commanded_distance) or self.min_commanded_distance <= 0:
+      raise ValueError("Velocity curriculum min_commanded_distance must be positive")
+    if (self.min_progress_ratio > 0 or self.regress_min_progress_ratio > 0) and not self.progress_metric_name:
+      raise ValueError("Velocity curriculum progress gates need progress and distance metrics")
     # Defaults preserve callers which do not opt into safety gates.  Standard
     # HIM config enables them explicitly; a high active-step score alone must
     # not promote a policy whose episodes mostly end in failure.
@@ -116,7 +128,8 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
     self.max_failure_fraction = float(params.get("max_failure_fraction", 1.0))
     self.regress_min_episode_fraction = float(params.get("regress_min_episode_fraction", 0.0))
     self.regress_max_failure_fraction = float(params.get("regress_max_failure_fraction", 1.0))
-    for name in ("min_episode_fraction", "max_failure_fraction",
+    for name in ("min_progress_ratio", "regress_min_progress_ratio",
+                 "min_episode_fraction", "max_failure_fraction",
                  "regress_min_episode_fraction", "regress_max_failure_fraction"):
       value = getattr(self, name)
       if not math.isfinite(value) or not 0.0 <= value <= 1.0:
@@ -125,6 +138,8 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
       raise ValueError("Velocity curriculum regression survival gate exceeds promotion gate")
     if self.regress_max_failure_fraction < self.max_failure_fraction:
       raise ValueError("Velocity curriculum regression failure gate is below promotion gate")
+    if self.regress_min_progress_ratio > self.min_progress_ratio:
+      raise ValueError("Velocity curriculum regression progress gate exceeds promotion gate")
     self.limits = {
       name: tuple(float(value) for value in params.get(f"{name}_limit", (-1.0, 1.0)))
       for name in self._range_names
@@ -161,6 +176,11 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
     self.has_score_ema = False
     self.metric_score_sum = torch.zeros((), device=self.device)
     self.metric_active_steps = torch.zeros((), device=self.device)
+    self.commanded_distance_sum = torch.zeros((), device=self.device)
+    self.tracking_progress_sum = torch.zeros((), device=self.device)
+    self.progress_ratio = torch.zeros((), device=self.device)
+    self.progress_gate_pass = False
+    self.score_gate_pass = False
     self.episode_steps_sum = torch.zeros((), device=self.device)
     self.failed_episode_count = torch.zeros((), device=self.device)
     self.episode_fraction = torch.zeros((), device=self.device)
@@ -194,6 +214,13 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
           raise ValueError("Velocity curriculum tracking metrics are missing; check env.metrics")
         self.metric_score_sum += score_values[env_ids].sum()
         self.metric_active_steps += active_values[env_ids].sum()
+      if self.progress_metric_name:
+        progress_values = metric_sums.get(self.progress_metric_name)
+        distance_values = metric_sums.get(self.distance_metric_name)
+        if progress_values is None or distance_values is None:
+          raise ValueError("Velocity curriculum progress metrics are missing; check env.metrics")
+        self.tracking_progress_sum += progress_values[env_ids].sum()
+        self.commanded_distance_sum += distance_values[env_ids].sum()
     if (
       env.common_step_counter - self.last_check_step < self.check_interval_steps
       or self.episode_count == 0
@@ -219,22 +246,35 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
       (self.episode_steps_sum / (env.max_episode_length * self.episode_count)).clamp(0.0, 1.0)
     )
     self.failure_fraction.copy_(self.failed_episode_count / self.episode_count)
+    # Aggregate meters, not episode ratios: short near-zero commands must not
+    # outweigh long moving episodes. Standing commands add zero to both terms.
+    has_progress_samples = bool(self.commanded_distance_sum >= self.min_commanded_distance)
+    self.progress_ratio.copy_(
+      (self.tracking_progress_sum / self.commanded_distance_sum.clamp_min(1e-6)).clamp(0.0, 1.0)
+    )
+    self.progress_gate_pass = not self.progress_metric_name or (
+      has_progress_samples and bool(self.progress_ratio >= self.min_progress_ratio)
+    )
     has_moving_samples = not self.score_metric_name or bool(self.metric_active_steps > 0)
     self.promotion_allowed = (
       has_moving_samples
+      and self.progress_gate_pass
       and bool(self.episode_fraction >= self.min_episode_fraction)
       and bool(self.failure_fraction <= self.max_failure_fraction)
     )
     unsafe = (
       bool(self.episode_fraction < self.regress_min_episode_fraction)
       or bool(self.failure_fraction > self.regress_max_failure_fraction)
+      or (bool(self.progress_metric_name) and has_progress_samples
+          and bool(self.progress_ratio < self.regress_min_progress_ratio))
     )
     if not self.has_score_ema:
       self.score_ema.copy_(self.scores)
       self.has_score_ema = True
     else:
       self.score_ema.lerp_(self.scores, self.score_ema_alpha)
-    if self.score_ema[0] >= self.linear_threshold and self.promotion_allowed:
+    self.score_gate_pass = bool(self.score_ema[0] >= self.linear_threshold)
+    if self.score_gate_pass and self.promotion_allowed:
       self.promotion_streak += 1
       self.regression_streak = 0
     elif self.score_ema[0] < self.linear_regress_threshold or unsafe:
@@ -278,6 +318,10 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
       "linear_score_ema": self.score_ema[0],
       "promotion_streak": float(self.promotion_streak),
       "regression_streak": float(self.regression_streak),
+      "progress_ratio": self.progress_ratio,
+      "min_progress_ratio": self.min_progress_ratio,
+      "progress_gate_pass": float(self.progress_gate_pass),
+      "score_gate_pass": float(self.score_gate_pass),
       "episode_fraction": self.episode_fraction,
       "failure_fraction": self.failure_fraction,
       "promotion_allowed": float(self.promotion_allowed),
@@ -287,7 +331,7 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
 
   def state_dict(self):
     return {
-      "version": 2,
+      "version": 3,
       "command_name": self.command_name,
       "ranges": {
         name: tuple(getattr(self.command_term.cfg.ranges, name))
@@ -301,6 +345,9 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
       "has_score_ema": self.has_score_ema,
       "metric_score_sum": self.metric_score_sum.detach().cpu().clone(),
       "metric_active_steps": self.metric_active_steps.detach().cpu().clone(),
+      "commanded_distance_sum": self.commanded_distance_sum.detach().cpu().clone(),
+      "tracking_progress_sum": self.tracking_progress_sum.detach().cpu().clone(),
+      "progress_ratio": self.progress_ratio.detach().cpu().clone(),
       "episode_steps_sum": self.episode_steps_sum.detach().cpu().clone(),
       "failed_episode_count": self.failed_episode_count.detach().cpu().clone(),
       "episode_fraction": self.episode_fraction.detach().cpu().clone(),
@@ -310,7 +357,7 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
     }
 
   def load_state_dict(self, state):
-    if state.get("version") not in (1, 2) or state.get("command_name") != self.command_name:
+    if state.get("version") not in (1, 2, 3) or state.get("command_name") != self.command_name:
       raise ValueError("Incompatible velocity curriculum checkpoint state")
     ranges = self._checked_ranges(state.get("ranges", {}))
     reward_sums = torch.as_tensor(state.get("reward_sums"), device=self.device)
@@ -353,15 +400,7 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
       raise ValueError("Invalid velocity curriculum streak state")
     self.episode_count = int(state.get("episode_count", 0))
     self.last_check_step = min(int(state.get("last_check_step", 0)), int(self._env.common_step_counter))
-    if state["version"] == 1:
-      # Old partial windows have no survival statistics.  Keep their restored
-      # ranges, but require a fresh window and fresh streaks for the new gates.
-      self._reset_window()
-      self.promotion_streak = self.regression_streak = 0
-      self.last_check_step = int(self._env.common_step_counter)
-      self.episode_fraction.zero_()
-      self.failure_fraction.zero_()
-    else:
+    if state["version"] >= 2:
       for name in ("episode_steps_sum", "failed_episode_count", "episode_fraction", "failure_fraction"):
         if state.get(name) is None:
           raise ValueError("Missing velocity curriculum survival statistics")
@@ -375,13 +414,39 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
         raise ValueError("Invalid velocity curriculum failure count")
       if self.episode_steps_sum > self.episode_count * self._env.max_episode_length:
         raise ValueError("Invalid velocity curriculum episode step count")
+    if state["version"] < 3:
+      # v1 has no survival statistics; v2 has no progress statistics. Keep the
+      # restored ranges, but do not promote using their incomplete windows.
+      self._reset_window()
+      self.promotion_streak = self.regression_streak = 0
+      self.last_check_step = int(self._env.common_step_counter)
+      self.episode_fraction.zero_()
+      self.failure_fraction.zero_()
+      self.progress_ratio.zero_()
+    else:
+      for name in ("commanded_distance_sum", "tracking_progress_sum", "progress_ratio"):
+        if state.get(name) is None:
+          raise ValueError("Missing velocity curriculum progress statistics")
+        value = torch.as_tensor(state[name], device=self.device)
+        if value.numel() != 1 or not torch.isfinite(value).all() or (value < 0).any():
+          raise ValueError("Invalid velocity curriculum progress statistics")
+        if name == "progress_ratio" and (value > 1).any():
+          raise ValueError("Invalid velocity curriculum progress ratio")
+        getattr(self, name).copy_(value.reshape(()))
+      tolerance = self.commanded_distance_sum.abs().clamp_min(1.0) * 1e-5
+      if self.tracking_progress_sum > self.commanded_distance_sum + tolerance:
+        raise ValueError("Velocity curriculum progress exceeds commanded distance")
     # Re-evaluate the permission against the next actual completed window.
     self.promotion_allowed = False
+    self.progress_gate_pass = False
+    self.score_gate_pass = False
 
   def _reset_window(self):
     self.reward_sums.zero_()
     self.metric_score_sum.zero_()
     self.metric_active_steps.zero_()
+    self.commanded_distance_sum.zero_()
+    self.tracking_progress_sum.zero_()
     self.episode_steps_sum.zero_()
     self.failed_episode_count.zero_()
     self.episode_count = 0
@@ -403,6 +468,9 @@ class RewardBasedVelocityCurriculum(ManagerTermBase):
     self.has_score_ema = False
     self.episode_fraction.zero_()
     self.failure_fraction.zero_()
+    self.progress_ratio.zero_()
+    self.progress_gate_pass = False
+    self.score_gate_pass = False
     self.promotion_streak = self.regression_streak = 0
     self.promotion_allowed = False
     return True
