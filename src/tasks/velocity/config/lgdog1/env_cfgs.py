@@ -1,7 +1,7 @@
 """LgDog1 机器人、观测、地形、指令与终止配置。
 
 奖励权重、参数和函数绑定统一在同目录 reward_cfg.py。
-机器人增益、力矩限幅、站姿和动作缩放在 assets/robots/lgdog1/lgdog1_constants.py。
+机器人增益、力矩限幅、站姿和动作缩放在 src/config/lgdog1.py。
 """
 
 from typing import Literal

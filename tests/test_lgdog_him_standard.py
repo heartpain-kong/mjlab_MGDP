@@ -42,10 +42,10 @@ class StandardHIMTests(unittest.TestCase):
       self.assertEqual(cfg.observations["actor"].history_length, 3)
       self.assertFalse(cfg.observations["actor"].flatten_history_dim)
       self.assertFalse(cfg.observations["him_target"].enable_corruption)
-      self.assertEqual(set(cfg.observations["actor"].terms), {
+      self.assertEqual(tuple(cfg.observations["actor"].terms), (
         "base_ang_vel", "projected_gravity", "command", "phase",
         "joint_pos", "joint_vel", "actions",
-      })
+      ))
       self.assertEqual(sum(name.endswith("_ground_ray") for name in sensors), 4)
 
   def test_standard_generator_uses_unitree_rough_profile_without_polluting_legacy_gentle(self):

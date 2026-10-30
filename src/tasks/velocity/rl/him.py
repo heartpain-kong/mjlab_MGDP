@@ -7,7 +7,7 @@ from torch import nn
 from rsl_rl.algorithms import PPO
 from rsl_rl.models import MLPModel
 from rsl_rl.modules import EmpiricalNormalization
-from src.him_contract import HIM_HISTORY_LENGTH, HIM_FRAME_DIM
+from src.him_contract import HIM_HISTORY_LENGTH, HIM_FRAME_DIM, make_him_checkpoint_contract
 
 from .him_estimator import HIMEstimator
 from .runner import PPOHIMRunner
@@ -184,14 +184,12 @@ class HIMPPO(PPO):
   def save(self):
     data = super().save()
     data["him_estimator_optimizer"] = self.estimator_optimizer.state_dict()
-    data["him_contract"] = {"frame_dim": self.actor.frame_dim,
-                            "history_length": self.actor.history_length,
-                            "order": "oldest_to_newest"}
+    data["him_contract"] = make_him_checkpoint_contract(
+      self.actor.frame_dim, self.actor.history_length)
     return data
 
   def load(self, loaded_dict, load_cfg=None, strict=True):
-    expected = {"frame_dim": self.actor.frame_dim,
-                "history_length": self.actor.history_length, "order": "oldest_to_newest"}
+    expected = make_him_checkpoint_contract(self.actor.frame_dim, self.actor.history_length)
     if loaded_dict.get("him_contract") != expected:
       raise ValueError(
         f"Incompatible LgDog HIM history: checkpoint={loaded_dict.get('him_contract')}, "

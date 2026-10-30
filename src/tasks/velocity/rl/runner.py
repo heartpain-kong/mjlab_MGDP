@@ -12,6 +12,7 @@ from mjlab.rl.exporter_utils import (
   get_base_metadata,
 )
 from mjlab.rl.runner import MjlabOnPolicyRunner
+from src.him_contract import HIM_HISTORY_ORDER
 from src.tasks.velocity.mdp.curriculums import RewardBasedVelocityCurriculum
 from src.tasks.velocity.mdp.lp_terrain import LPTerrainCurriculum
 
@@ -133,7 +134,7 @@ class PPOHIMRunner(MjlabOnPolicyRunner):
         "policy_architecture": "lgdog_him_v1",
         "history_length": str(self.alg.actor.history_length),
         "frame_dim": str(self.alg.actor.frame_dim),
-        "history_order": "oldest_to_newest",
+        "history_order": HIM_HISTORY_ORDER,
         "history_reset": "repeat_first_frame",
         "control_dt": str(self.env.unwrapped.step_dt),
       })

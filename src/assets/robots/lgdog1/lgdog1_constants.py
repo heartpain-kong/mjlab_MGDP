@@ -1,23 +1,16 @@
 """LgDog1 constants.
 
 LgDog1 是用户自研四足（trunk 0.404 m / thigh 0.19 m + calf 0.245 m / 整机 ≈10.06 kg）。
-参数来源：`LgRobotDog/legged_gym/legged_gym/envs/LgDog1/LgDog1_config.py`
-以及正在运行那轮的 `config_snapshot.json`，逐项对齐如下：
-
-  · 关节限位 / 力矩  = MJCF（= sim2sim 模型）：hip ±1.2、thigh ±1.5、calf ±0.85；
-                       hip,thigh ±10 Nm、calf ±20 Nm（calf 带 1:2 减速比）
-  · 被动参数         = armature 0.01 / frictionloss 0.2（与 sim2sim XML 一致）
-  · PD 增益          = kp 40.0 / kd 1.2（legged_gym 里 stiffness/damping 是标量，12 关节同值）
-  · 默认站姿         = hip 0.0 / thigh 0.0 / calf 0.2，出生高度 0.31 m
-  · 动作缩放         = 0.25（部署侧 config.yaml 同值）
-  · 软限位系数       = 0.9（= soft_dof_pos_limit）
+名义控制和初始状态参数集中在 src.config.lgdog1；模型和碰撞定义保留在资产层。
 """
 
 from pathlib import Path
+from dataclasses import asdict
 
 import mujoco
 
 from src import SRC_PATH
+from src.config import lgdog1 as params
 from mjlab.actuator import BuiltinPositionActuatorCfg
 from mjlab.entity import EntityArticulationInfoCfg, EntityCfg
 from mjlab.utils.os import update_assets
@@ -53,28 +46,13 @@ def get_spec() -> mujoco.MjSpec:
 #   抄过来策略会学到真机给不出的力矩，sim2real 直接废掉。
 #   frictionloss 也保留 LgDog1 原值（Go2 是 0），它是这套模型的关节摩擦。
 LGDOG1_ACTUATOR_HIP = BuiltinPositionActuatorCfg(
-  target_names_expr=(r".*_hip_joint",),
-  stiffness=20.0,  # Go2 值（原 LgDog1/legged_gym = 40.0）
-  damping=1.0,  # Go2 值（原 1.2）
-  effort_limit=10.0,  # ★ LgDog1 真机值，保持不动
-  armature=0.01,
-  frictionloss=0.2,
+  **asdict(params.HIP),
 )
 LGDOG1_ACTUATOR_THIGH = BuiltinPositionActuatorCfg(
-  target_names_expr=(r".*_thigh_joint",),
-  stiffness=20.0,  # Go2 值（原 40.0）
-  damping=1.0,  # Go2 值（原 1.2）
-  effort_limit=10.0,  # ★ LgDog1 真机值，保持不动
-  armature=0.01,
-  frictionloss=0.2,
+  **asdict(params.THIGH),
 )
 LGDOG1_ACTUATOR_CALF = BuiltinPositionActuatorCfg(
-  target_names_expr=(r".*_calf_joint",),
-  stiffness=40.0,  # Go2 值（与 LgDog1 原值相同）
-  damping=2.0,  # Go2 值（原 1.2）
-  effort_limit=20.0,  # ★ LgDog1 真机值（calf 带 1:2 减速比），保持不动
-  armature=0.02,  # Go2 值（原 0.01）
-  frictionloss=0.2,
+  **asdict(params.CALF),
 )
 
 ##
@@ -83,13 +61,9 @@ LGDOG1_ACTUATOR_CALF = BuiltinPositionActuatorCfg(
 
 # 出生高度 0.31 m ≈ 默认姿态（thigh 0 / calf 0.2）的被动站高 0.303 m + 7 mm 余量。
 INIT_STATE = EntityCfg.InitialStateCfg(
-  pos=(0.0, 0.0, 0.31),
-  joint_pos={
-    r".*_hip_joint": 0.0,
-    r".*_thigh_joint": 0.0,
-    r".*_calf_joint": 0.2,
-  },
-  joint_vel={".*": 0.0},
+  pos=params.INITIAL_POSITION,
+  joint_pos=dict(params.INITIAL_JOINT_POSITIONS),
+  joint_vel={".*": params.INITIAL_JOINT_VELOCITY},
 )
 
 ##
@@ -134,11 +108,11 @@ LGDOG1_ARTICULATION = EntityArticulationInfoCfg(
     LGDOG1_ACTUATOR_THIGH,
     LGDOG1_ACTUATOR_CALF,
   ),
-  soft_joint_pos_limit_factor=0.9,  # = legged_gym 的 soft_dof_pos_limit
+  soft_joint_pos_limit_factor=params.SOFT_JOINT_POS_LIMIT_FACTOR,
 )
 
 # 动作缩放（= legged_gym control.action_scale，也是部署侧 config.yaml 的值）。
-LGDOG1_ACTION_SCALE = 0.25
+LGDOG1_ACTION_SCALE = params.ACTION_SCALE
 
 
 def get_lgdog1_robot_cfg() -> EntityCfg:

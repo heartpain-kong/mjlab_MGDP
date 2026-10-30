@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from mjlab.managers.observation_manager import ObservationGroupCfg, ObservationTermCfg
 from mjlab.rl import RslRlModelCfg, RslRlPpoAlgorithmCfg
-from src.him_contract import HIM_HISTORY_LENGTH, HIM_FRAME_DIM
+from src.him_contract import HIM_HISTORY_LENGTH, HIM_FRAME_DIM, LGDOG_HIM_LAYOUT
 
 from .blind_terrain_env_cfg import lgdog1_blind_terrain_env_cfg
 from .env_cfgs import BASE_BODY, FOOT_SITES
@@ -55,6 +55,8 @@ def lgdog1_him_flat_env_cfg(play=False):
 
 
 def _add_him_observations(cfg):
+  # A 47-wide vector with reordered terms would silently invalidate policies.
+  LGDOG_HIM_LAYOUT.validate_terms(cfg.observations["actor"].terms)
   # Separate clean target groups prevent fragile hard-coded critic slicing.
   cfg.observations["him_target"] = deepcopy(cfg.observations["actor"])
   cfg.observations["him_target"].enable_corruption = False

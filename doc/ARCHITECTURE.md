@@ -39,6 +39,7 @@ unitree_rl_mjlab/
 ```
 src/
 ├── __init__.py              只定义了 SRC_PATH（别的模块靠它定位资产）
+├── config/lgdog1.py         LgDog 名义控制、动作缩放与初始姿态参数
 ├── assets/                  机器人本体
 │   ├── robots/
 │   │   ├── unitree_g1/      ├─ 每个机器人一个目录，三件套：

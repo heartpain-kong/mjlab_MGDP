@@ -4,7 +4,7 @@ Only NumPy is required. Each push is one new 50 Hz observation frame.
 """
 
 import numpy as np
-from src.him_contract import HIM_HISTORY_LENGTH, HIM_FRAME_DIM
+from src.him_contract import HIM_HISTORY_LENGTH, HIM_FRAME_DIM, HIM_HISTORY_ORDER
 
 
 class PolicyHistory:
@@ -29,13 +29,13 @@ class PolicyHistory:
     return self.frames.reshape(-1).copy()
 
 
-def validate_policy_history(input_shape, metadata, history_length, frame_dim=47, control_dt=.02):
+def validate_policy_history(input_shape, metadata, history_length, frame_dim=HIM_FRAME_DIM, control_dt=.02):
   """Fail before control starts if task/model history conventions disagree."""
   if len(input_shape) != 2 or input_shape[1] != history_length * frame_dim:
     raise ValueError(f"Policy shape {input_shape} does not match {history_length} x {frame_dim}")
   if history_length > 1:
     expected = {"policy_architecture": "lgdog_him_v1", "history_length": str(history_length),
-                "frame_dim": str(frame_dim), "history_order": "oldest_to_newest",
+                "frame_dim": str(frame_dim), "history_order": HIM_HISTORY_ORDER,
                 "history_reset": "repeat_first_frame"}
     for key, value in expected.items():
       if metadata.get(key) != value:
