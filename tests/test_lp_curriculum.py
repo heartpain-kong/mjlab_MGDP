@@ -12,7 +12,7 @@ from unittest.mock import Mock, patch
 import numpy as np
 import torch
 
-from src.curriculum.lp import LearningProgressSampler, build_terrain_tasks
+from src.curriculum.lp import LearningProgressSampler, build_terrain_tasks, terrain_baseline_probabilities
 from src.tasks.velocity.config.lgdog1.him_env_cfg import lgdog1_him_standard_env_cfg, lgdog1_him_flat_env_cfg
 from src.tasks.velocity.config.lgdog1.terrain_curriculum import configure_terrain_curriculum
 from src.tasks.velocity.mdp.lp_terrain import LPTerrainCurriculum
@@ -90,6 +90,59 @@ class SamplerTests(unittest.TestCase):
       bad=deepcopy(state);bad[key]=value
       with self.subTest(key=key),self.assertRaises(ValueError):s.load_state_dict(bad)
 
+  def test_v28_sized_alternating_outliers_cannot_monopolize_sampling(self):
+    baseline=np.array([.2]+[.8/41]*41)
+    s=LearningProgressSampler(42,baseline_probabilities=baseline,uniform_mix=.5,
+                             progress_scale=20,progress_alpha=.25,probability_alpha=.2,
+                             max_task_probability=.25,min_episodes=2)
+    ids=np.repeat(np.arange(42),2)
+    for stage in range(100):
+      rewards=np.full(42,10.);rewards[38 if stage%2 else 41]=90.
+      old=s.probabilities.copy()
+      s.observe(ids,np.repeat(rewards,2));s.update()
+      self.assertLessEqual(s.probabilities.max(),.25+1e-12)
+      self.assertTrue((s.probabilities>=.5*baseline-1e-12).all())
+      self.assertLessEqual(np.abs(s.probabilities-old).max(),.05+1e-12)
+      self.assertAlmostEqual(s.probabilities.sum(),1.)
+
+  def test_capping_extreme_progress_redistributes_mass_without_breaking_floor(self):
+    s=LearningProgressSampler(10,uniform_mix=.5,probability_alpha=1.,max_task_probability=.25,min_episodes=1)
+    ids=np.arange(10)
+    s.observe(ids,np.zeros(10));s.update()
+    s.observe(ids,np.array([1e8]+[0.]*9));s.update()
+    self.assertAlmostEqual(s.probabilities[0],.25)
+    self.assertAlmostEqual(s.probabilities.sum(),1.)
+    self.assertTrue((s.probabilities>=.05).all())
+
+  def test_reward_scale_and_progress_scale_change_together_without_changing_probabilities(self):
+    samplers=[self.sampler(progress_scale=scale,progress_alpha=.25,probability_alpha=.2) for scale in [20.,40.]]
+    for rewards in ([0,0,0],[72,-72,1],[-72,72,1]):
+      self.stage(samplers[0],rewards)
+      self.stage(samplers[1],np.array(rewards)*2)
+    np.testing.assert_allclose(samplers[0].probabilities,samplers[1].probabilities)
+
+  def test_drain_episodes_count_for_diagnostics_but_not_lp_window(self):
+    s=self.sampler()
+    s.observe(np.array([0,0]),np.array([2.,100.]),include_in_window=np.array([True,False]))
+    self.assertEqual(s.counts[0],2)
+    self.assertEqual(s.window_counts[0],1)
+    self.assertEqual(s.window_returns[0],2.)
+    with self.assertRaises(ValueError):
+      s.observe(np.array([0]),np.array([2.]),include_in_window=np.array([1]))
+
+  def test_stabilizer_configuration_is_checkpointed_and_validated(self):
+    s=self.sampler(progress_scale=20.,progress_alpha=.25,probability_alpha=.2,max_task_probability=.5)
+    self.stage(s,[1.,2.,3.]);self.stage(s,[50.,0.,0.])
+    saved=s.state_dict();other=self.sampler(progress_scale=20.,progress_alpha=.25,probability_alpha=.2,max_task_probability=.5)
+    other.load_state_dict(saved)
+    self.stage(s,[0.,50.,0.]);self.stage(other,[0.,50.,0.])
+    np.testing.assert_allclose(s.probabilities,other.probabilities)
+    for kwargs in ({'progress_scale':0.},{'progress_alpha':0.},{'probability_alpha':2.},
+                   {'baseline_probabilities':[.2,.2,.2]},{'max_task_probability':.1}):
+      with self.subTest(kwargs=kwargs),self.assertRaises(ValueError):self.sampler(**kwargs)
+    bad=deepcopy(saved);bad['probabilities']=[.8,.1,.1]
+    with self.assertRaises(ValueError):other.load_state_dict(bad)
+
 
 class TerrainIntegrationTests(unittest.TestCase):
   def make_term(self, *, status_path=None, mode='lp_acrl', cfg=None):
@@ -144,6 +197,49 @@ class TerrainIntegrationTests(unittest.TestCase):
       self.assertEqual(len(matches),1)
       self.assertEqual(len(matches[0]['rows']),10)
     self.assertEqual(len([t for t in tasks if t['terrain']=='pyramid_stairs']),10)
+
+  def test_baseline_keeps_requested_type_proportions_including_flat(self):
+    cfg=lgdog1_him_standard_env_cfg();g=cfg.scene.terrain.terrain_generator
+    tasks=build_terrain_tasks(g);p=terrain_baseline_probabilities(tasks,g)
+    for name,sub in g.sub_terrains.items():
+      self.assertAlmostEqual(sum(v for t,v in zip(tasks,p) if t['terrain']==name),sub.proportion)
+    for mode in ['lp_acrl','uniform']:
+      _,term=self.make_term(mode=mode)
+      np.testing.assert_allclose(term.sampler.probabilities,p)
+
+  def test_start_window_waits_for_late_survivors_before_updating(self):
+    env,term=self.make_term();term(env,torch.arange(4))
+    term.env_task_ids[:]=0
+    # Short failure completes within the collection window.
+    env.common_step_counter=4500;env.episode_length_buf[:]=100
+    env.reward_manager._episode_sums['tracking'][:]=1.
+    term(env,torch.tensor([0]))
+    # At the cutoff a late survivor completes. Both belong to the old window;
+    # a newly launched episode belongs to the drain and is excluded from LP.
+    env.common_step_counter=5000;env.reward_manager._episode_sums['tracking'][:]=100.
+    term(env,torch.tensor([1]))
+    self.assertEqual(term.sampler.updates,0)
+    self.assertEqual(term.env_window_ids[1],-1)
+    env.common_step_counter=5500;env.reward_manager._episode_sums['tracking'][:]=999.
+    term(env,torch.tensor([1]))
+    self.assertEqual(term.sampler.window_counts[0],2)
+    self.assertEqual(term.sampler.window_returns[0],101.)
+    self.assertEqual(term.sampler.counts.sum(),3)
+    env.common_step_counter=6000
+    term(env,torch.tensor([1]))
+    self.assertEqual(term.sampler.updates,1)
+    self.assertEqual(term.sampler.mean_returns[0],50.5)
+    self.assertEqual(term.env_window_ids[1],1)
+
+  def test_resume_discards_unfinished_cohort_but_keeps_completed_history(self):
+    env,term=self.make_term();term(env,torch.arange(4))
+    term.sampler.observe(np.array([0,0]),np.array([3.,4.]));term.sampler.update()
+    term.sampler.observe(np.array([0]),np.array([99.]))
+    other,restored=self.make_term();restored.load_state_dict(term.state_dict())
+    self.assertEqual(restored.sampler.window_counts.sum(),0)
+    self.assertEqual(restored.sampler.counts[0],3)
+    self.assertEqual(restored.sampler.mean_returns[0],3.5)
+    self.assertTrue((restored.env_window_ids==-1).all())
 
   def test_task_columns_match_actual_installed_mjlab_generator(self):
     from mjlab.terrains.terrain_generator import TerrainGenerator

@@ -88,7 +88,6 @@ if [[ "${SKIP_SYSTEM}" -eq 0 ]]; then
     build-essential cmake git pkg-config
     python3-venv python3-dev
     libegl1 libgl1 libglib2.0-0 libx11-6 libxext6 libxrender1
-    libyaml-cpp-dev libboost-all-dev libeigen3-dev libspdlog-dev libfmt-dev
   )
   APT_RUNNER=()
   if [[ "${EUID}" -ne 0 ]]; then
@@ -130,6 +129,11 @@ if [[ ! -x "${ENV_DIR}/bin/python" ]]; then
 fi
 VENV_PYTHON="${ENV_DIR}/bin/python"
 [[ -x "${VENV_PYTHON}" ]] || die "virtual environment creation failed: ${VENV_PYTHON}"
+"${VENV_PYTHON}" - <<'PY'
+import sys
+if not (3, 10) <= sys.version_info[:2] < (3, 14):
+    raise SystemExit("Existing venv needs Python 3.10-3.13; choose a new --env-dir instead of replacing it")
+PY
 
 log "upgrading packaging tools"
 "${VENV_PYTHON}" -m pip install --upgrade pip setuptools wheel

@@ -12,7 +12,7 @@ import numpy as np
 import torch
 from mjlab.managers.manager_base import ManagerTermBase
 
-from src.curriculum.lp import LearningProgressSampler, build_terrain_tasks
+from src.curriculum.lp import LearningProgressSampler, build_terrain_tasks, terrain_baseline_probabilities
 
 
 def _canonical(value):
@@ -52,10 +52,16 @@ class LPTerrainCurriculum(ManagerTermBase):
       raise ValueError("LP terrain sampling cannot share control with manual terrain/speed curricula")
     self.tasks = build_terrain_tasks(generator)
     self.mode = params.get("mode", "lp_acrl")
+    baseline = terrain_baseline_probabilities(self.tasks, generator)
     self.sampler_options = {
       "mode": self.mode, "temperature": float(params.get("temperature", 2.0)),
-      "uniform_mix": float(params.get("uniform_mix", 0.1)),
+      "uniform_mix": float(params.get("uniform_mix", 0.5)),
       "min_episodes": params.get("min_episodes", 32), "seed": int(env.cfg.seed or 0),
+      "baseline_probabilities": baseline,
+      "progress_scale": float(env.max_episode_length_s),
+      "progress_alpha": float(params.get("progress_alpha", 0.25)),
+      "probability_alpha": float(params.get("probability_alpha", 0.2)),
+      "max_task_probability": max(float(params.get("max_task_probability", 0.25)), max(baseline)),
     }
     self.sampler = LearningProgressSampler(len(self.tasks), **self.sampler_options)
     interval = float(params.get("update_interval_s", 100.0))
@@ -64,6 +70,12 @@ class LPTerrainCurriculum(ManagerTermBase):
     self.check_interval_steps = max(1, math.ceil(interval / env.step_dt))
     self.last_check_step = int(env.common_step_counter)
     self.env_task_ids = torch.full((self.num_envs,), -1, dtype=torch.long, device=self.device)
+    self.env_window_ids = torch.full_like(self.env_task_ids, -1)
+    self.window_id = 0
+    # Finalize only after every episode STARTED in this collection window has
+    # had a full horizon to end. Otherwise short failures dominate one update
+    # and late survivors dominate the following one when probabilities switch.
+    self.window_drain_steps = math.ceil(env.max_episode_length_s / env.step_dt)
     self.failed_counts = np.zeros(len(self.tasks), dtype=np.int64)
     self.progress_sums = np.zeros(len(self.tasks), dtype=np.float64)
     self.distance_sums = np.zeros(len(self.tasks), dtype=np.float64)
@@ -71,7 +83,7 @@ class LPTerrainCurriculum(ManagerTermBase):
     self.last_progress = 0.0
     self.skipped_partial_episodes = 0
     self.status_path = Path(params["status_path"]) if params.get("status_path") else None
-    signature = {"tasks": self.tasks, "generator": generator,
+    signature = {"sampling_version": 2, "tasks": self.tasks, "generator": generator,
                  "rewards": env.cfg.rewards, "command": env.cfg.commands["twist"],
                  "step_dt": env.step_dt, "episode_s": env.max_episode_length_s,
                  "interval_steps": self.check_interval_steps,
@@ -115,20 +127,24 @@ class LPTerrainCurriculum(ManagerTermBase):
       if (not np.isfinite(progress).all() or not np.isfinite(distance).all()
           or (progress < 0).any() or (distance < 0).any()):
         raise ValueError("LP terrain sampling received invalid progress/distance metrics")
-      self.sampler.observe(old_tasks, returns.detach().cpu().numpy())
+      included = (self.env_window_ids[completed] == self.window_id).detach().cpu().numpy()
+      self.sampler.observe(old_tasks, returns.detach().cpu().numpy(), include_in_window=included)
       np.add.at(self.failed_counts, old_tasks, failed.astype(np.int64))
       np.add.at(self.progress_sums, old_tasks, progress)
       np.add.at(self.distance_sums, old_tasks, distance)
       self.last_failure = float(failed.mean())
       self.last_progress = float(progress.sum() / max(float(distance.sum()), 1e-6))
-    if env.common_step_counter - self.last_check_step >= self.check_interval_steps:
+    if env.common_step_counter - self.last_check_step >= self.check_interval_steps + self.window_drain_steps:
       self.sampler.update()
       self.last_check_step = int(env.common_step_counter)
+      self.window_id += 1
       self.write_status()
     task_ids = self.sampler.sample(len(env_ids))
     rows = np.asarray([self.sampler.rng.choice(self.tasks[i]["rows"]) for i in task_ids])
     cols = np.asarray([self.sampler.rng.choice(self.tasks[i]["columns"]) for i in task_ids])
     self.env_task_ids[env_ids] = torch.as_tensor(task_ids, device=self.device)
+    collecting = env.common_step_counter - self.last_check_step < self.check_interval_steps
+    self.env_window_ids[env_ids] = self.window_id if collecting else -1
     self.terrain.terrain_levels[env_ids] = torch.as_tensor(rows, device=self.device)
     self.terrain.terrain_types[env_ids] = torch.as_tensor(cols, device=self.device)
     self.terrain.env_origins[env_ids] = self.terrain.terrain_origins[
@@ -144,16 +160,18 @@ class LPTerrainCurriculum(ManagerTermBase):
             "ready_tasks": int(self.sampler.known.sum()),
             "skipped_partial_episodes": self.skipped_partial_episodes,
             "sampling_entropy": float(-(p * np.log(p.clip(1e-300))).sum()),
+            "max_task_probability": float(p.max()),
+            "collecting_window": float(self._env.common_step_counter - self.last_check_step < self.check_interval_steps),
             "reset_batch_failure_fraction": self.last_failure, "tracking_ratio": self.last_progress}
 
   def state_dict(self):
-    return {"version": 1, "signature": self.signature,
+    return {"version": 2, "signature": self.signature,
             "sampler": self.sampler.state_dict(), "last_check_step": self.last_check_step,
             "failed_counts": self.failed_counts.tolist(), "progress_sums": self.progress_sums.tolist(),
             "distance_sums": self.distance_sums.tolist()}
 
   def load_state_dict(self, state):
-    if state.get("version") != 1 or state.get("signature") != self.signature:
+    if state.get("version") != 2 or state.get("signature") != self.signature:
       warnings.warn("LP task/reward/command configuration changed; starting fresh sampler statistics")
       self.sampler = LearningProgressSampler(len(self.tasks), **self.sampler_options)
       self.failed_counts.fill(0)
@@ -161,6 +179,8 @@ class LPTerrainCurriculum(ManagerTermBase):
       self.distance_sums.fill(0)
       self.last_check_step = int(self._env.common_step_counter)
       self.env_task_ids.fill_(-1)
+      self.env_window_ids.fill_(-1)
+      self.window_id = 0
       self.write_status()
       return False
     restored = LearningProgressSampler(len(self.tasks), **self.sampler_options)
@@ -184,9 +204,14 @@ class LPTerrainCurriculum(ManagerTermBase):
     self.sampler = restored
     for name, value in diagnostics.items():
       getattr(self, name)[:] = value
-    self.last_check_step = min(step, int(self._env.common_step_counter))
+    self.last_check_step = int(self._env.common_step_counter)
     # Physics episodes are not restored by OnPolicyRunner. Reassign only on reset.
     self.env_task_ids.fill_(-1)
+    self.env_window_ids.fill_(-1)
+    self.window_id = 0
+    # No physics episodes survive a resume, so discard the unfinished cohort.
+    self.sampler.window_counts.fill(0)
+    self.sampler.window_returns.fill(0.)
     self.last_failure = self.last_progress = 0.0
     self.write_status()
     return True
@@ -204,13 +229,19 @@ class LPTerrainCurriculum(ManagerTermBase):
   def _write_status(self):
     self.status_path.parent.mkdir(parents=True, exist_ok=True)
     data = {"version": 1, "mode": self.mode, "signature": self.signature,
+            "sampling_version": 2,
             "updated": datetime.now(timezone.utc).isoformat(),
             "control_step": int(self._env.common_step_counter),
             "updates": self.sampler.updates, "fixed_velocity_ranges": self.fixed_ranges,
+            "sampling_options": self.sampler_options,
+            "window": {"id": self.window_id, "start_step": self.last_check_step,
+                       "collection_steps": self.check_interval_steps, "drain_steps": self.window_drain_steps},
             "tasks": []}
     for i, task in enumerate(self.tasks):
       count = int(self.sampler.counts[i])
       data["tasks"].append({**task, "probability": float(self.sampler.probabilities[i]),
+                            "baseline_probability": float(self.sampler.baseline_probabilities[i]),
+                            "smoothed_progress": float(self.sampler.smoothed_progress[i]),
                             "learning_progress": float(self.sampler.learning_progress[i]),
                             "mean_return": float(self.sampler.mean_returns[i]) if self.sampler.known[i] else None,
                             "samples": count, "pending_samples": int(self.sampler.window_counts[i]),

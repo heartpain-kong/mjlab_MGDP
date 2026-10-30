@@ -73,7 +73,7 @@ python scripts/list_rewards.py LgDog1-Flat
 | `stand_still` | -1.0 | 零指令站立时的姿态代价 |
 | `is_terminated` | -200.0 | 非超时终止代价 |
 
-`foot_clearance.target_height`：Flat 为 0.10 m，Rough/Blind/Gentle 为 0.15 m，TerrainV4/HIM 为 0.10 m。前两类使用世界坐标 z；TerrainV4/HIM 使用足端相对正下方地面的高度，而且仅对摆动脚计入。相同数值不代表相同的奖励定义。TerrainV4/HIM 的腿部接触力奖励还会自动绑定到 `legs_ground_contact`。
+`foot_clearance.target_height`：Flat为0.10m，Rough/Blind/Gentle为0.15m，TerrainV4/温和HIM为0.10m。标准HIM改为**连续摆动净空短缺**：起落脚目标接近0，中段峰值0.06m、容差0.01m，自动同步foot_gait相位；默认仍0，初次开启可对照-0.2。已撤回base_height和落地峰值结算。详见 [抬脚、高度与LP调参](CLEARANCE_HEIGHT_LP_TUNING.md)。
 
 每个控制步的贡献是 `raw_reward × weight × step_dt`，本工程默认 `step_dt=0.02 s`。例如终止项返回 1 时贡献为 `-200 × 0.02 = -4`。连续接触力、二值碰撞与其他框架的奖励返回值可能不同，不能仅按 dt 换算权重。
 

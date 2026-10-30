@@ -38,6 +38,8 @@ ACTION_METRIC_TAGS = {
   "policy_mean_std": "Policy/mean_std",
   "entropy": "Loss/entropy",
   "mean_reward": "Train/mean_reward",
+  "foot_clearance_height": "Metrics/swing_clearance_height_numerator",
+  "foot_clearance_valid": "Metrics/swing_clearance_valid_fraction",
   "velocity_error_xy": "Metrics/twist/error_vel_xy",
   "velocity_error_yaw": "Metrics/twist/error_vel_yaw",
   "velocity_tracking_score": "Episode_Metrics/velocity_tracking_score",

@@ -14,7 +14,7 @@
 - `LgDog1-Rough-Blind-HIM`：在 TerrainV4 训练分布上增加历史观测与 HIM 风格状态估计的实验版本。
 - `LgDog1-Rough-Blind-HIM-Standard`：标准 Rough 地形 + HIM，actor 和 critic 均不读取机身高度扫描。
 
-HIM 版本保留 LgDog 的 47 维单帧观测和 12 维动作。策略接收最近 6 帧、合计 282 维历史输入。actor 不读取地形扫描或训练用速度标签；critic 和估计器的训练标签只用于仿真训练。
+HIM版本保留47维单帧观测和12维动作。2026-10-28起，新训练默认接收最近3帧、合计141维历史；旧6帧模型仍需282维。actor不读取地形扫描或训练用速度标签。迁移和兼容说明见 [HIM_HISTORY_3.md](HIM_HISTORY_3.md)。
 
 本实现借鉴 HIMLoco 的训练思路，适配当前 mjlab / RSL-RL 工程，不是论文结果的复现。估计器使用速度监督和原型对比目标学习历史特征。HIM 任务需要从头训练，不能加载旧的 47 维策略权重。
 
@@ -109,15 +109,15 @@ python scripts/sim2sim.py LgDog1-Rough-Blind-HIM \
   --vx 0.4 --duration 20 --no-keyboard
 ```
 
-HIM ONNX 的输入为 `[1, 282]`，输出为 `[1, 12]`。输入必须是每帧 47 维、按“最旧帧到最新帧”顺序排列的 6 帧历史。模型内部已经包含观测归一化；部署端传入原始观测，不要再次归一化。启动时用第一帧填充历史缓存，之后每个 20 ms 控制周期更新一次。
+新HIM ONNX输入为 `[1,141]`，输出为 `[1,12]`。输入由每帧47维、按“最旧到最新”排列的3帧构成；旧模型继续使用其metadata中记录的6帧/282维。模型内部已有观测归一化，不要重复归一化。启动时重复第一帧填充缓存，每20ms更新一次。
 
-`scripts/sim2sim.py` 会检查 ONNX 中记录的历史长度、帧维度、排列、reset 规则和控制周期，配置不一致时会停止运行。传统 47 维 ONNX 仍可使用单帧输入，不能将它与 282 维 HIM 输入混接。
+`scripts/sim2sim.py`检查ONNX记录的历史长度、帧维度、顺序、reset规则与控制周期。支持141维新HIM、282维旧HIM、47维单帧PPO，各自按模型协议构造缓存。
 
 ## 5. 真机部署前需要做的工作
 
-这份压缩包没有 LgDog 真机通信与控制程序，因此完成训练和 MuJoCo sim2sim 不等于已经完成真机部署。真机程序至少要实现与训练一致的 47 维观测构造、六帧环形缓存、reset 时重复首帧、20 ms 更新周期、关节顺序和动作缩放，再运行新 ONNX。可参考 [`src/policy_history.py`](../src/policy_history.py) 的历史缓存接口及 [`scripts/sim2sim.py`](../scripts/sim2sim.py) 的观测与推理流程。
+工程没有LgDog真机通信控制程序。真机端需要47维观测、按模型metadata决定长度的历史缓存（新模型3帧）、reset重复首帧、20ms更新周期，以及相同关节顺序和动作缩放。参考 [`src/policy_history.py`](../src/policy_history.py) 和 [`scripts/sim2sim.py`](../scripts/sim2sim.py)。CPU验证不代表完成实机部署。
 
-HIM 模型的 282 维输入协议与旧 47 维策略不同。先完成真机程序适配和安全的台架/吊装验证，再安排低速、受控的实机测试；不要仅替换 ONNX 文件。
+新HIM模型的141维输入与旧HIM的282维、单帧PPO的47维不同；更换模型时必须匹配输入协议。
 
 ## 6. 常见问题
 
@@ -125,9 +125,9 @@ HIM 模型的 282 维输入协议与旧 47 维策略不同。先完成真机程�
 
 **CUDA 初始化失败或显存不足**：先在目标 Python 环境检查 PyTorch / CUDA 与驱动是否匹配，并用 `nvidia-smi` 检查剩余显存。把 `--env.scene.num-envs` 降低后再启动。
 
-**旧模型加载失败**：HIM actor 输入维度、编码器和辅助优化器状态都不同于旧策略，HIM 任务需要从头训练。TerrainV4 checkpoint 不能当作 HIM checkpoint 恢复。
+**旧模型加载失败**：旧6帧HIM不能直接resume到新3帧训练，需新开实验；Play会按原checkpoint恢复帧数。TerrainV4 checkpoint也不能作为HIM恢复。
 
-**ONNX 报输入尺寸错误**：确认运行的是 `LgDog1-Rough-Blind-HIM` 的 ONNX，并传入 `[1,282]` 历史观测。旧版单帧模型输入是 `[1,47]`。
+**ONNX输入尺寸错误**：核对模型shape和metadata。新3帧HIM为 `[1,141]`，旧6帧HIM为 `[1,282]`，单帧PPO为 `[1,47]`。
 
 ## 相关文档
 

@@ -42,6 +42,56 @@ def feet_clearance_terrain(
   return clearance_cost(clearance, speed, contact, valid, active, target_height)
 
 
+def swing_clearance_cost(clearance, valid, active, phase, target_height, tolerance, stance_fraction):
+  """Dense one-sided swing clearance cost, with a smooth takeoff/landing ramp."""
+  in_swing = phase >= stance_fraction
+  swing_phase = ((phase - stance_fraction) / (1. - stance_fraction)).clamp(0.,1.)
+  desired = target_height * torch.sin(torch.pi * swing_phase).square()
+  usable = valid & in_swing & active[:,None]
+  # Contact does NOT mask this error: failing to lift during scheduled swing
+  # must not evade the cost. No landing event or horizontal-speed multiplier.
+  shortfall = (desired - clearance - tolerance).clamp_min(0.) / target_height
+  cost = torch.where(usable,shortfall.square().clamp_max(1.),0.).mean(dim=1)
+  return cost,desired,usable
+
+
+class feet_clearance_swing:
+  """Continuous swing shaping, synchronized to the existing gait reward.
+
+  Only caches the fixed phase offsets. No swing/landing history survives a
+  reset, no minimum-airtime exclusion and no event-rate division by dt.
+  """
+
+  def __init__(self, cfg, env):
+    params=cfg.params
+    period=params.get("period",.6)
+    stance=params.get("stance_fraction",.56)
+    target=params.get("target_height",.06)
+    tolerance=params.get("tolerance",.01)
+    offsets=params.get("offset",[0.,.5,.5,0.])
+    if (not all(math.isfinite(x) for x in (period,stance,target,tolerance,*offsets))
+        or period<=0 or not 0<stance<1 or target<=0 or not 0<=tolerance<target
+        or len(offsets)!=len(params["sensor_names"])):
+      raise ValueError("Invalid swing clearance phase/height parameters")
+    self.offsets=torch.tensor(offsets,device=env.device).view(1,-1)
+
+  def __call__(self, env, sensor_names, asset_cfg, target_height=.06, tolerance=.01,
+               period=.6, offset=(0.,.5,.5,0.), stance_fraction=.56,
+               sensor_name="feet_ground_contact",command_name="twist",command_threshold=.1):
+    del asset_cfg,offset,sensor_name
+    clearance,valid=foot_clearance_relative(env,sensor_names)
+    command=env.command_manager.get_command(command_name)
+    active=ops.command_active(command,command_threshold).bool()
+    phase=(env.episode_length_buf.to(clearance.dtype)[:,None]*env.step_dt/period+self.offsets)%1.
+    cost,desired,usable=swing_clearance_cost(clearance,valid,active,phase,target_height,tolerance,stance_fraction)
+    logs=env.extras["log"]
+    logs["Metrics/swing_clearance_height_numerator"]=torch.where(usable,clearance,0.).mean()
+    logs["Metrics/swing_clearance_valid_fraction"]=usable.float().mean()
+    logs["Metrics/swing_clearance_shortfall"]=cost.mean()
+    logs["Metrics/foot_clearance_ray_valid"]=valid.float().mean()
+    return cost
+
+
 def relative_foot_height(env, sensor_names):
   """Critic-only foot height; replace absolute world elevation."""
   return foot_clearance_relative(env, sensor_names)[0]

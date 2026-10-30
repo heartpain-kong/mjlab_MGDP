@@ -48,6 +48,92 @@ class ClearanceTests(unittest.TestCase):
     torch.testing.assert_close(cost, torch.tensor([.1, 0.]))
 
 
+class SwingClearanceTests(unittest.TestCase):
+  def make_env(self,dt=.02):
+    scene={'feet':NS(data=NS(found=torch.ones(2,4,dtype=torch.long)))}
+    for i in range(4):
+      scene[str(i)]=NS(data=NS(pos_w=torch.zeros(2,3),hit_pos_w=torch.zeros(2,1,3),distances=torch.ones(2,1)))
+    command=torch.tensor([[.4,0.,0.],[.4,0.,0.]])
+    env=NS(scene=scene,num_envs=2,device='cpu',step_dt=dt,episode_length_buf=torch.full((2,),23,dtype=torch.long),
+           extras={'log':{}},command_manager=NS(get_command=lambda _:command))
+    params={'sensor_names':tuple(str(i) for i in range(4)),'asset_cfg':None,'sensor_name':'feet'}
+    return env,mdp.feet_clearance_swing(NS(params=params),env),params,command
+
+  def test_required_height_ramps_up_and_down_without_penalizing_stance(self):
+    phase=torch.tensor([[0.,.56,.78,.99999]])
+    cost,desired,usable=mdp.swing_clearance_cost(torch.zeros(1,4),torch.ones(1,4,dtype=torch.bool),
+                        torch.tensor([True]),phase,.06,.01,.56)
+    self.assertFalse(usable[0,0].item())
+    self.assertAlmostEqual(desired[0,2].item(),.06,places=5)
+    self.assertLess(desired[0,1].item(),1e-6)
+    self.assertLess(desired[0,3].item(),1e-6)
+    self.assertGreater(cost.item(),0.)
+
+  def test_staying_on_ground_and_short_contact_chatter_cannot_evade_cost(self):
+    env,term,params,_=self.make_env()
+    grounded=term(env,**params)
+    self.assertTrue((grounded>0).all())
+    env.scene['feet'].data.found.zero_()
+    torch.testing.assert_close(grounded,term(env,**params))
+    env.scene['feet'].data.found[:]=1
+    torch.testing.assert_close(grounded,term(env,**params))
+
+  def test_sufficient_clearance_has_no_extra_incentive_to_lift_higher(self):
+    env,term,params,_=self.make_env()
+    for height in [.06,.12,.30]:
+      for i in range(4):env.scene[str(i)].data.pos_w[:,2]=height
+      torch.testing.assert_close(term(env,**params),torch.zeros(2))
+
+  def test_standing_invalid_rays_and_partial_reset_have_no_stale_swing_state(self):
+    env,term,params,cmd=self.make_env()
+    cmd[0].zero_()
+    self.assertEqual(term(env,**params)[0].item(),0.)
+    for i in range(4):
+      env.scene[str(i)].data.distances[1]=-1
+      env.scene[str(i)].data.hit_pos_w[1]=float('nan')
+    torch.testing.assert_close(term(env,**params),torch.zeros(2))
+    env,term,params,_=self.make_env()
+    env.episode_length_buf[0]=0
+    result=term(env,**params)
+    self.assertEqual(result[0].item(),0.)
+    self.assertGreater(result[1].item(),0.)
+
+  def test_vertical_world_translation_does_not_change_cost(self):
+    env,term,params,_=self.make_env();original=term(env,**params)
+    for i in range(4):
+      env.scene[str(i)].data.pos_w[:,2]+=2.
+      env.scene[str(i)].data.hit_pos_w[:,:,2]+=2.
+    torch.testing.assert_close(original,term(env,**params))
+
+  def test_dense_cost_has_no_landing_impulse_and_integrates_consistently(self):
+    integrals=[]
+    for dt in [.01,.02]:
+      env,term,params,_=self.make_env(dt);total=torch.zeros(2)
+      for step in range(round(.6/dt)):
+        env.episode_length_buf[:]=step
+        cost=term(env,**params)
+        self.assertTrue(((cost>=0)&(cost<=1)).all())
+        total+=cost*dt
+      integrals.append(total)
+    torch.testing.assert_close(integrals[0],integrals[1],atol=1e-3,rtol=1e-3)
+
+  def test_real_reward_manager_scales_dense_cost_once(self):
+    from mjlab.managers.reward_manager import RewardManager,RewardTermCfg
+    env,term,params,_=self.make_env();env.max_episode_length_s=20.
+    expected=term(env,**params)*(-.2)*env.step_dt
+    manager=RewardManager({'foot_clearance':RewardTermCfg(func=mdp.feet_clearance_swing,weight=-.2,params=params)},env)
+    torch.testing.assert_close(manager.compute(env.step_dt),expected)
+    manager.reset(torch.tensor([0]));env.episode_length_buf[0]=0
+    self.assertEqual(manager.compute(env.step_dt)[0].item(),0.)
+
+  def test_invalid_phase_or_height_parameters_fail_at_construction(self):
+    env,_,params,_=self.make_env()
+    for extra in ({'period':0.},{'stance_fraction':1.},{'target_height':0.},
+                  {'tolerance':.06},{'offset':[0.,.5]}):
+      with self.subTest(extra=extra),self.assertRaises(ValueError):
+        mdp.feet_clearance_swing(NS(params={**params,**extra}),env)
+
+
 class CurriculumTests(unittest.TestCase):
   def test_success_failure_hysteresis_and_zero_command(self):
     expected = torch.tensor([5., 5., 5., 0., 5., 5.])

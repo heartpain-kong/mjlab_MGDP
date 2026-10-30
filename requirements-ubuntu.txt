@@ -13,3 +13,7 @@ scipy>=1.15.0,<2
 # Used by the ONNX export/parity checker and sim2sim tooling.
 onnx>=1.17.0
 onnxruntime>=1.20.0
+tensorboard>=2.19,<3
+psutil>=5.9,<8
+filelock>=3.12
+PyYAML>=6,<7

@@ -94,7 +94,7 @@ REWARD_PROFILES = {
         "relative_std": 0.5,
         "min_command_speed": 0.2,
       },
-      "foot_clearance": {"target_height": 0.10},
+      "foot_clearance": {"target_height": 0.06, "tolerance": 0.01},
       "leg_contact_force": {"sensor_name": "legs_ground_contact"},
     },
   },
@@ -223,4 +223,12 @@ def make_lgdog_rewards(profile, *, base_body, foot_sites, terrain_ray_names=()):
       raise ValueError(f"{profile} clearance requires one terrain ray for each foot")
     rewards["foot_clearance"].func = blind_mdp.feet_clearance_terrain
     rewards["foot_clearance"].params.setdefault("sensor_names", tuple(terrain_ray_names))
+    if profile == "him_standard":
+      rewards["foot_clearance"].func = blind_mdp.feet_clearance_swing
+      params=rewards["foot_clearance"].params
+      obsolete={"max_height","min_air_time"}&params.keys()
+      if obsolete:
+        raise ValueError(f"foot_clearance 已改为连续摆动净空；请从面板参数删除旧字段 {sorted(obsolete)}，只保留 target_height/tolerance")
+      gait=rewards["foot_gait"].params
+      params.update(period=gait["period"],offset=deepcopy(gait["offset"]),stance_fraction=gait["threshold"])
   return rewards

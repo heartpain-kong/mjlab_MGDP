@@ -19,6 +19,7 @@ from mjlab.utils.wrappers import VideoRecorder
 from mjlab.viewer import NativeMujocoViewer, ViserPlayViewer
 
 from src.tasks.velocity.rl.action_monitor import ActionMonitorVecEnvWrapper
+from src.him_contract import apply_him_play_contract
 
 
 @dataclass(frozen=True)
@@ -154,6 +155,14 @@ def run_play(task_id: str, cfg: PlayConfig):
       )
       print(msg)
     log_dir = resume_path.parent
+
+  if TRAINED_MODE and hasattr(agent_cfg.actor, "history_length"):
+    # Read only the recorded protocol before allocating physics/rollout buffers.
+    # New training defaults to H=3, while old H=6 policies stay playable as H=6.
+    saved = torch.load(resume_path, map_location="cpu", weights_only=True)
+    history_length = apply_him_play_contract(env_cfg, agent_cfg, saved.get("him_contract"))
+    del saved
+    print(f"[INFO]: HIM checkpoint history: {history_length} x {agent_cfg.actor.frame_dim}")
 
   if cfg.num_envs is not None:
     env_cfg.scene.num_envs = cfg.num_envs

@@ -7,14 +7,15 @@ from torch import nn
 from rsl_rl.algorithms import PPO
 from rsl_rl.models import MLPModel
 from rsl_rl.modules import EmpiricalNormalization
+from src.him_contract import HIM_HISTORY_LENGTH, HIM_FRAME_DIM
 
 from .him_estimator import HIMEstimator
 from .runner import PPOHIMRunner
 
 
 class HIMActor(MLPModel):
-  def __init__(self, obs, obs_groups, obs_set, output_dim, history_length=6,
-               frame_dim=47, latent_dim=16, **kwargs):
+  def __init__(self, obs, obs_groups, obs_set, output_dim, history_length=HIM_HISTORY_LENGTH,
+               frame_dim=HIM_FRAME_DIM, latent_dim=16, **kwargs):
     self.history_length, self.frame_dim, self.latent_dim = history_length, frame_dim, latent_dim
     super().__init__(obs, obs_groups, obs_set, output_dim, **kwargs)
     # One shared normalizer for all timestamps, updated from current frames only.
@@ -51,7 +52,7 @@ class HIMActor(MLPModel):
 
 
 class HIMExport(nn.Module):
-  """Stateless export: deployment supplies six raw frames, oldest first."""
+  """Stateless export: deployment supplies H raw frames, oldest first."""
   is_recurrent = False
 
   def __init__(self, actor):
@@ -192,7 +193,11 @@ class HIMPPO(PPO):
     expected = {"frame_dim": self.actor.frame_dim,
                 "history_length": self.actor.history_length, "order": "oldest_to_newest"}
     if loaded_dict.get("him_contract") != expected:
-      raise ValueError("Not a compatible LgDog HIM checkpoint; use fresh training")
+      raise ValueError(
+        f"Incompatible LgDog HIM history: checkpoint={loaded_dict.get('him_contract')}, "
+        f"configured={expected}. Changing history length requires fresh training; "
+        "play can read the original history from the checkpoint."
+      )
     iteration = super().load(loaded_dict, load_cfg, strict)
     if load_cfg is None or load_cfg.get("optimizer"):
       self.estimator_optimizer.load_state_dict(loaded_dict["him_estimator_optimizer"])

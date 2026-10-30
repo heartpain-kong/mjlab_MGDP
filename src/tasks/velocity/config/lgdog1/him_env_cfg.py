@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from mjlab.managers.observation_manager import ObservationGroupCfg, ObservationTermCfg
 from mjlab.rl import RslRlModelCfg, RslRlPpoAlgorithmCfg
+from src.him_contract import HIM_HISTORY_LENGTH, HIM_FRAME_DIM
 
 from .blind_terrain_env_cfg import lgdog1_blind_terrain_env_cfg
 from .env_cfgs import BASE_BODY, FOOT_SITES
@@ -61,9 +62,9 @@ def _add_him_observations(cfg):
     terms={"velocity": ObservationTermCfg(func=body_linear_velocity)},
     concatenate_terms=True, enable_corruption=False, history_length=1,
   )
-  cfg.observations["actor"].history_length = 6
+  cfg.observations["actor"].history_length = HIM_HISTORY_LENGTH
   # Do not flatten each individual term: that produces term-major history.
-  # Concatenate [N,6,term_dim] on the last axis -> [N,6,47].
+  # Concatenate [N,H,term_dim] on the last axis -> [N,H,47].
   cfg.observations["actor"].flatten_history_dim = False
   cfg.observations["actor"].concatenate_dim = -1
   return cfg
@@ -71,8 +72,8 @@ def _add_him_observations(cfg):
 
 @dataclass
 class HIMModelCfg(RslRlModelCfg):
-  history_length: int = 6
-  frame_dim: int = 47
+  history_length: int = HIM_HISTORY_LENGTH
+  frame_dim: int = HIM_FRAME_DIM
   latent_dim: int = 16
 
 

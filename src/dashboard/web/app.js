@@ -53,9 +53,12 @@ function collect() {
     terrain_difficulty_max:$("terrain-difficulty-max")?.disabled?"":$("terrain-difficulty-max")?.value || "",
     terrain_curriculum:$("terrain-curriculum")?.value||"manual",
     lp_temperature:$("lp-temperature")?.value||"2",
-    lp_uniform_mix:$("lp-uniform-mix")?.value??"0.1",
+    lp_uniform_mix:$("lp-uniform-mix")?.value??"0.5",
     lp_min_episodes:$("lp-min-episodes")?.value||"32",
     lp_update_interval_s:$("lp-update-interval")?.value||"100",
+    lp_progress_alpha:$("lp-progress-alpha")?.value||"0.25",
+    lp_probability_alpha:$("lp-probability-alpha")?.value||"0.2",
+    lp_max_task_probability:$("lp-max-task-probability")?.value||"0.25",
     velocity_min_abs:$("velocity-min-abs")?.value || "",
     velocity_max_abs:$("velocity-max-abs")?.value || "",
     resume:$("resume").checked, checkpoint:model, onnx:model, viewer:$("viewer").value,
@@ -158,6 +161,8 @@ function renderActionMetrics(data){
 }
 function renderTrainingMetrics(data){
   renderTerrainCurriculum(data?.terrain_curriculum);
+  const clearance=metricValue(data,"foot_clearance_height"),valid=metricValue(data,"foot_clearance_valid");
+  $("metric-swing-height").textContent=clearance==null||!(valid>0)?"—":`${(clearance/valid).toFixed(3)} m`;
   const xy=metricValue(data,"velocity_error_xy"), yaw=metricValue(data,"velocity_error_yaw");
   const activeScore=metricValue(data,"velocity_tracking_score");
   const activeCommand=metricValue(data,"velocity_tracking_active");
@@ -229,7 +234,8 @@ function renderTerrainCurriculum(data){
   const card=$("lp-status-card");if(!card)return;
   card.classList.toggle("hidden",!data?.tasks?.length);
   if(!data?.tasks?.length)return;
-  $("lp-status-summary").textContent=`${data.mode==="lp_acrl"?"LP-ACRL 地形采样":"均匀任务采样对照"} · ${data.tasks.length} 个任务 · 更新 ${data.updates??0} 次 · 控制步 ${data.control_step??0}`;
+  const largest=Math.max(...data.tasks.map(t=>Number(t.probability)||0));
+  $("lp-status-summary").textContent=`${data.mode==="lp_acrl"?"LP 地形采样":"固定基础比例对照"} · ${data.sampling_version===2?"稳定版 v2":"旧版"} · ${data.tasks.length} 个任务 · 最大概率 ${(largest*100).toFixed(1)}% · 更新 ${data.updates??0} 次 · 控制步 ${data.control_step??0}`;
   const list=$("lp-task-grid");list.replaceChildren();
   const maximum=Math.max(...data.tasks.map(t=>Number(t.probability)),1e-9);
   for(const task of data.tasks){

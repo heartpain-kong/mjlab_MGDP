@@ -41,9 +41,12 @@ class TrainConfig:
   terrain_difficulty_max: float | None = None
   terrain_curriculum: Literal["manual", "uniform", "lp_acrl"] = "manual"
   lp_temperature: float = 2.0
-  lp_uniform_mix: float = 0.1
+  lp_uniform_mix: float = 0.5
   lp_min_episodes: int = 32
   lp_update_interval_s: float = 100.0
+  lp_progress_alpha: float = 0.25
+  lp_probability_alpha: float = 0.2
+  lp_max_task_probability: float = 0.25
   velocity_min_abs: float | None = None
   velocity_max_abs: float | None = None
   resume_checkpoint: str | None = None
@@ -100,6 +103,8 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
     cfg.env, cfg.terrain_curriculum, temperature=cfg.lp_temperature,
     uniform_mix=cfg.lp_uniform_mix, min_episodes=cfg.lp_min_episodes,
     update_interval_s=cfg.lp_update_interval_s,
+    progress_alpha=cfg.lp_progress_alpha, probability_alpha=cfg.lp_probability_alpha,
+    max_task_probability=cfg.lp_max_task_probability,
     status_path=log_dir / "curriculum" / "terrain_sampling.json",
   )
 

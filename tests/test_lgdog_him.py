@@ -1,7 +1,11 @@
 """Behavioral tests for HIM identification, history and checkpoint contracts."""
 
 import copy
+from pathlib import Path
+import tempfile
+from types import SimpleNamespace as NS
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 import torch
@@ -10,21 +14,22 @@ from rsl_rl.models import MLPModel
 from rsl_rl.storage import RolloutStorage
 
 from src.policy_history import PolicyHistory, validate_policy_history
+from src.him_contract import HIM_HISTORY_LENGTH
 from src.tasks.velocity.rl.him import HIMActor, HIMPPO
 from src.tasks.velocity.rl.him_estimator import balanced_assignments
 from mjlab.utils.buffers import CircularBuffer
 
 
-def make_obs(batch=8):
-  return TensorDict({"actor": torch.randn(batch, 6, 47), "critic": torch.randn(batch, 261),
+def make_obs(batch=8, history_length=HIM_HISTORY_LENGTH):
+  return TensorDict({"actor": torch.randn(batch, history_length, 47), "critic": torch.randn(batch, 261),
                     "him_target": torch.randn(batch, 47), "him_velocity": torch.randn(batch, 3)},
                    batch_size=[batch])
 
 
-def make_algorithm():
-  obs = make_obs()
+def make_algorithm(history_length=HIM_HISTORY_LENGTH):
+  obs = make_obs(history_length=history_length)
   groups = {"actor": ["actor"], "critic": ["critic"]}
-  actor = HIMActor(obs, groups, "actor", 12, hidden_dims=(32, 16), obs_normalization=True,
+  actor = HIMActor(obs, groups, "actor", 12, history_length=history_length, hidden_dims=(32, 16), obs_normalization=True,
                    distribution_cfg={"class_name": "GaussianDistribution", "init_std": 1.0,
                                      "std_type": "scalar"})
   critic = MLPModel(obs, groups, "critic", 1, hidden_dims=(32, 16))
@@ -37,7 +42,7 @@ def rollout(alg, obs, all_done=False):
   with torch.inference_mode():
     for _ in range(2):
       alg.act(obs)
-      successor = make_obs()
+      successor = make_obs(history_length=alg.actor.history_length)
       dones = torch.ones(8, dtype=torch.long) if all_done else torch.tensor([1, 0, 0, 0, 0, 0, 0, 0])
       alg.process_env_step(successor, torch.ones(8), dones, {})
       obs = successor
@@ -45,9 +50,34 @@ def rollout(alg, obs, all_done=False):
 
 
 class HistoryTests(unittest.TestCase):
+  def test_play_uses_saved_history_without_changing_training_defaults(self):
+    from mjlab.tasks.registry import load_env_cfg, load_rl_cfg
+    from src.him_contract import apply_him_play_contract
+    for length in (3,6):
+      env=load_env_cfg('LgDog1-Rough-Blind-HIM-Standard',play=True)
+      agent=load_rl_cfg('LgDog1-Rough-Blind-HIM-Standard')
+      contract={'frame_dim':47,'history_length':length,'order':'oldest_to_newest'}
+      self.assertEqual(apply_him_play_contract(env,agent,contract),length)
+      self.assertEqual(env.observations['actor'].history_length,length)
+      self.assertEqual(agent.actor.history_length,length)
+    self.assertEqual(load_rl_cfg('LgDog1-Rough-Blind-HIM-Standard').actor.history_length,3)
+    for contract in (None,{'frame_dim':47,'history_length':0,'order':'oldest_to_newest'}):
+      with self.assertRaises(ValueError):apply_him_play_contract(env,agent,contract)
+
+  def test_real_play_entry_reads_legacy_contract_before_allocating_physics(self):
+    from scripts import play
+    class StopBeforePhysics(Exception):pass
+    with tempfile.TemporaryDirectory() as td:
+      path=Path(td)/'model_100.pt'
+      torch.save({'him_contract':{'frame_dim':47,'history_length':6,'order':'oldest_to_newest'}},path)
+      with patch.object(play,'configure_torch_backends'),patch.object(play,'ManagerBasedRlEnv',side_effect=StopBeforePhysics) as create:
+        with self.assertRaises(StopBeforePhysics):
+          play.run_play('LgDog1-Rough-Blind-HIM-Standard',play.PlayConfig(checkpoint_file=str(path),device='cpu'))
+      self.assertEqual(create.call_args.kwargs['cfg'].observations['actor'].history_length,6)
+
   def test_numpy_buffer_matches_mjlab_and_backfill(self):
     deploy = PolicyHistory()
-    training = CircularBuffer(6, 1, "cpu")
+    training = CircularBuffer(HIM_HISTORY_LENGTH, 1, "cpu")
     for step in range(10):
       frame = np.arange(47, dtype=np.float32) + step * 100
       training.append(torch.from_numpy(frame[None]))
@@ -113,6 +143,36 @@ class HIMTests(unittest.TestCase):
     alg, obs = make_algorithm()
     alg.actor.update_normalization(obs)
     torch.testing.assert_close(alg.actor(obs), alg.actor.as_onnx()(obs["actor"].flatten(1)))
+
+  def test_real_onnx_and_torchscript_export_for_three_and_legacy_six_frames(self):
+    import onnx
+    import onnxruntime as ort
+    from src.tasks.velocity.rl.runner import PPOHIMRunner
+    for length in (3,6):
+      with self.subTest(history=length),tempfile.TemporaryDirectory() as td:
+        alg,obs=make_algorithm(length);alg.actor.update_normalization(obs)
+        runner=PPOHIMRunner.__new__(PPOHIMRunner)
+        runner.alg=alg;runner.env=NS(unwrapped=NS(step_dt=.02))
+        with patch('src.tasks.velocity.rl.runner.get_base_metadata',return_value={}):
+          runner.export_policy_to_onnx(td)
+        runner.export_policy_to_jit(td,'policy_jit.pt')
+        onnx.checker.check_model(str(Path(td)/'policy.onnx'))
+        opts=ort.SessionOptions();opts.intra_op_num_threads=1;opts.inter_op_num_threads=1
+        session=ort.InferenceSession(str(Path(td)/'policy.onnx'),sess_options=opts,providers=['CPUExecutionProvider'])
+        self.assertEqual(session.get_inputs()[0].shape,[1,length*47])
+        validate_policy_history(session.get_inputs()[0].shape,session.get_modelmeta().custom_metadata_map,length)
+        raw=obs['actor'][:1].flatten(1)
+        with torch.no_grad():expected=alg.actor(TensorDict({'actor':obs['actor'][:1]},batch_size=[1]))
+        np.testing.assert_allclose(session.run(None,{session.get_inputs()[0].name:raw.numpy()})[0],expected.numpy(),rtol=1e-4,atol=2e-5)
+        scripted=torch.jit.load(str(Path(td)/'policy_jit.pt'))
+        torch.testing.assert_close(scripted(raw),expected)
+
+  def test_six_frame_checkpoint_cannot_resume_three_frame_training(self):
+    old,_=make_algorithm(6);new,_=make_algorithm(3)
+    before=new.actor.estimator.encoder[0].weight.detach().clone()
+    with self.assertRaisesRegex(ValueError,'Changing history length requires fresh training'):
+      new.load(old.save())
+    torch.testing.assert_close(new.actor.estimator.encoder[0].weight,before)
 
   def test_terminal_transitions_masked_and_auxiliary_updates(self):
     alg, obs = make_algorithm()

@@ -38,7 +38,7 @@ class PPOHIMRunner(MjlabOnPolicyRunner):
   """One LgDog PPO entry point with optional HIM history identification.
 
   Plain PPO actors keep the normal single-frame contract.  HIM actors expose
-  ``estimator`` and keep their six-frame export contract.  The runner is shared
+  ``estimator`` and export their configured history length.  The runner is shared
   so checkpoint/export handling stays in one place while incompatible weights
   remain rejected by the model and algorithm contracts.
   """

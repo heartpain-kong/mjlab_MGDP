@@ -53,6 +53,25 @@ class RewardProfileTests(unittest.TestCase):
       with self.assertRaisesRegex(ValueError, "foot_clearance.*非负代价"):
         lgdog1_him_standard_env_cfg()
 
+  def test_standard_clearance_phase_tracks_edited_gait_parameters(self):
+    from src.tasks.velocity.config.lgdog1.him_env_cfg import lgdog1_him_standard_env_cfg
+    with patch.dict(REWARD_PROFILES['him_standard']['params'],{
+      'foot_gait':{'period':.8,'offset':[.25,.75,.75,.25],'threshold':.6}}):
+      cfg=lgdog1_him_standard_env_cfg()
+      clearance=cfg.rewards['foot_clearance'].params
+      self.assertEqual(clearance['period'],.8)
+      self.assertEqual(clearance['offset'],[.25,.75,.75,.25])
+      self.assertEqual(clearance['stance_fraction'],.6)
+      clearance['offset'][0]=0.
+      self.assertEqual(cfg.rewards['foot_gait'].params['offset'][0],.25)
+
+  def test_obsolete_peak_reward_arguments_fail_with_migration_hint(self):
+    from src.tasks.velocity.config.lgdog1.him_env_cfg import lgdog1_him_standard_env_cfg
+    with patch.dict(DASHBOARD_REWARD_OVERRIDES['him_standard']['params'],{
+      'foot_clearance':{'target_height':.06,'max_height':.25,'min_air_time':.06}}):
+      with self.assertRaisesRegex(ValueError,'删除旧字段'):
+        lgdog1_him_standard_env_cfg()
+
 
 if __name__ == "__main__":
   unittest.main()

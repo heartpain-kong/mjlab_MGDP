@@ -32,10 +32,19 @@ def main():
   web = sub.add_parser("web", help="启动 mjlab 总览：环境/GPU/进程/轮次一页看完，并带起工作台和曲线终端")
   web.add_argument("--port", type=int, default=8770)
   web.add_argument("--host", default="127.0.0.1", help="默认只绑 127.0.0.1；0.0.0.0 允许局域网访问")
+  web.add_argument("--dashboard-port", type=int, default=8765)
+  web.add_argument("--kline-port", type=int, default=8766)
+  web.add_argument("--tensorboard-port", type=int, default=6006)
   web.add_argument("--logdir", action="append", default=None, help="额外的 event 目录，可给多次")
   web.add_argument("--no-autostart", action="store_true", help="不自动带起工作台和曲线终端")
   web.add_argument("--no-browser", action="store_true")
   sub.add_parser("tasks", help="查看短任务名，无需加载训练依赖")
+  server = sub.add_parser("server", help="服务器后台工作台/曲线/总览启停；不停止训练")
+  server.add_argument("action", choices=("start", "stop", "status"), default="status", nargs="?")
+  server.add_argument("--ui-port", type=int, default=8765)
+  server.add_argument("--kline-port", type=int, default=8766)
+  server.add_argument("--portal-port", type=int, default=8770)
+  server.add_argument("--tb-port", type=int, default=6006)
   models = sub.add_parser("models", help="列出任务的模型")
   models.add_argument("task", nargs="?", default="standard")
   for mode in ("train", "play", "sim", "rewards", "curves"):
@@ -48,9 +57,13 @@ def main():
     if mode == "train":
       child.add_argument("--terrain-curriculum", choices=("manual", "uniform", "lp_acrl"), default="manual")
       child.add_argument("--lp-temperature", type=float, default=2.0)
-      child.add_argument("--lp-uniform-mix", type=float, default=0.1)
+      child.add_argument("--lp-uniform-mix", type=float, default=0.5,
+                         help="基础地形比例混合量；保留参数名以兼容旧命令")
       child.add_argument("--lp-min-episodes", type=int, default=32)
       child.add_argument("--lp-update-interval-s", type=float, default=100.0)
+      child.add_argument("--lp-progress-alpha", type=float, default=0.25)
+      child.add_argument("--lp-probability-alpha", type=float, default=0.2)
+      child.add_argument("--lp-max-task-probability", type=float, default=0.25)
       child.add_argument("--iterations", type=int, default=16000)
       child.add_argument("--seed", type=int, default=42)
       child.add_argument("--run-name", default="")
@@ -94,6 +107,10 @@ def main():
   if not Path(python).is_file():
     parser.error(f"Python 不存在：{python}")
   try:
+    if args.mode == "server":
+      from src.server_deploy import manage
+      return manage(ROOT,python,args.action,ui_port=args.ui_port,kline_port=args.kline_port,
+                    portal_port=args.portal_port,tb_port=args.tb_port)
     if args.mode in (None, "ui"):
       from src.dashboard.server import serve
       serve(ROOT, python, port=getattr(args, "port", 8765), open_browser=not getattr(args, "no_browser", False))
@@ -105,7 +122,8 @@ def main():
     if args.mode == "web":
       from src.portal.server import serve as serve_portal
       return serve_portal(ROOT, python, args.logdir, port=args.port, host=args.host,
-                          autostart=not args.no_autostart, open_browser=not args.no_browser) or 0
+                          autostart=not args.no_autostart, open_browser=not args.no_browser,
+                          ports={'dashboard':args.dashboard_port,'kline':args.kline_port,'tensorboard':args.tensorboard_port}) or 0
     if args.mode == "tasks":
       for alias, task in TASKS.items():
         print(f"{alias:10} {task['id']}\n           {task['description']}")

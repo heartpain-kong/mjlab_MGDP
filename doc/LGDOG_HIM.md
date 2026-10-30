@@ -1,5 +1,7 @@
 # LgDog：借鉴 HIMLoco 的盲走实验
 
+> 2026-10-28更新：本文以下网络图和验证结果记录的是历史V7六帧版本。当前代码的HIM新训练默认改为3帧/141维；旧模型回放保留原6帧/282维。当前使用请先看 [HIM_HISTORY_3.md](HIM_HISTORY_3.md)，不要将下文历史维度直接用于新模型。
+
 本文记录原 V7 温和地形 HIM。标准 Rough 地形、删除 actor/critic 机身高度扫描的新任务 `LgDog1-Rough-Blind-HIM-Standard` 见 [LGDOG_HIM_STANDARD.md](LGDOG_HIM_STANDARD.md)，其奖励配置为 `him_standard`。
 
 奖励调参入口已集中到 `src/tasks/velocity/config/lgdog1/reward_cfg.py`，HIM 对应 `REWARD_PROFILES["him"]`，操作说明见 [REWARDS.md](REWARDS.md)。

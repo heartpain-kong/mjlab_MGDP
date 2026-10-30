@@ -114,12 +114,17 @@ def build_command(root, python, options):
       if task.get("scene") == "flat":
         raise ValueError("平地任务不支持自动地形课程，请选择崎岖地形")
       temperature = number(options.get("lp_temperature", 2.0), "LP温度", 0.000001, 10000)
-      mix = number(options.get("lp_uniform_mix", 0.1), "LP均匀探索比例", 0, 1)
+      mix = number(options.get("lp_uniform_mix", 0.5), "LP基础地形比例混合量", 0, 1)
       minimum = integer(options.get("lp_min_episodes", 32), "LP最少回合数", 1, 100000)
       interval = number(options.get("lp_update_interval_s", 100), "LP更新间隔", 0.02, 3600)
+      progress_alpha = number(options.get("lp_progress_alpha", 0.25), "LP进度平滑系数", 0.000001, 1)
+      probability_alpha = number(options.get("lp_probability_alpha", 0.2), "LP概率更新系数", 0.000001, 1)
+      max_probability = number(options.get("lp_max_task_probability", 0.25), "LP单任务概率上限", 0.000001, 1)
       curriculum_flags = [f"--terrain-curriculum={curriculum}", f"--lp-temperature={temperature}",
                           f"--lp-uniform-mix={mix}", f"--lp-min-episodes={minimum}",
-                          f"--lp-update-interval-s={interval}"]
+                          f"--lp-update-interval-s={interval}", f"--lp-progress-alpha={progress_alpha}",
+                          f"--lp-probability-alpha={probability_alpha}",
+                          f"--lp-max-task-probability={max_probability}"]
     name = str(options.get("run_name", "")).strip()
     if name and not re.fullmatch(r"[a-zA-Z0-9_.-]{1,80}", name):
       raise ValueError("实验名只能使用 1–80 位英文字母、数字、下划线、点和短横线")

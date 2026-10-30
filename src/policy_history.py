@@ -4,10 +4,11 @@ Only NumPy is required. Each push is one new 50 Hz observation frame.
 """
 
 import numpy as np
+from src.him_contract import HIM_HISTORY_LENGTH, HIM_FRAME_DIM
 
 
 class PolicyHistory:
-  def __init__(self, length=6, frame_dim=47):
+  def __init__(self, length=HIM_HISTORY_LENGTH, frame_dim=HIM_FRAME_DIM):
     if length < 1 or frame_dim < 1:
       raise ValueError("History dimensions must be positive")
     self.length, self.frame_dim = length, frame_dim

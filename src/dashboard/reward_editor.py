@@ -109,7 +109,7 @@ def reward_detail(root, profile, name):
     raise ValueError(f"未知 reward profile: {profile}")
   if name == "foot_clearance" and profile in {"terrain_v4", "him", "him_standard"}:
     relative = Path("src/tasks/velocity/config/lgdog1/blind_mdp.py")
-    function = "feet_clearance_terrain"
+    function = "feet_clearance_swing" if profile == "him_standard" else "feet_clearance_terrain"
   elif name in IMPLEMENTATIONS:
     relative, function = IMPLEMENTATIONS[name]
   elif name in INHERITED:
@@ -130,8 +130,13 @@ def reward_detail(root, profile, name):
     raise ValueError(f"找不到函数实现: {function}")
   lines = implementation_source.splitlines()
   start, end = node.lineno, getattr(node, "end_lineno", node.lineno)
+  text = "\n".join(lines[start - 1:end])
+  if function == "feet_clearance_swing":
+    for helper in ("swing_clearance_cost", "foot_clearance_relative"):
+      dependency = next(item for item in tree.body if isinstance(item,ast.FunctionDef) and item.name==helper)
+      text += "\n\n" + "\n".join(lines[dependency.lineno-1:dependency.end_lineno])
   return {"name": name, "title": f"{name} · {function}", "source": str(implementation_path), "line": start,
-          "binding": f"reward_cfg.py: mdp.{function}", "text": "\n".join(lines[start - 1:end])}
+          "binding": f"reward_cfg.py: {function}", "text": text}
 
 
 def _validate_changes(common, profiles, profile, changes):

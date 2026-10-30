@@ -26,6 +26,11 @@ class StandardHIMTests(unittest.TestCase):
     for task in TASKS.values():
       self.assertEqual(load_rl_cfg(task["id"]).experiment_name, task["experiment"])
       self.assertIn("actor", load_env_cfg(task["id"]).observations)
+      if task['algorithm']=='him':
+        self.assertEqual(task['obs'],141)
+        self.assertEqual(load_rl_cfg(task['id']).actor.history_length,3)
+        for play in (False,True):
+          self.assertEqual(load_env_cfg(task['id'],play=play).observations['actor'].history_length,3)
 
   def test_no_body_grid_scan_in_train_or_play_and_history_remains_proprioceptive(self):
     for play in (False, True):
@@ -34,7 +39,7 @@ class StandardHIMTests(unittest.TestCase):
       self.assertNotIn("terrain_scan", sensors)
       for group in cfg.observations.values():
         self.assertNotIn("height_scan", group.terms)
-      self.assertEqual(cfg.observations["actor"].history_length, 6)
+      self.assertEqual(cfg.observations["actor"].history_length, 3)
       self.assertFalse(cfg.observations["actor"].flatten_history_dim)
       self.assertFalse(cfg.observations["him_target"].enable_corruption)
       self.assertEqual(set(cfg.observations["actor"].terms), {
@@ -108,7 +113,14 @@ class StandardHIMTests(unittest.TestCase):
     self.assertEqual(cfg.curriculum["command_vel"].params["distance_metric_name"], "commanded_distance")
     self.assertEqual(cfg.curriculum["command_vel"].params["min_progress_ratio"], 0.6)
     self.assertEqual(cfg.curriculum["command_vel"].params["regress_min_progress_ratio"], 0.4)
-    self.assertIs(cfg.rewards["foot_clearance"].func, blind_mdp.feet_clearance_terrain)
+    self.assertIs(cfg.rewards["foot_clearance"].func, blind_mdp.feet_clearance_swing)
+    self.assertNotIn('base_height',cfg.rewards)
+    self.assertEqual(cfg.rewards["feet_air_time"].params['threshold'],0.4)
+    clearance=cfg.rewards['foot_clearance'].params
+    gait=cfg.rewards['foot_gait'].params
+    self.assertEqual(clearance['period'],gait['period'])
+    self.assertEqual(clearance['offset'],gait['offset'])
+    self.assertEqual(clearance['stance_fraction'],gait['threshold'])
     self.assertEqual(cfg.rewards["leg_contact_force"].params["sensor_name"], "legs_ground_contact")
     self.assertEqual(cfg.commands["twist"].ranges.lin_vel_x, (-0.2, 0.4))
 

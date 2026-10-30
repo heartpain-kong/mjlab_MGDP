@@ -33,12 +33,12 @@ HIM 是策略中的状态估计与学习方法，地形生成、难度课程和�
 | 模块 | 本任务中的职责 |
 |---|---|
 | `unitree_rl_mjlab` 工程 | LgDog 几何、质量、关节顺序、PD、动作缩放、仿真步进、观测、日志和部署框架 |
-| HIMActor / HIMEstimator | 六帧历史 → 三维速度预测和 16 维隐变量；当前观测与估计特征 → 十二维动作 |
+| HIMActor / HIMEstimator | 三帧历史 → 三维速度预测和 16 维隐变量；当前观测与估计特征 → 十二维动作 |
 | HIMPPO | 正常 PPO 更新，以及独立的速度监督、原型对比辅助更新 |
 | 地形训练配置 | 标准 Rough 地形，按累计指令距离和跟踪进度调难度，区分机身碰撞与短暂腿部擦碰 |
 | `reward_cfg.py` | 18 个奖励项的权重、参数及任务间独立覆盖 |
 
-本体 PD、力矩上限、动作缩放 0.25、仿真 dt=0.005 s 和控制周期 0.02 s 沿用当前 LgDog 配置。标准 HIM 默认关闭相对抬脚高度代价（`foot_clearance=0`）；目标参数仍为 0.10 m，足下射线继续提供 critic 高度信息。重新测试该代价时须使用负权重。
+本体PD、动作缩放0.25、仿真dt=0.005s、控制周期0.02s沿用LgDog配置。标准HIM的抬脚项默认仍0，开启时按现有步态相位连续计算净空短缺：摆动中段目标0.06m、容差0.01m，初次对照可用-0.2。已撤回base_height，不再使用落地峰值冲量；滞空时间threshold恢复0.4s。详见 [抬脚、高度与LP参数](CLEARANCE_HEIGHT_LP_TUNING.md)。
 
 训练指令沿用现有 HIM 的范围：vx 为 (-0.4,0.8)、vy 为 ±0.3 m/s、yaw rate 为 ±0.6 rad/s；指令在 3–5 s 之间随机重采样，减少固定周期切换造成的动作尖峰。标准 HIM 根据 V21 退化分析恢复 V19 奖励基线：线速度权重 2.0、`relative_weight=0`、姿态权重 1.5、站立指令比例 25%；stumble 为 -0.5、airtime 为 1.0、落地冲击为 -0.002、动作变化为 -0.1。另外记录移动指令追踪分数。地形课程还要求完成回合的平均 XY 速度误差不超过 0.8 m/s，避免策略只靠走过距离提前进入更难地形。
 
@@ -107,7 +107,7 @@ Terrain、TransCurriculum、TACL 和 PSC 都强调先扩展可探索空间，再
 
 迁移到训练机时同步当前工程目录及新增文件。`archive/LgDog_HIM_patch.zip` 是早期 V7 的历史补丁，不包含这个新任务或控制面板。
 
-先从头训练，不要用 `--agent.resume=True` 直接恢复 V7 的完整 checkpoint：新任务的 critic 从 261 维改成了 74 维，训练分布也变了。训练保存 checkpoint 时会同时导出同目录下的 `policy.onnx` 和 `policy_jit.pt`，输入 `[1,282]`，输出 `[1,12]`，历史排列和 reset 协议与已有 HIM 相同。CUDA 训练默认启用 fused Adam；CPU 或不支持该算子的 PyTorch 会自动回退到普通 Adam。速度跟踪、课程进度和指令门控中的热点张量算子已用 TorchScript kernel 脚本化。
+先从头训练，不要用 `--agent.resume=True` 直接恢复 V7 的完整 checkpoint：新任务的 critic 从 261 维改成了 74 维，训练分布也变了。2026-10-28起三个HIM任务默认历史从6帧降到3帧，训练保存时导出 `policy.onnx` 和 `policy_jit.pt`，输入 `[1,141]`，输出 `[1,12]`；顺序仍为最旧到最新，reset重复首帧。旧6帧checkpoint不能直接续训3帧模型；Play按checkpoint协议恢复原帧数，Sim2Sim按ONNX metadata读取，所以旧模型仍按282维运行。见 [三帧历史迁移](HIM_HISTORY_3.md)。CUDA训练默认启用fused Adam；CPU或不支持的PyTorch回退普通Adam。速度追踪、课程进度和指令门控使用原有TorchScript kernel。
 
 ```bash
 EXP_DIR="logs/rsl_rl/lgdog1_velocity_blind_him_standard_v1/你的实际实验目录"

@@ -56,10 +56,16 @@ class CommandTests(unittest.TestCase):
       self.assertIn('--terrain-curriculum='+mode,argv)
       self.assertIn('--lp-temperature=2.0',argv)
       self.assertIn('--lp-uniform-mix=0.0',argv)
+      self.assertIn('--lp-progress-alpha=0.25',argv)
+      self.assertIn('--lp-probability-alpha=0.2',argv)
+      self.assertIn('--lp-max-task-probability=0.25',argv)
     for options in ({'terrain_curriculum':'bad'},
                     {'terrain_curriculum':'lp_acrl','task':'him_flat'},
                     {'terrain_curriculum':'lp_acrl','lp_temperature':'nan'},
-                    {'terrain_curriculum':'lp_acrl','lp_min_episodes':'0'}):
+                    {'terrain_curriculum':'lp_acrl','lp_min_episodes':'0'},
+                    {'terrain_curriculum':'lp_acrl','lp_progress_alpha':'0'},
+                    {'terrain_curriculum':'lp_acrl','lp_probability_alpha':'nan'},
+                    {'terrain_curriculum':'lp_acrl','lp_max_task_probability':'2'}):
       with self.subTest(options=options),self.assertRaises(ValueError):
         build_command(self.root,sys.executable,{'mode':'train',**options})
 
@@ -160,7 +166,7 @@ class HTTPTests(unittest.TestCase):
     self.assertIn("策略裁剪比例", body.decode())
     self.assertIn("打开 3D 查看器", body.decode())
     self.assertIn("当前地形 / 编辑", body.decode())
-    self.assertIn("LP-ACRL 自动地形采样", body.decode())
+    self.assertIn("LP 地形采样（稳定版 v2）", body.decode())
     status, body = self.request("GET", "/api/state")
     self.assertEqual(status, 200)
     state = json.loads(body)
@@ -177,7 +183,9 @@ class HTTPTests(unittest.TestCase):
     run.mkdir(parents=True)
     writer=EventFileWriter(str(run))
     writer.add_event(Event(step=10,summary=Summary(value=[
-      Summary.Value(tag='Curriculum/terrain_sampling/level_mean',simple_value=2.)])))
+      Summary.Value(tag='Curriculum/terrain_sampling/level_mean',simple_value=2.),
+      Summary.Value(tag='Metrics/swing_clearance_height_numerator',simple_value=.015),
+      Summary.Value(tag='Metrics/swing_clearance_valid_fraction',simple_value=.25)])))
     writer.flush();writer.close()
     p=run/'curriculum/terrain_sampling.json';p.parent.mkdir()
     data={'version':1,'mode':'lp_acrl','updates':1,
@@ -191,6 +199,7 @@ class HTTPTests(unittest.TestCase):
       if result.get('available'):break
       time.sleep(.05)
     self.assertEqual(result['metrics']['terrain_level']['value'],2.)
+    self.assertAlmostEqual(result['metrics']['foot_clearance_height']['value']/result['metrics']['foot_clearance_valid']['value'],.06,places=5)
     self.assertEqual(result['terrain_curriculum']['mode'],'lp_acrl')
     data['updates']=2;p.write_text(json.dumps(data),encoding='utf-8')
     # No new event required: the cached scalar response must read fresh LP status.

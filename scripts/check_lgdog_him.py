@@ -35,6 +35,10 @@ def main():
                       default="LgDog1-Rough-Blind-HIM")
   args = parser.parse_args()
   cfg = load_env_cfg(args.task)
+  agent_cfg = load_rl_cfg(args.task)
+  history_length = agent_cfg.actor.history_length
+  frame_dim = agent_cfg.actor.frame_dim
+  input_dim = history_length * frame_dim
   standard = args.task.endswith("-Standard")
   if standard:
     baseline = lgdog1_blind_terrain_env_cfg(
@@ -57,22 +61,21 @@ def main():
   env = ManagerBasedRlEnv(cfg=cfg, device=args.device)
   try:
     obs, _ = env.reset()
-    assert obs["actor"].shape == (4, 6, 47)
+    assert obs["actor"].shape == (4, history_length, frame_dim)
     assert obs["critic"].shape == (4, critic_dim)
     assert obs["him_target"].shape == (4, 47)
     assert obs["him_velocity"].shape == (4, 3)
-    deploy = PolicyHistory()
+    deploy = PolicyHistory(history_length, frame_dim)
     for _ in range(9):
       flat = deploy.push(obs["actor"][0, -1].cpu().numpy())
       np.testing.assert_array_equal(flat, obs["actor"][0].cpu().numpy().reshape(-1))
       obs, rewards, _, _, _ = env.step(torch.zeros(4, 12, device=args.device))
       assert torch.isfinite(rewards).all()
     obs, _ = env.reset(env_ids=torch.tensor([0], device=args.device))
-    torch.testing.assert_close(obs["actor"][0], obs["actor"][0, -1:].expand(6, -1))
-    print(f"PASS: actual actor [4,6,47], critic [4,{critic_dim}], temporal order and partial reset")
+    torch.testing.assert_close(obs["actor"][0], obs["actor"][0, -1:].expand(history_length, -1))
+    print(f"PASS: actual actor [4,{history_length},{frame_dim}], critic [4,{critic_dim}], temporal order and partial reset")
 
     wrapped = RslRlVecEnvWrapper(env)
-    agent_cfg = load_rl_cfg(args.task)
     agent_cfg.logger = "tensorboard"
     agent_cfg.upload_model = False
     agent_cfg.num_steps_per_env = 12
@@ -89,16 +92,16 @@ def main():
     onnx.checker.check_model(str(policy), full_check=True)
     session = ort.InferenceSession(str(policy), providers=["CPUExecutionProvider"])
     metadata = session.get_modelmeta().custom_metadata_map
-    validate_policy_history(session.get_inputs()[0].shape, metadata, 6)
+    validate_policy_history(session.get_inputs()[0].shape, metadata, history_length, frame_dim)
     rng = np.random.default_rng(17)
-    for raw in (np.zeros((1, 282), np.float32), rng.normal(size=(1, 282)).astype(np.float32)):
-      td = TensorDict({"actor": torch.from_numpy(raw).reshape(1, 6, 47).to(args.device)}, batch_size=[1])
+    for raw in (np.zeros((1, input_dim), np.float32), rng.normal(size=(1, input_dim)).astype(np.float32)):
+      td = TensorDict({"actor": torch.from_numpy(raw).reshape(1, history_length, frame_dim).to(args.device)}, batch_size=[1])
       with torch.no_grad():
         expected = runner.alg.actor(td).cpu().numpy()
       actual = session.run(None, {session.get_inputs()[0].name: raw})[0]
       np.testing.assert_allclose(actual, expected, rtol=1e-4, atol=2e-5)
       assert actual.shape == (1, 12) and np.isfinite(actual).all()
-    print("PASS: ONNX Runtime / PyTorch parity [1,282] -> [1,12] and history metadata")
+    print(f"PASS: ONNX Runtime / PyTorch parity [1,{input_dim}] -> [1,12] and history metadata")
 
     # Load only our newly generated trusted checkpoint through the real runner.
     resumed = HIMRunner(wrapped, asdict(agent_cfg), None, args.device)

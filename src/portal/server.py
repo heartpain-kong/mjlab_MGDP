@@ -284,9 +284,9 @@ def _autostart(services):
       continue
 
 
-def serve(root, python, logdirs=None, port=8770, host="127.0.0.1", autostart=True, open_browser=True):
+def serve(root, python, logdirs=None, port=8770, host="127.0.0.1", autostart=True, open_browser=True,ports=None):
   try:
-    server = create_server(root, python, logdirs, port, host, autostart)
+    server = create_server(root, python, logdirs, port, host, autostart,ports=ports)
   except OSError as error:
     print(f"端口 {port} 起不来：{error}", flush=True)
     print(f"可能是已经有一个总览在跑，或者端口被别的程序占了；试一下 --port {port + 1}", flush=True)
@@ -299,7 +299,7 @@ def serve(root, python, logdirs=None, port=8770, host="127.0.0.1", autostart=Tru
     print(f"  数据源: {path}", flush=True)
   if host not in {"127.0.0.1", "localhost"}:
     print("⚠ 已绑定到所有网卡：局域网内任何人都能打开这个页面（启动/停止服务仍需页面里的 token）。", flush=True)
-  print("子服务：工作台 :8765 · 曲线终端 :8766 · TensorBoard :6006（按需启动；Ctrl+C 只停总览）", flush=True)
+  print("子服务："+" · ".join(f"{item['label']} :{item['port']}" for item in server.services.definitions())+"（Ctrl+C只停总览）",flush=True)
   threading.Thread(target=server.start_services, daemon=True).start()
   if open_browser:
     import webbrowser

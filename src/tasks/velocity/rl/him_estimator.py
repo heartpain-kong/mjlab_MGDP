@@ -10,6 +10,7 @@ import math
 import torch
 from torch import nn
 from torch.nn import functional as F
+from src.him_contract import HIM_HISTORY_LENGTH, HIM_FRAME_DIM
 
 
 @torch.no_grad()
@@ -27,7 +28,7 @@ def balanced_assignments(scores, epsilon=0.05, iterations=3):
 
 
 class HIMEstimator(nn.Module):
-  def __init__(self, frame_dim=47, history_length=6, latent_dim=16, prototypes=32):
+  def __init__(self, frame_dim=HIM_FRAME_DIM, history_length=HIM_HISTORY_LENGTH, latent_dim=16, prototypes=32):
     super().__init__()
     self.encoder = nn.Sequential(
       nn.Linear(frame_dim * history_length, 128), nn.ELU(),

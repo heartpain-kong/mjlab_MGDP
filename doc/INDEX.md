@@ -8,6 +8,8 @@
 | 一个网页看全部：环境 / GPU / 进程 / 轮次 / 日志（总览） | [WEBHUB.md](WEBHUB.md) |
 | 把训练曲线当 K 线看（曲线终端） | [KLINE.md](KLINE.md) |
 | LP-ACRL地形自动采样、参数与对照实验 | [LP_ACRL_INTEGRATION.md](LP_ACRL_INTEGRATION.md) |
+| HIM三帧历史、训练开销与旧模型兼容 | [HIM_HISTORY_3.md](HIM_HISTORY_3.md) |
+| 抬腿异常、连续摆动净空与LP参数 | [CLEARANCE_HEIGHT_LP_TUNING.md](CLEARANCE_HEIGHT_LP_TUNING.md) |
 | 速度扩张条件、进度门与旧 checkpoint 迁移 | [VELOCITY_CURRICULUM.md](VELOCITY_CURRICULUM.md) |
 | V23地形为0：进度门与扩速判据诊断 | [TRAINING_DATA_ANALYSIS_V23_2026-10-27.md](TRAINING_DATA_ANALYSIS_V23_2026-10-27.md) |
 | 调整奖励、查看最终权重和函数位置 | [REWARDS.md](REWARDS.md) |
@@ -23,6 +25,7 @@
 | TerrainV4 分析 | [LGDOG_TERRAIN_V4.md](LGDOG_TERRAIN_V4.md) |
 | 安装训练依赖 | [setup_zh.md](setup_zh.md) |
 | GPUFree Ubuntu 22.04 部署、CUDA 修复、SSH 转发和显存经验 | [DEPLOYMENT_GPUFREE.md](DEPLOYMENT_GPUFREE.md) |
+| 服务器一键安装、自检、后台网页和Windows上传 | [SERVER_DEPLOY.md](../SERVER_DEPLOY.md) |
 | 原项目说明 | [中文](UPSTREAM_README_zh.md) / [English](UPSTREAM_README.md) |
 
 `archive/` 内为历史补丁和验证记录，当前功能请同步完整工程。模型与训练快照仍在 `logs/rsl_rl/`。旧记录里提到的 Linux 机器外部 `DEPLOY_NOTES.md`、`export/` 不属于这份工程的随附文件。
