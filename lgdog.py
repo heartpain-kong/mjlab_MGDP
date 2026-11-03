@@ -8,7 +8,7 @@ import shutil
 import subprocess
 import sys
 
-from src.dashboard.catalog import TASKS
+from src.dashboard.catalog import DEFAULT_TASK, TASKS
 from src.dashboard.commands import build_command, discover_models, display_command
 
 ROOT = Path(__file__).resolve().parent
@@ -46,10 +46,10 @@ def main():
   server.add_argument("--portal-port", type=int, default=8770)
   server.add_argument("--tb-port", type=int, default=6006)
   models = sub.add_parser("models", help="列出任务的模型")
-  models.add_argument("task", nargs="?", default="standard")
+  models.add_argument("task", nargs="?", default=DEFAULT_TASK)
   for mode in ("train", "play", "sim", "rewards", "curves"):
     child = sub.add_parser(mode)
-    child.add_argument("task", nargs="?", default="standard", help="standard/him_flat/him/terrain/gentle/blind/flat/rough")
+    child.add_argument("task", nargs="?", default=DEFAULT_TASK, help="mgdp/standard/him_flat/him/terrain/gentle/blind/flat/rough")
     child.add_argument("--dry-run", action="store_true", help="仅显示命令，不执行")
     if mode in {"train", "play"}:
       child.add_argument("--envs", type=int, default=1024 if mode == "train" else 4)
@@ -148,3 +148,4 @@ def main():
 
 if __name__ == "__main__":
   raise SystemExit(main())
+

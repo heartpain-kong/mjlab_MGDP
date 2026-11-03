@@ -64,6 +64,20 @@ from pathlib import Path
 import mujoco
 import numpy as np
 
+# ── 工程内的地形资源 ───────────────────────────────────────────────────────
+TERRAIN_DIR = Path(__file__).resolve().parent.parent / "src" / "assets" / "terrains"
+# 2027 ROBOCON 比赛场地：由 scripts/import_race_course.py 从 27rc-dog-race 转成
+# 「弧度 + quat + 无 default」的地理 XML，可以安全 attach 到机器人场景里。
+COURSE_MAPS = {
+  "race": "race_obstacle_2027.xml",
+  "race_task": "race_task_2027.xml",
+}
+COURSE_STARTS = {
+  # (x, y, yaw_deg)：场地里的两个启动区（建模说明 docs/modeling.md）
+  "race": (0.0, 0.0, 0.0),
+  "race_start2": (-5.95, -1.9, 0.0),
+}
+
 # ── 与训练强绑定的常量（改训练配置必须同步改这里）───────────────────────────
 # 来源：src/tasks/velocity/config/lgdog1/env_cfgs.py + lgdog1_constants.py
 CTRL_DT = 0.02  # 控制周期 = sim dt 0.005 × decimation 4  → 50 Hz
@@ -146,8 +160,20 @@ def add_terrain(spec, kind: str) -> int:
   if kind in ("flat", "", None):
     return 0
 
+  # ── 2027 ROBOCON 比赛场地（27rc-dog-race 转换而来，见 scripts/import_race_course.py）──
+  #    race      障碍赛：14×6 m，绕桩 / 限高框架 / 高墙 / 沟壑 / 砖木坑 / 轮胎阵 / 梅花桩 / 单木桥
+  #    race_task 任务赛：6×4 m 内场 + 8 个动态物资箱（贴图在 race_task_labels/）
+  #    两张图都自带地板（arena_floor），下面 build_model 不会再补无限平面。
+  if kind in COURSE_MAPS:
+    path = TERRAIN_DIR / COURSE_MAPS[kind]
+    if not path.exists():
+      raise FileNotFoundError(
+        f"找不到 {path}\n  重新转换： python scripts/import_race_course.py /path/to/27rc-dog-race-main"
+      )
+    return _attach(spec, path)
+
   if kind == "lgdog1":
-    path = Path(__file__).resolve().parent.parent / "src" / "assets" / "terrains" / "lgdog1_testmap.xml"
+    path = TERRAIN_DIR / "lgdog1_testmap.xml"
     if not path.exists():
       raise FileNotFoundError(
         f"找不到 {path}\n  重新生成： python scripts/sim2sim.py --help 见说明，或用 --map-file 指定别的"
@@ -266,14 +292,16 @@ def build_model(
   spec = robot.spec
 
   # 补一块无限地面（机器人的 xml 是"纯机器人"，没有场景）
-  floor = spec.worldbody.add_geom()
-  floor.name = "floor"
-  floor.type = mujoco.mjtGeom.mjGEOM_PLANE
-  floor.size = [0.0, 0.0, 0.05]
-  floor.contype = 1
-  floor.conaffinity = 1
-  floor.friction = [1.0, 0.005, 0.0001]
-  floor.rgba = [0.3, 0.35, 0.4, 1.0]
+  # ⚠ 比赛场地自带 arena_floor；再叠一块 z=0 的无限平面会出现共面接触，所以跳过。
+  if map_kind not in COURSE_MAPS:
+    floor = spec.worldbody.add_geom()
+    floor.name = "floor"
+    floor.type = mujoco.mjtGeom.mjGEOM_PLANE
+    floor.size = [0.0, 0.0, 0.05]
+    floor.contype = 1
+    floor.conaffinity = 1
+    floor.friction = [1.0, 0.005, 0.0001]
+    floor.rgba = [0.3, 0.35, 0.4, 1.0]
 
   # 地形（默认平地；宇树自带场景也只有平地，见 add_terrain 的说明）
   n_terrain = _attach(spec, Path(map_file)) if map_file else add_terrain(spec, map_kind)
@@ -847,9 +875,10 @@ def main():
   ap.add_argument(
     "--map",
     default="flat",
-    choices=("flat", "stairs", "slope", "obstacles", "mixed", "lgdog1"),
+    choices=("flat", "stairs", "slope", "obstacles", "mixed", "lgdog1", "race", "race_task"),
     help="测试地形：flat(默认平地) / stairs(四组楼梯) / slope(10°坡) / obstacles(高台列) / "
-    "mixed(全都有) / lgdog1(LgRobotDog 那张测试图，191 个 geom)",
+    "mixed(全都有) / lgdog1(LgRobotDog 那张测试图，191 个 geom) / "
+    "race(2027 比赛障碍赛，14×6 m，八个障碍) / race_task(2027 任务赛内场，含 8 个物资箱)",
   )
   ap.add_argument("--map-file", default=None, help="外部地形 XML（只含 worldbody geom），优先级高于 --map")
   ap.add_argument("--spawn-x", type=float, default=0.0, help="出生点 x [m]")

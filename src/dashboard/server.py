@@ -15,7 +15,8 @@ import time
 from urllib.parse import parse_qs, urlparse
 import webbrowser
 
-from .catalog import ALGORITHMS, SCENES, SIM2SIM_MAPS, TASKS, resolve_task
+from .catalog import resolve_task
+from . import routes
 from .commands import build_command, discover_models, display_command, integer
 from .run_naming import next_run_name
 from . import history
@@ -24,11 +25,11 @@ from .reward_editor import read_rewards, reward_detail, save_rewards
 from .terrain_editor import read_terrain, save_terrain
 
 WEB = Path(__file__).parent / "web"
-DOCUMENTS = {
-  "start": ("使用说明", "doc/WORKBENCH.md"),
-  "rewards": ("奖励调参", "doc/REWARDS.md"),
-  "standard": ("标准地形 HIM", "doc/LGDOG_HIM_STANDARD.md"),
-  "reward-code": ("奖励配置源码", "src/tasks/velocity/config/lgdog1/reward_cfg.py"),
+STATIC_FILES = {
+  "/": ("index.html", "text/html; charset=utf-8"),
+  "/assets/app.js": ("app.js", "text/javascript; charset=utf-8"),
+  "/assets/js/format.js": ("js/format.js", "text/javascript; charset=utf-8"),
+  "/assets/style.css": ("style.css", "text/css; charset=utf-8"),
 }
 
 ACTION_METRIC_TAGS = {
@@ -243,6 +244,9 @@ def create_server(root, python, host="127.0.0.1", port=8765):
             "metrics": {}, "warning": "正在读取最新 TensorBoard 记录…",
             "terrain_curriculum": terrain_status}
 
+  ctx = routes.ApiContext(root=root, python=Path(python), token=token,
+                          jobs=jobs, gpu=gpu_info, metrics=latest_metrics)
+
   class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
       pass
@@ -273,61 +277,12 @@ def create_server(root, python, host="127.0.0.1", port=8765):
       parsed = urlparse(self.path)
       query = parse_qs(parsed.query)
       try:
-        if parsed.path in {"/", "/assets/app.js", "/assets/style.css"}:
-          filename, mime = {
-            "/": ("index.html", "text/html; charset=utf-8"),
-            "/assets/app.js": ("app.js", "text/javascript; charset=utf-8"),
-            "/assets/style.css": ("style.css", "text/css; charset=utf-8"),
-          }[parsed.path]
+        static = STATIC_FILES.get(parsed.path)
+        if static is not None:
+          filename, mime = static
           return self.send((WEB / filename).read_bytes(), content_type=mime)
-        if parsed.path == "/api/state":
-          return self.send({"token": token, "root": str(root), "python": str(python),
-                            "tasks": [{"alias": alias, **task} for alias, task in TASKS.items()],
-                            "algorithms": [{"alias": alias, **item} for alias, item in ALGORITHMS.items()],
-                            "scenes": [{"alias": alias, **item} for alias, item in SCENES.items()],
-                            "sim2sim_maps": [{"alias": alias, **item} for alias, item in SIM2SIM_MAPS.items()],
-                            "gpu": gpu_info(), "jobs": jobs.list(), "job_counts": jobs.counts(),
-                            "documents": [{"id": key, "label": value[0]} for key, value in DOCUMENTS.items()]})
-        if parsed.path == "/api/gpu":
-          return self.send(gpu_info())
-        if parsed.path == "/api/run-name":
-          alias, task = resolve_task(query.get("task", ["standard"])[0])
-          seed = integer(query.get("seed", [42])[0], "seed", 0, 2147483647)
-          return self.send({"task": alias, "seed": seed,
-                            "name": next_run_name(root / "logs/rsl_rl" / task["experiment"], seed)})
-        if parsed.path == "/api/models":
-          return self.send({"models": discover_models(root, query.get("task", ["standard"])[0])})
-        if parsed.path == "/api/metrics":
-          return self.send(latest_metrics(query.get("task", ["standard"])[0]))
-        if parsed.path == "/api/rewards":
-          alias, task = resolve_task(query.get("task", ["standard"])[0])
-          return self.send({"task": alias, **read_rewards(root, task["profile"])})
-        if parsed.path == "/api/terrain":
-          return self.send(read_terrain(root))
-        if parsed.path == "/api/reward-detail":
-          alias, task = resolve_task(query.get("task", ["standard"])[0])
-          return self.send({"task": alias, **reward_detail(root, task["profile"], query.get("name", [""])[0])})
-        if parsed.path == "/api/log":
-          return self.send({"text": jobs.tail(query.get("id", [""])[0])})
-        if parsed.path == "/api/history":
-          jobs.list()  # Refresh exits before reading the lifecycle events.
-          result = history.read_history(root, query.get("limit", [history.DEFAULT_LIMIT])[0])
-          with jobs.lock:
-            for run in result["runs"]:
-              pair = jobs.jobs.get(run["id"])
-              if pair:
-                record = pair[0]
-                run.update(status=record["status"], can_delete=record.get("can_delete", False))
-              else:
-                run["can_delete"] = True  # History-only record, no managed process.
-          return self.send(result)
-        if parsed.path == "/api/document":
-          document = DOCUMENTS.get(query.get("id", [""])[0])
-          if not document:
-            raise ValueError("未知文档")
-          return self.send({"title": document[0], "path": str(root / document[1]),
-                            "text": (root / document[1]).read_text(encoding="utf-8-sig")})
-        return self.send({"error": "页面不存在"}, 404)
+        status, payload = routes.dispatch_get(ctx, parsed.path, query)
+        return self.send(payload, status)
       except (ValueError, OSError) as error:
         return self.send({"error": str(error)}, 400)
 
@@ -336,7 +291,8 @@ def create_server(root, python, host="127.0.0.1", port=8765):
       supplied = self.headers.get("X-LgDog-Token", "")
       origin = self.headers.get("Origin")
       expected_origin = f"http://{self.headers.get('Host', '')}"
-      if not self.valid_host() or not hmac.compare_digest(supplied, token) or (origin and origin != expected_origin):
+      if (not self.valid_host() or not hmac.compare_digest(supplied, token)
+          or (origin and origin != expected_origin)):
         return self.send({"error": "请刷新本地面板后再操作"}, 403)
       try:
         length = int(self.headers.get("Content-Length", "0"))
@@ -345,39 +301,8 @@ def create_server(root, python, host="127.0.0.1", port=8765):
         data = json.loads(self.rfile.read(length))
         if not isinstance(data, dict):
           raise ValueError("请求必须为对象")
-        if self.path in {"/api/preview", "/api/run"}:
-          argv = build_command(root, python, data)
-          if self.path == "/api/preview":
-            return self.send({"command": display_command(argv), "argv": argv})
-          alias, _ = resolve_task(data.get("task", "standard"))
-          return self.send({"job": jobs.launch(argv, data.get("mode", "train"), alias)})
-        if self.path == "/api/rewards/save":
-          alias, task = resolve_task(data.get("task", "standard"))
-          before = {item["name"]: {"weight": item["weight"], "params": item["params"]}
-                    for item in read_rewards(root, task["profile"])["rewards"]}
-          result = save_rewards(root, task["profile"], data.get("changes"))
-          after = {item["name"]: {"weight": item["weight"], "params": item["params"]}
-                   for item in result.get("rewards") or []}
-          history.record_reward_edit(root, task=alias, profile=task["profile"], before=before,
-                                     after=after, source=result.get("source"),
-                                     backup=result.get("backup"))
-          return self.send({"task": alias, **result})
-        if self.path == "/api/terrain/save":
-          result = save_terrain(root, data)
-          return self.send(result)
-        if self.path == "/api/terrain/view":
-          script = root / "scripts" / "visualize_terrain.py"
-          if not script.is_file():
-            raise ValueError("找不到 scripts/visualize_terrain.py")
-          job = jobs.launch([str(python), str(script), "--lgdog"], "terrain", "terrain")
-          return self.send({"job": job, "url": "http://127.0.0.1:8080"})
-        if self.path == "/api/stop":
-          return self.send({"job": jobs.stop(str(data.get("id", "")), force=data.get("force") is True)})
-        if self.path == "/api/jobs/delete":
-          return self.send(jobs.delete(str(data.get("id", ""))))
-        if self.path == "/api/jobs/clear-finished":
-          return self.send(jobs.clear_finished())
-        return self.send({"error": "操作不存在"}, 404)
+        status, payload = routes.dispatch_post(ctx, self.path, data)
+        return self.send(payload, status)
       except (ValueError, OSError) as error:
         return self.send({"error": str(error)}, 400)
 
@@ -403,3 +328,5 @@ def serve(root, python, host="127.0.0.1", port=8765, open_browser=True):
       if job["status"] in {"running", "stopping"}:
         print(f"仍在运行: pid={job['pid']} {job['mode']}，日志 {job['log']}")
     server.server_close()
+
+

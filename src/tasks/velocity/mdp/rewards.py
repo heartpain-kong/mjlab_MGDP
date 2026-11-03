@@ -141,25 +141,37 @@ def angular_momentum_penalty(
 def feet_air_time(
   env: ManagerBasedRlEnv,
   sensor_name: str,
-  threshold: float = 0.4,
+  threshold_min: float = 0.05,
+  threshold_max: float = 0.5,
   command_name: str | None = None,
   command_threshold: float = 0.1,
 ) -> torch.Tensor:
-  """Reward feet air time."""
+  """Reward feet air time, counting feet whose swing is in the target window.
+
+  口径与 mjlab 自带 ``feet_air_time`` 一致：**数有多少只脚正处在
+  ``(threshold_min, threshold_max)`` 的腾空时间里**，而不是去追某个"单支撑相时长"。
+
+  为什么换掉旧写法：旧版奖励  ``min(mode_time)``（最近一次抬脚/落脚以来的时间）
+  只有在恰好两只脚触地时才生效，而实测 V28 的策略 47% 的时间四脚着地、单支撑只占
+  35%，并且腾空时间只有 0.10 s（p90 0.225 s）—— 旧版阈值 0.4 s 永远够不到，
+  整段平均只有 0.021（中位数 0），等于没开。换成计数口径后同一轨迹上约 0.6，
+  而且**每只脚抬起来就有信号**，不再依赖"刚好两只脚接地的瞬间"。
+  """
   sensor: ContactSensor = env.scene[sensor_name]
   sensor_data = sensor.data
   air_time = sensor_data.current_air_time
-  contact_time = sensor_data.current_contact_time
-  in_contact = contact_time > 0.0
-  in_mode_time = torch.where(in_contact, contact_time, air_time)
-  single_stance = torch.mean(in_contact.float(), dim=1) == 0.5
-  mode_time = torch.min(torch.where(single_stance.unsqueeze(-1), in_mode_time, 0.0), dim=1)[0]
-  error = torch.abs(mode_time - threshold)
-  reward = torch.clamp(threshold - error, min=0.0)
+  if air_time is None:  # pragma: no cover - 传感器没开 track_air_time 时才会发生
+    raise ValueError(f"{sensor_name} 没有记录 air time，检查 ContactSensorCfg.track_air_time")
+  in_range = (air_time > threshold_min) & (air_time < threshold_max)
+  reward = torch.sum(in_range.float(), dim=1)
+  in_air = air_time > 0.0
+  num_in_air = torch.sum(in_air.float())
+  mean_air_time = torch.sum(air_time * in_air.float()) / torch.clamp(num_in_air, min=1)
+  env.extras.setdefault("log", {})["Metrics/air_time_mean"] = mean_air_time
   if command_name is not None:
     command = env.command_manager.get_command(command_name)
     if command is not None:
-      reward *= ops.command_active(command, command_threshold)
+      reward = reward * ops.command_active(command, command_threshold)
   return reward
 
 

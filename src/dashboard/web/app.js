@@ -2,11 +2,9 @@
 const $ = id => document.getElementById(id);
 let state = null, mode = "train", models = [], rewardData = null, selectedJob = null, previewVersion = 0, timer = null, runNameVersion = 0;
 let lastCommand = "";
-const modeNames = {train:"训练", play:"Play 回放", sim:"Sim2Sim", rewards:"查看奖励", curves:"训练曲线", terrain:"地形查看"};
-const statuses = {running:"运行中", stopping:"停止中", completed:"已完成", failed:"失败", stopped:"已停止", finished:"已结束", unknown:"历史·未接管"};
+const {modeNames, statuses, rewardLabels, metricValue, healthText} = window.LgDogFormat;
 const pendingStops = new Set();
 let pendingDelete = null, deletingJobs = false;
-const rewardLabels = {track_linear_velocity:"线速度跟踪",track_angular_velocity:"角速度跟踪",body_orientation_l2:"机身姿态",pose:"关节姿态",foot_gait:"足端步态",body_ang_vel:"机身角速度",angular_momentum:"角动量",joint_acc_l2:"关节加速度",joint_pos_limits:"关节限位",action_rate_l2:"动作变化率",foot_clearance:"抬脚高度",foot_slip:"足端滑移",soft_landing:"落足冲击",feet_stumble:"足端绊倒",feet_air_time:"足端滞空",leg_contact_force:"腿部接触力",stand_still:"静止站立",is_terminated:"终止惩罚"};
 
 async function api(path, body) {
   const options = body === undefined ? {} : {method:"POST", headers:{"Content-Type":"application/json", "X-LgDog-Token":state.token}, body:JSON.stringify(body)};
@@ -22,22 +20,38 @@ function matchingTasks() {
   const algorithm=$("algorithm")?.value, scene=$("scene")?.value;
   return state.tasks.filter(item=>(!algorithm||item.algorithm===algorithm)&&(!scene||item.scene===scene));
 }
+function fillTaskSelect(preferred){
+  const select=$("task"); if(!select||!state?.tasks)return null;
+  const groups=new Map();
+  for(const item of state.tasks){
+    const key=item.algorithm||"ppo";
+    if(!groups.has(key)){
+      const group=document.createElement("optgroup");
+      group.label=state.algorithms?.find(a=>a.alias===key)?.label||key;
+      groups.set(key,group);
+    }
+    groups.get(key).append(new Option(item.label,item.alias));
+  }
+  select.replaceChildren(...groups.values());
+  const selected=state.tasks.some(item=>item.alias===preferred)?preferred:(state.tasks[0]?.alias||"");
+  select.value=selected;
+  select.disabled=false;
+  return selected;
+}
 function renderModelSceneSelectors(preferredAlias=$("task")?.value||"standard") {
   if(!state?.algorithms||!state?.scenes)return;
   const current=state.tasks.find(item=>item.alias===preferredAlias)||state.tasks[0];
-  const algorithm=$("algorithm"), scene=$("scene"), taskSelect=$("task");
-  const algorithmValue=algorithm.value||current.algorithm||"him";
+  const algorithm=$("algorithm"), scene=$("scene");
   algorithm.replaceChildren(...state.algorithms.map(item=>new Option(`${item.label} · ${item.description}`,item.alias)));
-  algorithm.value=state.algorithms.some(item=>item.alias===algorithmValue)?algorithmValue:(current.algorithm||"him");
-  const sceneValue=scene.value||(current.algorithm===algorithm.value?current.scene:"rough");
   scene.replaceChildren(...state.scenes.map(item=>new Option(`${item.label} · ${item.description}`,item.alias)));
-  scene.value=state.scenes.some(item=>item.alias===sceneValue)?sceneValue:"rough";
-  const matches=matchingTasks();
-  taskSelect.replaceChildren(...(matches.length?matches.map(item=>new Option(item.label,item.alias)):[new Option("当前组合没有注册任务","")]));
-  const selected=matches.some(item=>item.alias===preferredAlias)?preferredAlias:(matches[0]?.alias||"");
-  taskSelect.value=selected;
-  taskSelect.disabled=true;
-  return selected;
+  algorithm.value=current.algorithm||"ppo";
+  scene.value=current.scene||"rough";
+  // The task list is the primary control; algorithm/scene are derived context
+  // so a task such as mgdp can never be hidden by a stale filter.
+  algorithm.disabled=true; scene.disabled=true;
+  algorithm.title="由所选任务自动决定";
+  scene.title="由所选任务自动决定";
+  return fillTaskSelect(preferredAlias);
 }
 function syncSelectorsFromTask() {
   const current=task();
@@ -78,6 +92,7 @@ function updateTask() {
     $("summary-obs").textContent="—";
     $("task-description").textContent=`${$("algorithm")?.value||"算法"} + ${$("scene")?.value||"场景"} 没有对应的训练任务，请更换组合。`;
     $("critic-chip").textContent="";$("profile-chip").textContent="";$("experiment-path").textContent="—";
+    $("task-capabilities")?.replaceChildren();
     $("model-hint").textContent="任务由算法和场景决定；当前组合没有可用模型。";
     updateRunNameHint();
     return;
@@ -87,9 +102,20 @@ function updateTask() {
   $("task-description").textContent=t.description;
   $("critic-chip").textContent=`critic ${t.critic} 维`;
   $("profile-chip").textContent=`reward: ${t.profile}`;
+  renderTaskCapabilities(t);
   $("experiment-path").textContent=`logs/rsl_rl/${t.experiment}`;
   $("model-hint").textContent=t.shared?"Flat/Rough 共用目录，请手动选择与任务匹配的模型。":"续训只能使用当前算法和场景的 checkpoint。";
   updateRunNameHint();
+}
+function renderTaskCapabilities(t){
+  const box=$("task-capabilities"); if(!box)return;
+  box.replaceChildren();
+  const cap=t.capabilities||{};
+  const add=(text,title,cls)=>{const span=document.createElement("span");span.className="capability"+(cls?` ${cls}`:"");span.textContent=text;if(title)span.title=title;box.append(span);};
+  if(cap.needs_pretrain) add("需预训练",cap.pretrain_command||"","warn");
+  if(cap.supports_curriculum===false) add("无自动课程","平地任务不使用地形采样课程","muted");
+  if(cap.docs) add("文档",cap.docs,"muted");
+  if(!box.children.length) add("就绪","");
 }
 function updateCurriculumOptions(){
   const select=$("terrain-curriculum");if(!select)return;
@@ -133,8 +159,6 @@ function fillModels() {
   $("summary-models").textContent=models.length;
 }
 async function loadModels() { const alias=$("task").value; if(!alias){models=[];fillModels();return;} const data=await api(`/api/models?task=${encodeURIComponent(alias)}`); if(alias!==$("task").value)return; models=data.models;fillModels(); }
-function metricValue(data,name){return data?.metrics?.[name]?.value;}
-function healthText(status){return {healthy:"正常",observe:"观察",warning:"需要检查"}[status]||"等待数据";}
 function setHealthPill(element,status){
   if(!element)return;
   element.classList.toggle("warning",status==="warning");
@@ -331,14 +355,15 @@ function showMode() {
 function setWorkspaceView(view){
   const grid=document.querySelector(".workspace-grid");
   if(!grid)return;
-  const monitor=view==="monitor";
-  grid.classList.toggle("workspace-monitor",monitor);
-  grid.classList.toggle("workspace-settings",!monitor);
-  $("settings-view")?.classList.toggle("selected",!monitor);
-  $("monitor-view")?.classList.toggle("selected",monitor);
-  $("settings-view")?.setAttribute("aria-pressed",String(!monitor));
-  $("monitor-view")?.setAttribute("aria-pressed",String(monitor));
-  try{localStorage.setItem("lgdog-workbench-view",monitor?"monitor":"settings");}catch{}
+  const mode=view==="monitor"?"monitor":view==="settings"?"settings":"both";
+  grid.classList.toggle("workspace-monitor",mode==="monitor");
+  grid.classList.toggle("workspace-settings",mode==="settings");
+  grid.classList.toggle("workspace-both",mode==="both");
+  for(const [id,value] of [["both-view","both"],["settings-view","settings"],["monitor-view","monitor"]]){
+    $(id)?.classList.toggle("selected",mode===value);
+    $(id)?.setAttribute("aria-pressed",String(mode===value));
+  }
+  try{localStorage.setItem("lgdog-workbench-view-v2",mode);}catch{}
 }
 function renderRewards(){
   const list=$("reward-list"); list.replaceChildren();
@@ -559,8 +584,8 @@ async function showHistory(){
 async function start() {
   try {
     state=await api("/api/state");
-    let savedView="settings";
-    try{savedView=localStorage.getItem("lgdog-workbench-view")||"settings";}catch{}
+    let savedView="both";
+    try{savedView=localStorage.getItem("lgdog-workbench-view-v2")||"both";}catch{}
     setWorkspaceView(savedView);
     renderModelSceneSelectors("standard");
     renderSimMaps();
@@ -601,9 +626,12 @@ async function start() {
     $("history-refresh").addEventListener("click",showHistory);
     $("close-history").addEventListener("click",()=>$("history-dialog").close());
     $("copy-history").addEventListener("click",()=>{const text=$("copy-history").dataset.text||"";text?copy(text):toast("还没有可复制的记录");});
+    $("both-view").addEventListener("click",()=>setWorkspaceView("both"));
     $("settings-view").addEventListener("click",()=>setWorkspaceView("settings"));
     $("monitor-view").addEventListener("click",()=>setWorkspaceView("monitor"));
     setInterval(()=>refresh(),1800);
   }catch(error){toast(error.message);$("command").textContent="面板初始化失败，请检查服务终端。";}
 }
 start();
+
+

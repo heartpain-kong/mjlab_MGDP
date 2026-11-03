@@ -33,6 +33,20 @@ def lgdog1_him_standard_env_cfg(play=False):
   return _add_him_observations(cfg)
 
 
+def lgdog1_race_env_cfg(play=False):
+  """2027 比赛场地地形；观测/奖励与标准 HIM 完全一致。
+
+  地形按规则尺寸复刻（梅花桩 0.2×0.2×0.1、单木桥 0.4 宽、台阶 0.12/0.32、
+  砖木坑碎砖、绕桩细柱、0.3 m 高墙），里程与 sim2sim 的 `--map race` 是同一套
+  障碍定义 —— 训练里练"能不能过"，真场地上用 `--map race` 验"过不过得去"。
+  """
+  cfg = lgdog1_blind_terrain_env_cfg(
+    play=play, reward_profile="him_standard", gentle_terrain=False,
+    critic_height_scan=False, terrain="race",
+  )
+  return _add_him_observations(cfg)
+
+
 def lgdog1_him_flat_env_cfg(play=False):
   """Flat pretraining with the exact standard HIM observation contract."""
   cfg = lgdog1_blind_terrain_env_cfg(

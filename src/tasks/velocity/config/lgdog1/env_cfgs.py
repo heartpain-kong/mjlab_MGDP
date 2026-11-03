@@ -19,6 +19,7 @@ from mjlab.utils.noise import UniformNoiseCfg as Unoise
 
 from src.tasks.velocity.velocity_env_cfg import make_velocity_env_cfg
 from .reward_cfg import make_lgdog_rewards
+from .race_terrain_cfg import lgdog1_race_terrain_cfg
 from .terrain_cfg import lgdog1_rough_terrain_cfg
 
 TerrainType = Literal["rough", "obstacles"]
@@ -39,7 +40,8 @@ _TRUNK_GEOM = "trunk_collision"
 
 
 def lgdog1_rough_env_cfg(
-  play: bool = False, use_height_scan: bool = True, gentle_terrain: bool = False
+  play: bool = False, use_height_scan: bool = True, gentle_terrain: bool = False,
+  terrain: str = "rough",
 ) -> ManagerBasedRlEnvCfg:
   """LgDog1 崎岖地形配置。
 
@@ -62,8 +64,12 @@ def lgdog1_rough_env_cfg(
   # Keep LgDog on the native Unitree/mjlab rough terrain distribution, while
   # giving this project an isolated editable copy.  A change in terrain_cfg.py
   # cannot mutate ROUGH_TERRAINS_CFG or another robot's task config.
+  # ``terrain="race"`` 换成按 2027 比赛场地尺寸拼出来的地形（见 race_terrain_cfg.py）。
   if cfg.scene.terrain is not None and cfg.scene.terrain.terrain_generator is not None:
-    cfg.scene.terrain.terrain_generator = lgdog1_rough_terrain_cfg()
+    if terrain == "race":
+      cfg.scene.terrain.terrain_generator = lgdog1_race_terrain_cfg()
+    else:
+      cfg.scene.terrain.terrain_generator = lgdog1_rough_terrain_cfg()
 
   cfg.sim.mujoco.ccd_iterations = 500
   cfg.sim.contact_sensor_maxmatch = 500
@@ -116,7 +122,7 @@ def lgdog1_rough_env_cfg(
     cfg.scene.terrain.terrain_generator.curriculum = True
 
   # ★ A：盲跑版用更温和的地形（子地形配置是可变的 @dataclass，直接改字段）
-  if gentle_terrain:
+  if gentle_terrain and terrain != "race":
     tg = cfg.scene.terrain.terrain_generator
     assert tg is not None
     # ⚠️ 必须先【拷贝】再改！`make_velocity_env_cfg()` 里是

@@ -36,6 +36,17 @@ class CommandTests(unittest.TestCase):
     with self.assertRaisesRegex(ValueError, "实验名"):
       build_command(self.root, sys.executable, {"mode":"train", "run_name":"bad; command"})
 
+  def test_mgdp_task_requires_pretrain_before_training(self):
+    with self.assertRaisesRegex(ValueError, "预训练"):
+      build_command(self.root, sys.executable,
+                    {"mode":"train", "task":"mgdp", "envs":8, "iterations":1})
+    checkpoint = self.root / "logs/mgdp/perception/mgdp_perception.pt"
+    checkpoint.parent.mkdir(parents=True, exist_ok=True)
+    checkpoint.write_text("fixture", encoding="utf-8")
+    command = build_command(self.root, sys.executable,
+                            {"mode":"train", "task":"mgdp", "envs":8, "iterations":1})
+    self.assertIn("LgDog1-Rough-MGDP", command)
+
   def test_training_preview_converts_positive_speed_bounds_to_cli_flags(self):
     command = build_command(self.root, sys.executable, {
       "mode": "train", "velocity_min_abs": "0.4", "velocity_max_abs": "0.8",
@@ -170,9 +181,10 @@ class HTTPTests(unittest.TestCase):
     status, body = self.request("GET", "/api/state")
     self.assertEqual(status, 200)
     state = json.loads(body)
-    self.assertEqual(len(state["tasks"]), 8)
+    self.assertEqual(len(state["tasks"]), 10)
     self.assertEqual({item["alias"] for item in state["algorithms"]}, {"him", "ppo"})
     self.assertIn("lgdog1", {item["alias"] for item in state["sim2sim_maps"]})
+    self.assertIn("race", {item["alias"] for item in state["sim2sim_maps"]})
     self.assertEqual(self.request("GET", "/assets/../../setup.py")[0], 404)
 
   def test_lp_metrics_fallback_and_status_file_refresh_over_http(self):

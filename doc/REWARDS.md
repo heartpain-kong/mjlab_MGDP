@@ -68,7 +68,7 @@ python scripts/list_rewards.py LgDog1-Flat
 | `foot_slip` | -0.25 | 支撑足打滑代价 |
 | `soft_landing` | -0.001 | 落地冲击代价 |
 | `feet_stumble` | -0.5 | 脚撞立面代价；Flat 覆盖为 0 |
-| `feet_air_time` | 0 | 足端空中时间目标，当前关闭 |
+| `feet_air_time` | 0 | 足端腾空时间（mjlab 口径：0.05~0.5 s 的脚数），标准 HIM 覆盖为 0.25 |
 | `leg_contact_force` | -1.0 | 腿部接触力代价；Flat 覆盖为 0 |
 | `stand_still` | -1.0 | 零指令站立时的姿态代价 |
 | `is_terminated` | -200.0 | 非超时终止代价 |
@@ -77,7 +77,12 @@ python scripts/list_rewards.py LgDog1-Flat
 
 每个控制步的贡献是 `raw_reward × weight × step_dt`，本工程默认 `step_dt=0.02 s`。例如终止项返回 1 时贡献为 `-200 × 0.02 = -4`。连续接触力、二值碰撞与其他框架的奖励返回值可能不同，不能仅按 dt 换算权重。
 
-2026-10-27：根据 [V21 与 V19 对比](TRAINING_DATA_ANALYSIS_2026-10-27.md)，标准 HIM 恢复 V19 实际奖励基线：`track_linear_velocity=2.0`、`pose=1.5`、`action_rate_l2=-0.1`、`foot_clearance=0`、`feet_stumble=-0.5`、`feet_air_time=1.0`、`soft_landing=-0.002`。相对欠速项的 `relative_weight=0`，保留实现供后续单独实验。其他 profile 的权重不随此改动。
+2026-10-27：根据 [V21 与 V19 对比](TRAINING_DATA_ANALYSIS_2026-10-27.md)，标准 HIM 恢复 V19 实际奖励基线：`track_linear_velocity=2.0`、`pose=1.5`、`action_rate_l2=-0.1`、`foot_clearance=0`、`feet_stumble=-0.5`、`feet_air_time=0.25`、`soft_landing=-0.002`。相对欠速项的 `relative_weight=0`，保留实现供后续单独实验。其他 profile 的权重不随此改动。
+
+> **`feet_air_time` 于 2026-11-01 换成 mjlab 自带口径**：数「当前腾空时间落在 `(0.05, 0.5) s` 内的脚数」（0~4），并在 `Metrics/air_time_mean` 记平均腾空时间。
+>
+> 旧写法是「单支撑相时长 ≈ 0.4 s」：只在**恰好两只脚触地**时生效，追的是 `min(mode_time)`（最近一次抬脚/落脚以来的时间）。实测 V28 的策略 47% 时间四脚着地、单支撑只占 34%，腾空只有 0.10 s（p90 0.225 s），阈值 0.4 s 永远够不到 —— 整段平均 0.021、中位数 0，等于没开。同一轨迹上换计数口径后原始奖励 0.52（每秒贡献约 0.15，旧口径约 0.02），而且每只脚抬起来就有信号。计数返回 0~4，所以权重从 1.0 降到 0.25 保持量级不变。
+
 
 `foot_clearance`、`feet_stumble`、`foot_slip`、`action_rate_l2` 等函数返回非负代价，应使用负权重惩罚、0 关闭。正权重会奖励误差或碰撞，不能把“启用”理解为填写 +1。工作台显示各项语义，输入正代价时标红；面板保存和奖励配置构建会拒绝这类值。`feet_air_time`、`foot_gait` 和速度跟踪属于正向奖励。
 

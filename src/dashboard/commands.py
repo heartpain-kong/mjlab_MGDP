@@ -7,11 +7,11 @@ import shlex
 import subprocess
 import os
 
-from .catalog import TASKS, resolve_task
+from .catalog import DEFAULT_TASK, SIM2SIM_MAPS, TASKS, resolve_task
 from .run_naming import next_run_name
 
 
-def discover_models(root, task_value="standard"):
+def discover_models(root, task_value=DEFAULT_TASK):
   alias, task = resolve_task(task_value)
   aliases = [alias, *task.get("resume_sources", ())]
   result = []
@@ -85,8 +85,14 @@ def terrain_xml_path(root, value):
 def build_command(root, python, options):
   root = Path(root).resolve()
   mode = options.get("mode", "train")
-  task_value = options.get("task", "standard")
+  task_value = options.get("task", DEFAULT_TASK)
   _, task = resolve_task(task_value)
+  if mode == "train" and task.get("requires_pretrain"):
+    # Capability-driven prerequisite: fail before launching a doomed run and
+    # tell the user the exact command instead of crashing inside env setup.
+    checkpoint = root / str(task.get("pretrain_checkpoint") or "")
+    if not checkpoint.is_file():
+      raise ValueError(task.pretrain_hint())
   scripts = root / "scripts"
   if mode == "train":
     envs = integer(options.get("envs", 1024), "环境数", 1, 8192)
@@ -167,8 +173,8 @@ def build_command(root, python, options):
   if mode == "sim":
     path = model_path(root, task_value, options.get("onnx"), "onnx")
     map_name = options.get("map", "flat")
-    if map_name not in {"flat", "stairs", "slope", "obstacles", "mixed", "lgdog1"}:
-      raise ValueError("未知 sim2sim 测试地图")
+    if map_name not in SIM2SIM_MAPS:
+      raise ValueError(f"未知 sim2sim 测试地图：{map_name}")
     argv = [str(python), str(scripts / "sim2sim.py"), task["id"], f"--onnx={path}",
             "--map", map_name, "--vx", str(number(options.get("vx", 0.4), "vx", -3, 3)),
             "--vy", str(number(options.get("vy", 0), "vy", -3, 3)),
@@ -212,3 +218,4 @@ def build_command(root, python, options):
 
 def display_command(argv):
   return subprocess.list2cmdline(argv) if os.name == "nt" else shlex.join(argv)
+

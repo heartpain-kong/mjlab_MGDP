@@ -33,6 +33,7 @@ class ElevatedFootRayPatternCfg(GridPatternCfg):
 def lgdog1_blind_terrain_env_cfg(
   play: bool = False, *, reward_profile="terrain_v4",
   gentle_terrain: bool = True, critic_height_scan: bool = True,
+  terrain: str = "rough",
 ):
   """Terrain training mechanics, with independent terrain/critic scan choices.
 
@@ -43,7 +44,8 @@ def lgdog1_blind_terrain_env_cfg(
   if reward_profile not in {"terrain_v4", "him", "him_standard"}:
     raise ValueError("Blind terrain tasks require terrain_v4, him or him_standard rewards")
   cfg = deepcopy(lgdog1_rough_env_cfg(
-    play=play, use_height_scan=critic_height_scan, gentle_terrain=gentle_terrain
+    play=play, use_height_scan=critic_height_scan, gentle_terrain=gentle_terrain,
+    terrain=terrain,
   ))
   # Actor is always blind. The optional grid scan is privileged critic data only.
   cfg.observations["actor"].terms.pop("height_scan", None)

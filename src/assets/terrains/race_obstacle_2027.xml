@@ -1,0 +1,1035 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mujoco model="robocon_2027_obstacle_course">
+  
+  <compiler angle="radian" />
+
+  <asset>
+    <material name="course_matte" specular="0.05" shininess="0.1" />
+    <mesh name="tire_sector" vertex="0.164647 -0.0107915 -0.0825 0.164647 0.0107915 -0.0825 0.274411 -0.0179859 -0.0825 0.274411 0.0179859 -0.0825 0.164647 -0.0107915 0.0825 0.164647 0.0107915 0.0825 0.274411 -0.0179859 0.0825 0.274411 0.0179859 0.0825" />
+    <mesh name="ramp_wedge" vertex="-0.4 0 0 0.4 0 0 -0.4 0.989092 0 0.4 0.989092 0 -0.4 0 0.36 0.4 0 0.36" />
+  </asset>
+
+  <worldbody>
+    <geom name="arena_floor" size="7 3 0.05" pos="0 0 -0.05" type="box" rgba="0.95 0.85 0.08 1" friction="0.9" solref="0.01" />
+    <geom name="boundary_0" size="0.008 7" pos="0 -3 0.004" quat="0.707107 0 -0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.05 0.15 0.95 1" friction="0.9" solref="0.01" />
+    <geom name="boundary_1" size="0.008 3" pos="7 0 0.004" quat="0.707107 0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.05 0.15 0.95 1" friction="0.9" solref="0.01" />
+    <geom name="boundary_2" size="0.008 7" pos="0 3 0.004" quat="0.707107 0 0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.05 0.15 0.95 1" friction="0.9" solref="0.01" />
+    <geom name="boundary_3" size="0.008 3" pos="-7 0 0.004" quat="0.707107 -0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.05 0.15 0.95 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_0_0" size="0.004 0.0275" pos="-0.3725 -0.4 0.006" quat="0.707107 0 -0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_0_1" size="0.004 0.0275" pos="-0.2725 -0.4 0.006" quat="0.707107 0 -0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_0_2" size="0.004 0.0275" pos="-0.1725 -0.4 0.006" quat="0.707107 0 -0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_0_3" size="0.004 0.0275" pos="-0.0725 -0.4 0.006" quat="0.707107 0 -0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_0_4" size="0.004 0.0275" pos="0.0275 -0.4 0.006" quat="0.707107 0 -0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_0_5" size="0.004 0.0275" pos="0.1275 -0.4 0.006" quat="0.707107 0 -0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_0_6" size="0.004 0.0275" pos="0.2275 -0.4 0.006" quat="0.707107 0 -0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_0_7" size="0.004 0.0275" pos="0.3275 -0.4 0.006" quat="0.707107 0 -0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_1_0" size="0.004 0.0275" pos="0.4 -0.3725 0.006" quat="0.707107 0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_1_1" size="0.004 0.0275" pos="0.4 -0.2725 0.006" quat="0.707107 0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_1_2" size="0.004 0.0275" pos="0.4 -0.1725 0.006" quat="0.707107 0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_1_3" size="0.004 0.0275" pos="0.4 -0.0725 0.006" quat="0.707107 0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_1_4" size="0.004 0.0275" pos="0.4 0.0275 0.006" quat="0.707107 0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_1_5" size="0.004 0.0275" pos="0.4 0.1275 0.006" quat="0.707107 0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_1_6" size="0.004 0.0275" pos="0.4 0.2275 0.006" quat="0.707107 0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_1_7" size="0.004 0.0275" pos="0.4 0.3275 0.006" quat="0.707107 0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_2_0" size="0.004 0.0275" pos="0.3725 0.4 0.006" quat="0.707107 0 0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_2_1" size="0.004 0.0275" pos="0.2725 0.4 0.006" quat="0.707107 0 0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_2_2" size="0.004 0.0275" pos="0.1725 0.4 0.006" quat="0.707107 0 0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_2_3" size="0.004 0.0275" pos="0.0725 0.4 0.006" quat="0.707107 0 0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_2_4" size="0.004 0.0275" pos="-0.0275 0.4 0.006" quat="0.707107 0 0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_2_5" size="0.004 0.0275" pos="-0.1275 0.4 0.006" quat="0.707107 0 0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_2_6" size="0.004 0.0275" pos="-0.2275 0.4 0.006" quat="0.707107 0 0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_2_7" size="0.004 0.0275" pos="-0.3275 0.4 0.006" quat="0.707107 0 0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_3_0" size="0.004 0.0275" pos="-0.4 0.3725 0.006" quat="0.707107 -0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_3_1" size="0.004 0.0275" pos="-0.4 0.2725 0.006" quat="0.707107 -0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_3_2" size="0.004 0.0275" pos="-0.4 0.1725 0.006" quat="0.707107 -0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_3_3" size="0.004 0.0275" pos="-0.4 0.0725 0.006" quat="0.707107 -0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_3_4" size="0.004 0.0275" pos="-0.4 -0.0275 0.006" quat="0.707107 -0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_3_5" size="0.004 0.0275" pos="-0.4 -0.1275 0.006" quat="0.707107 -0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_3_6" size="0.004 0.0275" pos="-0.4 -0.2275 0.006" quat="0.707107 -0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <geom name="start_1_mark_3_7" size="0.004 0.0275" pos="-0.4 -0.3275 0.006" quat="0.707107 -0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+    <site name="start_1" pos="0 0 0.005" size="0.4 0.4 0.002" group="3" type="box" rgba="1 0 0 0" />
+    <body name="balance_beam" pos="-2 1.55 0">
+      <geom name="balance_beam_surface" size="1.5 0.2 0.05" pos="0 0 0.05" type="box" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+    </body>
+    <body name="high_wall" pos="0.95 1.55 0">
+      <geom name="wall_main" size="0.04 0.4 0.1475" pos="0 0 0.1475" type="box" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="wall_steel_cap" size="0.04 0.4 0.0025" pos="0 0 0.2975" type="box" rgba="0.55 0.58 0.6 1" friction="0.9" solref="0.01" />
+    </body>
+    <body name="stepping_stones" pos="2.29 1.55 0">
+      <geom name="stones_entry_platform" size="0.4 0.4 0.05" pos="0.4 0 0.05" type="box" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="stones_exit_platform" size="0.4 0.4 0.05" pos="3.1 0 0.05" type="box" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="stone_0_0" size="0.1 0.1 0.05" pos="1 0.2 0.05" type="box" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="stone_0_1" size="0.1 0.1 0.05" pos="1.6 0.2 0.05" type="box" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="stone_0_2" size="0.1 0.1 0.05" pos="2.2 0.2 0.05" type="box" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="stone_1_0" size="0.1 0.1 0.05" pos="1.3 -0.2 0.05" type="box" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="stone_1_1" size="0.1 0.1 0.05" pos="1.9 -0.2 0.05" type="box" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="stone_1_2" size="0.1 0.1 0.05" pos="2.5 -0.2 0.05" type="box" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+    </body>
+    <body name="clearance_frame" pos="1.37 -1.88 0">
+      <geom name="frame_leg_0_0" size="0.01 0.01 0.145" pos="-0.4 -0.41 0.145" type="box" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="frame_leg_0_1" size="0.01 0.01 0.145" pos="-0.4 0.41 0.145" type="box" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="frame_crossbar_0" size="0.01 0.42 0.01" pos="-0.4 0 0.3" type="box" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="frame_leg_1_0" size="0.01 0.01 0.145" pos="0 -0.41 0.145" type="box" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="frame_leg_1_1" size="0.01 0.01 0.145" pos="0 0.41 0.145" type="box" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="frame_crossbar_1" size="0.01 0.42 0.01" pos="0 0 0.3" type="box" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="frame_leg_2_0" size="0.01 0.01 0.145" pos="0.4 -0.41 0.145" type="box" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="frame_leg_2_1" size="0.01 0.01 0.145" pos="0.4 0.41 0.145" type="box" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="frame_crossbar_2" size="0.01 0.42 0.01" pos="0.4 0 0.3" type="box" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="frame_longbar_0" size="0.41 0.01 0.01" pos="0 -0.41 0.3" type="box" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="frame_longbar_1" size="0.41 0.01 0.01" pos="0 0.41 0.3" type="box" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+    </body>
+    <body name="gap_assembly" pos="-5.95 -1.9 0">
+      <geom name="ramp_platform" size="0.4 0.4 0.18" pos="0 0 0.18" type="box" rgba="0.95 0.85 0.08 1" friction="0.9" solref="0.01" />
+      <geom name="ramp" pos="0 0.4 0" quat="1 0 0 0" type="mesh" rgba="0.35 0.62 0.2 1" mesh="ramp_wedge" friction="0.9" solref="0.01" />
+      <geom name="stairs_platform" size="0.4 0.4 0.18" pos="1.16 0 0.18" type="box" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="stair_middle" size="0.16 0.4 0.12" pos="1.72 0 0.12" type="box" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="stair_low" size="0.16 0.4 0.06" pos="2.04 0 0.06" type="box" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_0_0" size="0.004 0.0275" pos="-0.3725 -0.4 0.366" quat="0.707107 0 -0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_0_1" size="0.004 0.0275" pos="-0.2725 -0.4 0.366" quat="0.707107 0 -0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_0_2" size="0.004 0.0275" pos="-0.1725 -0.4 0.366" quat="0.707107 0 -0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_0_3" size="0.004 0.0275" pos="-0.0725 -0.4 0.366" quat="0.707107 0 -0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_0_4" size="0.004 0.0275" pos="0.0275 -0.4 0.366" quat="0.707107 0 -0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_0_5" size="0.004 0.0275" pos="0.1275 -0.4 0.366" quat="0.707107 0 -0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_0_6" size="0.004 0.0275" pos="0.2275 -0.4 0.366" quat="0.707107 0 -0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_0_7" size="0.004 0.0275" pos="0.3275 -0.4 0.366" quat="0.707107 0 -0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_1_0" size="0.004 0.0275" pos="0.4 -0.3725 0.366" quat="0.707107 0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_1_1" size="0.004 0.0275" pos="0.4 -0.2725 0.366" quat="0.707107 0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_1_2" size="0.004 0.0275" pos="0.4 -0.1725 0.366" quat="0.707107 0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_1_3" size="0.004 0.0275" pos="0.4 -0.0725 0.366" quat="0.707107 0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_1_4" size="0.004 0.0275" pos="0.4 0.0275 0.366" quat="0.707107 0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_1_5" size="0.004 0.0275" pos="0.4 0.1275 0.366" quat="0.707107 0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_1_6" size="0.004 0.0275" pos="0.4 0.2275 0.366" quat="0.707107 0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_1_7" size="0.004 0.0275" pos="0.4 0.3275 0.366" quat="0.707107 0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_2_0" size="0.004 0.0275" pos="0.3725 0.4 0.366" quat="0.707107 0 0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_2_1" size="0.004 0.0275" pos="0.2725 0.4 0.366" quat="0.707107 0 0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_2_2" size="0.004 0.0275" pos="0.1725 0.4 0.366" quat="0.707107 0 0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_2_3" size="0.004 0.0275" pos="0.0725 0.4 0.366" quat="0.707107 0 0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_2_4" size="0.004 0.0275" pos="-0.0275 0.4 0.366" quat="0.707107 0 0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_2_5" size="0.004 0.0275" pos="-0.1275 0.4 0.366" quat="0.707107 0 0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_2_6" size="0.004 0.0275" pos="-0.2275 0.4 0.366" quat="0.707107 0 0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_2_7" size="0.004 0.0275" pos="-0.3275 0.4 0.366" quat="0.707107 0 0.707107 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_3_0" size="0.004 0.0275" pos="-0.4 0.3725 0.366" quat="0.707107 -0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_3_1" size="0.004 0.0275" pos="-0.4 0.2725 0.366" quat="0.707107 -0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_3_2" size="0.004 0.0275" pos="-0.4 0.1725 0.366" quat="0.707107 -0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_3_3" size="0.004 0.0275" pos="-0.4 0.0725 0.366" quat="0.707107 -0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_3_4" size="0.004 0.0275" pos="-0.4 -0.0275 0.366" quat="0.707107 -0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_3_5" size="0.004 0.0275" pos="-0.4 -0.1275 0.366" quat="0.707107 -0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_3_6" size="0.004 0.0275" pos="-0.4 -0.2275 0.366" quat="0.707107 -0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="start_2_mark_3_7" size="0.004 0.0275" pos="-0.4 -0.3275 0.366" quat="0.707107 -0.707107 0 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <site name="start_2" pos="0 0 0.365" size="0.4 0.4 0.002" group="3" type="box" rgba="1 0 0 0" />
+    </body>
+    <body name="slalom" pos="3.2 -1.9 0">
+      <geom name="slalom_pole_0" size="0.05 0.05" pos="0 0 0.05" type="cylinder" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_pole_1" size="0.05 0.05" pos="0.9 0 0.05" type="cylinder" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_pole_2" size="0.05 0.05" pos="1.8 0 0.05" type="cylinder" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_pole_3" size="0.05 0.05" pos="2.7 0 0.05" type="cylinder" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_pole_4" size="0.05 0.05" pos="2.7 0.9 0.05" type="cylinder" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_pole_5" size="0.05 0.05" pos="2.7 1.8 0.05" type="cylinder" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_entry_mark_0" size="0.004 0.0215239" pos="-0.253089 0.0213012 0.006" quat="0.707107 0.699789 0.101465 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_entry_mark_1" size="0.004 0.0215239" pos="-0.283421 0.0919031 0.006" quat="0.707107 0.555303 0.437765 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_entry_mark_2" size="0.004 0.0215239" pos="-0.344992 0.13788 0.006" quat="0.707107 0.262024 0.656768 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_entry_mark_3" size="0.004 0.0215239" pos="-0.421301 0.146911 0.006" quat="0.707107 -0.101465 0.699789 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_entry_mark_4" size="0.004 0.0215239" pos="-0.491903 0.116579 0.006" quat="0.707107 -0.437765 0.555303 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_entry_mark_5" size="0.004 0.0215239" pos="-0.53788 0.0550084 0.006" quat="0.707107 -0.656768 0.262024 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_entry_mark_6" size="0.004 0.0215239" pos="-0.546911 -0.0213012 0.006" quat="0.707107 -0.699789 -0.101465 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_entry_mark_7" size="0.004 0.0215239" pos="-0.516579 -0.0919031 0.006" quat="0.707107 -0.555303 -0.437765 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_entry_mark_8" size="0.004 0.0215239" pos="-0.455008 -0.13788 0.006" quat="0.707107 -0.262024 -0.656768 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_entry_mark_9" size="0.004 0.0215239" pos="-0.378699 -0.146911 0.006" quat="0.707107 0.101465 -0.699789 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_entry_mark_10" size="0.004 0.0215239" pos="-0.308097 -0.116579 0.006" quat="0.707107 0.437765 -0.555303 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_entry_mark_11" size="0.004 0.0215239" pos="-0.26212 -0.0550084 0.006" quat="0.707107 0.656768 -0.262024 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_corner_mark_0" size="0.004 0.0215239" pos="3.14691 -0.278699 0.006" quat="0.707107 0.699789 0.101464 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_corner_mark_1" size="0.004 0.0215239" pos="3.11658 -0.208097 0.006" quat="0.707107 0.555303 0.437765 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_corner_mark_2" size="0.004 0.0215239" pos="3.05501 -0.16212 0.006" quat="0.707107 0.262024 0.656768 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_corner_mark_3" size="0.004 0.0215239" pos="2.9787 -0.153089 0.006" quat="0.707107 -0.101465 0.699789 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_corner_mark_4" size="0.004 0.0215239" pos="2.9081 -0.183422 0.006" quat="0.707107 -0.437765 0.555303 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_corner_mark_5" size="0.004 0.0215239" pos="2.86212 -0.244992 0.006" quat="0.707107 -0.656767 0.262024 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_corner_mark_6" size="0.004 0.0215239" pos="2.85309 -0.321301 0.006" quat="0.707107 -0.699789 -0.101464 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_corner_mark_7" size="0.004 0.0215239" pos="2.88342 -0.391903 0.006" quat="0.707107 -0.555303 -0.437765 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_corner_mark_8" size="0.004 0.0215239" pos="2.94499 -0.43788 0.006" quat="0.707107 -0.262024 -0.656768 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_corner_mark_9" size="0.004 0.0215239" pos="3.0213 -0.446911 0.006" quat="0.707107 0.101465 -0.699789 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_corner_mark_10" size="0.004 0.0215239" pos="3.0919 -0.416578 0.006" quat="0.707107 0.437765 -0.555303 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_corner_mark_11" size="0.004 0.0215239" pos="3.13788 -0.355008 0.006" quat="0.707107 0.656767 -0.262024 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_exit_mark_0" size="0.004 0.0215239" pos="2.84691 2.2213 0.006" quat="0.707107 0.699789 0.101464 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_exit_mark_1" size="0.004 0.0215239" pos="2.81658 2.2919 0.006" quat="0.707107 0.555303 0.437765 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_exit_mark_2" size="0.004 0.0215239" pos="2.75501 2.33788 0.006" quat="0.707107 0.262024 0.656767 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_exit_mark_3" size="0.004 0.0215239" pos="2.6787 2.34691 0.006" quat="0.707107 -0.101464 0.699789 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_exit_mark_4" size="0.004 0.0215239" pos="2.6081 2.31658 0.006" quat="0.707107 -0.437765 0.555303 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_exit_mark_5" size="0.004 0.0215239" pos="2.56212 2.25501 0.006" quat="0.707107 -0.656767 0.262024 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_exit_mark_6" size="0.004 0.0215239" pos="2.55309 2.1787 0.006" quat="0.707107 -0.699789 -0.101464 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_exit_mark_7" size="0.004 0.0215239" pos="2.58342 2.1081 0.006" quat="0.707107 -0.555303 -0.437765 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_exit_mark_8" size="0.004 0.0215239" pos="2.64499 2.06212 0.006" quat="0.707107 -0.262024 -0.656767 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_exit_mark_9" size="0.004 0.0215239" pos="2.7213 2.05309 0.006" quat="0.707107 0.101464 -0.699789 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_exit_mark_10" size="0.004 0.0215239" pos="2.7919 2.08342 0.006" quat="0.707107 0.437765 -0.555303 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <geom name="slalom_exit_mark_11" size="0.004 0.0215239" pos="2.83788 2.14499 0.006" quat="0.707107 0.656767 -0.262024 0" type="capsule" contype="0" conaffinity="0" group="2" rgba="0.95 0.08 0.05 1" friction="0.9" solref="0.01" />
+      <site name="slalom_entry" pos="-0.4 0 0.006" size="0.15 0.002" group="3" type="cylinder" rgba="1 0 0 0" />
+      <site name="slalom_corner" pos="3 -0.3 0.006" size="0.15 0.002" group="3" type="cylinder" rgba="1 0 0 0" />
+      <site name="slalom_exit" pos="2.7 2.2 0.006" size="0.15 0.002" group="3" type="cylinder" rgba="1 0 0 0" />
+    </body>
+    <body name="tire_array" pos="-2.45 -2.3 0">
+      <body name="tire_0_0" pos="0.275 0.275 0.0825">
+        <geom name="tire_0_0_sector_0" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_1" pos="0 0 0" quat="0.997859 0 0 0.0654031" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_2" pos="0 0 0" quat="0.991445 0 0 0.130526" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_3" pos="0 0 0" quat="0.980785 0 0 0.19509" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_4" pos="0 0 0" quat="0.965926 0 0 0.258819" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_5" pos="0 0 0" quat="0.94693 0 0 0.321439" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_6" pos="0 0 0" quat="0.92388 0 0 0.382683" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_7" pos="0 0 0" quat="0.896873 0 0 0.442289" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_8" pos="0 0 0" quat="0.866025 0 0 0.5" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_9" pos="0 0 0" quat="0.83147 0 0 0.55557" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_10" pos="0 0 0" quat="0.793353 0 0 0.608761" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_11" pos="0 0 0" quat="0.75184 0 0 0.659346" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_12" pos="0 0 0" quat="0.707107 0 0 0.707107" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_13" pos="0 0 0" quat="0.659346 0 0 0.75184" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_14" pos="0 0 0" quat="0.608761 0 0 0.793353" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_15" pos="0 0 0" quat="0.55557 0 0 0.83147" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_16" pos="0 0 0" quat="0.5 0 0 0.866025" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_17" pos="0 0 0" quat="0.442289 0 0 0.896873" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_18" pos="0 0 0" quat="0.382683 0 0 0.92388" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_19" pos="0 0 0" quat="0.321439 0 0 0.94693" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_20" pos="0 0 0" quat="0.258819 0 0 0.965926" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_21" pos="0 0 0" quat="0.19509 0 0 0.980785" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_22" pos="0 0 0" quat="0.130526 0 0 0.991445" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_23" pos="0 0 0" quat="0.0654031 0 0 0.997859" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_24" pos="0 0 0" quat="0 0 0 1" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_25" pos="0 0 0" quat="-0.0654031 0 0 0.997859" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_26" pos="0 0 0" quat="-0.130526 0 0 0.991445" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_27" pos="0 0 0" quat="-0.19509 0 0 0.980785" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_28" pos="0 0 0" quat="-0.258819 0 0 0.965926" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_29" pos="0 0 0" quat="-0.321439 0 0 0.94693" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_30" pos="0 0 0" quat="-0.382683 0 0 0.92388" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_31" pos="0 0 0" quat="-0.442289 0 0 0.896873" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_32" pos="0 0 0" quat="-0.5 0 0 0.866025" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_33" pos="0 0 0" quat="-0.55557 0 0 0.83147" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_34" pos="0 0 0" quat="-0.608761 0 0 0.793353" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_35" pos="0 0 0" quat="-0.659346 0 0 0.75184" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_36" pos="0 0 0" quat="-0.707107 0 0 0.707107" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_37" pos="0 0 0" quat="-0.75184 0 0 0.659346" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_38" pos="0 0 0" quat="-0.793353 0 0 0.608761" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_39" pos="0 0 0" quat="-0.83147 0 0 0.55557" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_40" pos="0 0 0" quat="-0.866025 0 0 0.5" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_41" pos="0 0 0" quat="-0.896873 0 0 0.442289" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_42" pos="0 0 0" quat="-0.92388 0 0 0.382683" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_43" pos="0 0 0" quat="-0.94693 0 0 0.321439" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_44" pos="0 0 0" quat="-0.965926 0 0 0.258819" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_45" pos="0 0 0" quat="-0.980785 0 0 0.19509" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_46" pos="0 0 0" quat="-0.991445 0 0 0.130526" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_0_sector_47" pos="0 0 0" quat="-0.997859 0 0 0.0654031" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+      </body>
+      <body name="tire_0_1" pos="0.825 0.275 0.0825">
+        <geom name="tire_0_1_sector_0" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_1" pos="0 0 0" quat="0.997859 0 0 0.0654031" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_2" pos="0 0 0" quat="0.991445 0 0 0.130526" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_3" pos="0 0 0" quat="0.980785 0 0 0.19509" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_4" pos="0 0 0" quat="0.965926 0 0 0.258819" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_5" pos="0 0 0" quat="0.94693 0 0 0.321439" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_6" pos="0 0 0" quat="0.92388 0 0 0.382683" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_7" pos="0 0 0" quat="0.896873 0 0 0.442289" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_8" pos="0 0 0" quat="0.866025 0 0 0.5" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_9" pos="0 0 0" quat="0.83147 0 0 0.55557" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_10" pos="0 0 0" quat="0.793353 0 0 0.608761" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_11" pos="0 0 0" quat="0.75184 0 0 0.659346" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_12" pos="0 0 0" quat="0.707107 0 0 0.707107" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_13" pos="0 0 0" quat="0.659346 0 0 0.75184" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_14" pos="0 0 0" quat="0.608761 0 0 0.793353" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_15" pos="0 0 0" quat="0.55557 0 0 0.83147" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_16" pos="0 0 0" quat="0.5 0 0 0.866025" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_17" pos="0 0 0" quat="0.442289 0 0 0.896873" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_18" pos="0 0 0" quat="0.382683 0 0 0.92388" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_19" pos="0 0 0" quat="0.321439 0 0 0.94693" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_20" pos="0 0 0" quat="0.258819 0 0 0.965926" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_21" pos="0 0 0" quat="0.19509 0 0 0.980785" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_22" pos="0 0 0" quat="0.130526 0 0 0.991445" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_23" pos="0 0 0" quat="0.0654031 0 0 0.997859" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_24" pos="0 0 0" quat="0 0 0 1" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_25" pos="0 0 0" quat="-0.0654031 0 0 0.997859" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_26" pos="0 0 0" quat="-0.130526 0 0 0.991445" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_27" pos="0 0 0" quat="-0.19509 0 0 0.980785" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_28" pos="0 0 0" quat="-0.258819 0 0 0.965926" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_29" pos="0 0 0" quat="-0.321439 0 0 0.94693" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_30" pos="0 0 0" quat="-0.382683 0 0 0.92388" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_31" pos="0 0 0" quat="-0.442289 0 0 0.896873" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_32" pos="0 0 0" quat="-0.5 0 0 0.866025" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_33" pos="0 0 0" quat="-0.55557 0 0 0.83147" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_34" pos="0 0 0" quat="-0.608761 0 0 0.793353" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_35" pos="0 0 0" quat="-0.659346 0 0 0.75184" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_36" pos="0 0 0" quat="-0.707107 0 0 0.707107" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_37" pos="0 0 0" quat="-0.75184 0 0 0.659346" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_38" pos="0 0 0" quat="-0.793353 0 0 0.608761" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_39" pos="0 0 0" quat="-0.83147 0 0 0.55557" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_40" pos="0 0 0" quat="-0.866025 0 0 0.5" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_41" pos="0 0 0" quat="-0.896873 0 0 0.442289" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_42" pos="0 0 0" quat="-0.92388 0 0 0.382683" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_43" pos="0 0 0" quat="-0.94693 0 0 0.321439" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_44" pos="0 0 0" quat="-0.965926 0 0 0.258819" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_45" pos="0 0 0" quat="-0.980785 0 0 0.19509" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_46" pos="0 0 0" quat="-0.991445 0 0 0.130526" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_1_sector_47" pos="0 0 0" quat="-0.997859 0 0 0.0654031" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+      </body>
+      <body name="tire_0_2" pos="1.375 0.275 0.0825">
+        <geom name="tire_0_2_sector_0" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_1" pos="0 0 0" quat="0.997859 0 0 0.0654031" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_2" pos="0 0 0" quat="0.991445 0 0 0.130526" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_3" pos="0 0 0" quat="0.980785 0 0 0.19509" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_4" pos="0 0 0" quat="0.965926 0 0 0.258819" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_5" pos="0 0 0" quat="0.94693 0 0 0.321439" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_6" pos="0 0 0" quat="0.92388 0 0 0.382683" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_7" pos="0 0 0" quat="0.896873 0 0 0.442289" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_8" pos="0 0 0" quat="0.866025 0 0 0.5" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_9" pos="0 0 0" quat="0.83147 0 0 0.55557" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_10" pos="0 0 0" quat="0.793353 0 0 0.608761" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_11" pos="0 0 0" quat="0.75184 0 0 0.659346" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_12" pos="0 0 0" quat="0.707107 0 0 0.707107" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_13" pos="0 0 0" quat="0.659346 0 0 0.75184" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_14" pos="0 0 0" quat="0.608761 0 0 0.793353" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_15" pos="0 0 0" quat="0.55557 0 0 0.83147" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_16" pos="0 0 0" quat="0.5 0 0 0.866025" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_17" pos="0 0 0" quat="0.442289 0 0 0.896873" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_18" pos="0 0 0" quat="0.382683 0 0 0.92388" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_19" pos="0 0 0" quat="0.321439 0 0 0.94693" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_20" pos="0 0 0" quat="0.258819 0 0 0.965926" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_21" pos="0 0 0" quat="0.19509 0 0 0.980785" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_22" pos="0 0 0" quat="0.130526 0 0 0.991445" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_23" pos="0 0 0" quat="0.0654031 0 0 0.997859" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_24" pos="0 0 0" quat="0 0 0 1" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_25" pos="0 0 0" quat="-0.0654031 0 0 0.997859" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_26" pos="0 0 0" quat="-0.130526 0 0 0.991445" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_27" pos="0 0 0" quat="-0.19509 0 0 0.980785" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_28" pos="0 0 0" quat="-0.258819 0 0 0.965926" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_29" pos="0 0 0" quat="-0.321439 0 0 0.94693" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_30" pos="0 0 0" quat="-0.382683 0 0 0.92388" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_31" pos="0 0 0" quat="-0.442289 0 0 0.896873" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_32" pos="0 0 0" quat="-0.5 0 0 0.866025" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_33" pos="0 0 0" quat="-0.55557 0 0 0.83147" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_34" pos="0 0 0" quat="-0.608761 0 0 0.793353" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_35" pos="0 0 0" quat="-0.659346 0 0 0.75184" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_36" pos="0 0 0" quat="-0.707107 0 0 0.707107" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_37" pos="0 0 0" quat="-0.75184 0 0 0.659346" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_38" pos="0 0 0" quat="-0.793353 0 0 0.608761" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_39" pos="0 0 0" quat="-0.83147 0 0 0.55557" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_40" pos="0 0 0" quat="-0.866025 0 0 0.5" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_41" pos="0 0 0" quat="-0.896873 0 0 0.442289" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_42" pos="0 0 0" quat="-0.92388 0 0 0.382683" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_43" pos="0 0 0" quat="-0.94693 0 0 0.321439" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_44" pos="0 0 0" quat="-0.965926 0 0 0.258819" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_45" pos="0 0 0" quat="-0.980785 0 0 0.19509" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_46" pos="0 0 0" quat="-0.991445 0 0 0.130526" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_2_sector_47" pos="0 0 0" quat="-0.997859 0 0 0.0654031" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+      </body>
+      <body name="tire_0_3" pos="1.925 0.275 0.0825">
+        <geom name="tire_0_3_sector_0" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_1" pos="0 0 0" quat="0.997859 0 0 0.0654031" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_2" pos="0 0 0" quat="0.991445 0 0 0.130526" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_3" pos="0 0 0" quat="0.980785 0 0 0.19509" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_4" pos="0 0 0" quat="0.965926 0 0 0.258819" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_5" pos="0 0 0" quat="0.94693 0 0 0.321439" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_6" pos="0 0 0" quat="0.92388 0 0 0.382683" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_7" pos="0 0 0" quat="0.896873 0 0 0.442289" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_8" pos="0 0 0" quat="0.866025 0 0 0.5" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_9" pos="0 0 0" quat="0.83147 0 0 0.55557" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_10" pos="0 0 0" quat="0.793353 0 0 0.608761" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_11" pos="0 0 0" quat="0.75184 0 0 0.659346" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_12" pos="0 0 0" quat="0.707107 0 0 0.707107" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_13" pos="0 0 0" quat="0.659346 0 0 0.75184" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_14" pos="0 0 0" quat="0.608761 0 0 0.793353" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_15" pos="0 0 0" quat="0.55557 0 0 0.83147" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_16" pos="0 0 0" quat="0.5 0 0 0.866025" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_17" pos="0 0 0" quat="0.442289 0 0 0.896873" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_18" pos="0 0 0" quat="0.382683 0 0 0.92388" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_19" pos="0 0 0" quat="0.321439 0 0 0.94693" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_20" pos="0 0 0" quat="0.258819 0 0 0.965926" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_21" pos="0 0 0" quat="0.19509 0 0 0.980785" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_22" pos="0 0 0" quat="0.130526 0 0 0.991445" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_23" pos="0 0 0" quat="0.0654031 0 0 0.997859" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_24" pos="0 0 0" quat="0 0 0 1" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_25" pos="0 0 0" quat="-0.0654031 0 0 0.997859" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_26" pos="0 0 0" quat="-0.130526 0 0 0.991445" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_27" pos="0 0 0" quat="-0.19509 0 0 0.980785" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_28" pos="0 0 0" quat="-0.258819 0 0 0.965926" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_29" pos="0 0 0" quat="-0.321439 0 0 0.94693" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_30" pos="0 0 0" quat="-0.382683 0 0 0.92388" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_31" pos="0 0 0" quat="-0.442289 0 0 0.896873" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_32" pos="0 0 0" quat="-0.5 0 0 0.866025" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_33" pos="0 0 0" quat="-0.55557 0 0 0.83147" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_34" pos="0 0 0" quat="-0.608761 0 0 0.793353" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_35" pos="0 0 0" quat="-0.659346 0 0 0.75184" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_36" pos="0 0 0" quat="-0.707107 0 0 0.707107" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_37" pos="0 0 0" quat="-0.75184 0 0 0.659346" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_38" pos="0 0 0" quat="-0.793353 0 0 0.608761" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_39" pos="0 0 0" quat="-0.83147 0 0 0.55557" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_40" pos="0 0 0" quat="-0.866025 0 0 0.5" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_41" pos="0 0 0" quat="-0.896873 0 0 0.442289" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_42" pos="0 0 0" quat="-0.92388 0 0 0.382683" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_43" pos="0 0 0" quat="-0.94693 0 0 0.321439" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_44" pos="0 0 0" quat="-0.965926 0 0 0.258819" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_45" pos="0 0 0" quat="-0.980785 0 0 0.19509" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_46" pos="0 0 0" quat="-0.991445 0 0 0.130526" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_0_3_sector_47" pos="0 0 0" quat="-0.997859 0 0 0.0654031" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+      </body>
+      <body name="tire_1_0" pos="0.275 0.825 0.0825">
+        <geom name="tire_1_0_sector_0" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_1" pos="0 0 0" quat="0.997859 0 0 0.0654031" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_2" pos="0 0 0" quat="0.991445 0 0 0.130526" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_3" pos="0 0 0" quat="0.980785 0 0 0.19509" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_4" pos="0 0 0" quat="0.965926 0 0 0.258819" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_5" pos="0 0 0" quat="0.94693 0 0 0.321439" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_6" pos="0 0 0" quat="0.92388 0 0 0.382683" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_7" pos="0 0 0" quat="0.896873 0 0 0.442289" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_8" pos="0 0 0" quat="0.866025 0 0 0.5" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_9" pos="0 0 0" quat="0.83147 0 0 0.55557" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_10" pos="0 0 0" quat="0.793353 0 0 0.608761" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_11" pos="0 0 0" quat="0.75184 0 0 0.659346" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_12" pos="0 0 0" quat="0.707107 0 0 0.707107" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_13" pos="0 0 0" quat="0.659346 0 0 0.75184" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_14" pos="0 0 0" quat="0.608761 0 0 0.793353" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_15" pos="0 0 0" quat="0.55557 0 0 0.83147" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_16" pos="0 0 0" quat="0.5 0 0 0.866025" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_17" pos="0 0 0" quat="0.442289 0 0 0.896873" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_18" pos="0 0 0" quat="0.382683 0 0 0.92388" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_19" pos="0 0 0" quat="0.321439 0 0 0.94693" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_20" pos="0 0 0" quat="0.258819 0 0 0.965926" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_21" pos="0 0 0" quat="0.19509 0 0 0.980785" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_22" pos="0 0 0" quat="0.130526 0 0 0.991445" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_23" pos="0 0 0" quat="0.0654031 0 0 0.997859" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_24" pos="0 0 0" quat="0 0 0 1" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_25" pos="0 0 0" quat="-0.0654031 0 0 0.997859" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_26" pos="0 0 0" quat="-0.130526 0 0 0.991445" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_27" pos="0 0 0" quat="-0.19509 0 0 0.980785" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_28" pos="0 0 0" quat="-0.258819 0 0 0.965926" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_29" pos="0 0 0" quat="-0.321439 0 0 0.94693" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_30" pos="0 0 0" quat="-0.382683 0 0 0.92388" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_31" pos="0 0 0" quat="-0.442289 0 0 0.896873" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_32" pos="0 0 0" quat="-0.5 0 0 0.866025" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_33" pos="0 0 0" quat="-0.55557 0 0 0.83147" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_34" pos="0 0 0" quat="-0.608761 0 0 0.793353" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_35" pos="0 0 0" quat="-0.659346 0 0 0.75184" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_36" pos="0 0 0" quat="-0.707107 0 0 0.707107" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_37" pos="0 0 0" quat="-0.75184 0 0 0.659346" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_38" pos="0 0 0" quat="-0.793353 0 0 0.608761" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_39" pos="0 0 0" quat="-0.83147 0 0 0.55557" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_40" pos="0 0 0" quat="-0.866025 0 0 0.5" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_41" pos="0 0 0" quat="-0.896873 0 0 0.442289" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_42" pos="0 0 0" quat="-0.92388 0 0 0.382683" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_43" pos="0 0 0" quat="-0.94693 0 0 0.321439" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_44" pos="0 0 0" quat="-0.965926 0 0 0.258819" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_45" pos="0 0 0" quat="-0.980785 0 0 0.19509" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_46" pos="0 0 0" quat="-0.991445 0 0 0.130526" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_0_sector_47" pos="0 0 0" quat="-0.997859 0 0 0.0654031" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+      </body>
+      <body name="tire_1_1" pos="0.825 0.825 0.0825">
+        <geom name="tire_1_1_sector_0" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_1" pos="0 0 0" quat="0.997859 0 0 0.0654031" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_2" pos="0 0 0" quat="0.991445 0 0 0.130526" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_3" pos="0 0 0" quat="0.980785 0 0 0.19509" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_4" pos="0 0 0" quat="0.965926 0 0 0.258819" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_5" pos="0 0 0" quat="0.94693 0 0 0.321439" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_6" pos="0 0 0" quat="0.92388 0 0 0.382683" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_7" pos="0 0 0" quat="0.896873 0 0 0.442289" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_8" pos="0 0 0" quat="0.866025 0 0 0.5" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_9" pos="0 0 0" quat="0.83147 0 0 0.55557" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_10" pos="0 0 0" quat="0.793353 0 0 0.608761" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_11" pos="0 0 0" quat="0.75184 0 0 0.659346" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_12" pos="0 0 0" quat="0.707107 0 0 0.707107" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_13" pos="0 0 0" quat="0.659346 0 0 0.75184" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_14" pos="0 0 0" quat="0.608761 0 0 0.793353" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_15" pos="0 0 0" quat="0.55557 0 0 0.83147" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_16" pos="0 0 0" quat="0.5 0 0 0.866025" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_17" pos="0 0 0" quat="0.442289 0 0 0.896873" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_18" pos="0 0 0" quat="0.382683 0 0 0.92388" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_19" pos="0 0 0" quat="0.321439 0 0 0.94693" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_20" pos="0 0 0" quat="0.258819 0 0 0.965926" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_21" pos="0 0 0" quat="0.19509 0 0 0.980785" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_22" pos="0 0 0" quat="0.130526 0 0 0.991445" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_23" pos="0 0 0" quat="0.0654031 0 0 0.997859" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_24" pos="0 0 0" quat="0 0 0 1" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_25" pos="0 0 0" quat="-0.0654031 0 0 0.997859" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_26" pos="0 0 0" quat="-0.130526 0 0 0.991445" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_27" pos="0 0 0" quat="-0.19509 0 0 0.980785" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_28" pos="0 0 0" quat="-0.258819 0 0 0.965926" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_29" pos="0 0 0" quat="-0.321439 0 0 0.94693" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_30" pos="0 0 0" quat="-0.382683 0 0 0.92388" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_31" pos="0 0 0" quat="-0.442289 0 0 0.896873" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_32" pos="0 0 0" quat="-0.5 0 0 0.866025" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_33" pos="0 0 0" quat="-0.55557 0 0 0.83147" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_34" pos="0 0 0" quat="-0.608761 0 0 0.793353" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_35" pos="0 0 0" quat="-0.659346 0 0 0.75184" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_36" pos="0 0 0" quat="-0.707107 0 0 0.707107" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_37" pos="0 0 0" quat="-0.75184 0 0 0.659346" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_38" pos="0 0 0" quat="-0.793353 0 0 0.608761" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_39" pos="0 0 0" quat="-0.83147 0 0 0.55557" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_40" pos="0 0 0" quat="-0.866025 0 0 0.5" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_41" pos="0 0 0" quat="-0.896873 0 0 0.442289" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_42" pos="0 0 0" quat="-0.92388 0 0 0.382683" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_43" pos="0 0 0" quat="-0.94693 0 0 0.321439" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_44" pos="0 0 0" quat="-0.965926 0 0 0.258819" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_45" pos="0 0 0" quat="-0.980785 0 0 0.19509" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_46" pos="0 0 0" quat="-0.991445 0 0 0.130526" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_1_sector_47" pos="0 0 0" quat="-0.997859 0 0 0.0654031" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+      </body>
+      <body name="tire_1_2" pos="1.375 0.825 0.0825">
+        <geom name="tire_1_2_sector_0" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_1" pos="0 0 0" quat="0.997859 0 0 0.0654031" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_2" pos="0 0 0" quat="0.991445 0 0 0.130526" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_3" pos="0 0 0" quat="0.980785 0 0 0.19509" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_4" pos="0 0 0" quat="0.965926 0 0 0.258819" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_5" pos="0 0 0" quat="0.94693 0 0 0.321439" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_6" pos="0 0 0" quat="0.92388 0 0 0.382683" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_7" pos="0 0 0" quat="0.896873 0 0 0.442289" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_8" pos="0 0 0" quat="0.866025 0 0 0.5" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_9" pos="0 0 0" quat="0.83147 0 0 0.55557" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_10" pos="0 0 0" quat="0.793353 0 0 0.608761" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_11" pos="0 0 0" quat="0.75184 0 0 0.659346" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_12" pos="0 0 0" quat="0.707107 0 0 0.707107" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_13" pos="0 0 0" quat="0.659346 0 0 0.75184" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_14" pos="0 0 0" quat="0.608761 0 0 0.793353" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_15" pos="0 0 0" quat="0.55557 0 0 0.83147" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_16" pos="0 0 0" quat="0.5 0 0 0.866025" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_17" pos="0 0 0" quat="0.442289 0 0 0.896873" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_18" pos="0 0 0" quat="0.382683 0 0 0.92388" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_19" pos="0 0 0" quat="0.321439 0 0 0.94693" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_20" pos="0 0 0" quat="0.258819 0 0 0.965926" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_21" pos="0 0 0" quat="0.19509 0 0 0.980785" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_22" pos="0 0 0" quat="0.130526 0 0 0.991445" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_23" pos="0 0 0" quat="0.0654031 0 0 0.997859" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_24" pos="0 0 0" quat="0 0 0 1" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_25" pos="0 0 0" quat="-0.0654031 0 0 0.997859" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_26" pos="0 0 0" quat="-0.130526 0 0 0.991445" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_27" pos="0 0 0" quat="-0.19509 0 0 0.980785" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_28" pos="0 0 0" quat="-0.258819 0 0 0.965926" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_29" pos="0 0 0" quat="-0.321439 0 0 0.94693" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_30" pos="0 0 0" quat="-0.382683 0 0 0.92388" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_31" pos="0 0 0" quat="-0.442289 0 0 0.896873" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_32" pos="0 0 0" quat="-0.5 0 0 0.866025" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_33" pos="0 0 0" quat="-0.55557 0 0 0.83147" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_34" pos="0 0 0" quat="-0.608761 0 0 0.793353" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_35" pos="0 0 0" quat="-0.659346 0 0 0.75184" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_36" pos="0 0 0" quat="-0.707107 0 0 0.707107" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_37" pos="0 0 0" quat="-0.75184 0 0 0.659346" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_38" pos="0 0 0" quat="-0.793353 0 0 0.608761" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_39" pos="0 0 0" quat="-0.83147 0 0 0.55557" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_40" pos="0 0 0" quat="-0.866025 0 0 0.5" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_41" pos="0 0 0" quat="-0.896873 0 0 0.442289" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_42" pos="0 0 0" quat="-0.92388 0 0 0.382683" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_43" pos="0 0 0" quat="-0.94693 0 0 0.321439" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_44" pos="0 0 0" quat="-0.965926 0 0 0.258819" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_45" pos="0 0 0" quat="-0.980785 0 0 0.19509" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_46" pos="0 0 0" quat="-0.991445 0 0 0.130526" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_2_sector_47" pos="0 0 0" quat="-0.997859 0 0 0.0654031" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+      </body>
+      <body name="tire_1_3" pos="1.925 0.825 0.0825">
+        <geom name="tire_1_3_sector_0" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_1" pos="0 0 0" quat="0.997859 0 0 0.0654031" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_2" pos="0 0 0" quat="0.991445 0 0 0.130526" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_3" pos="0 0 0" quat="0.980785 0 0 0.19509" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_4" pos="0 0 0" quat="0.965926 0 0 0.258819" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_5" pos="0 0 0" quat="0.94693 0 0 0.321439" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_6" pos="0 0 0" quat="0.92388 0 0 0.382683" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_7" pos="0 0 0" quat="0.896873 0 0 0.442289" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_8" pos="0 0 0" quat="0.866025 0 0 0.5" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_9" pos="0 0 0" quat="0.83147 0 0 0.55557" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_10" pos="0 0 0" quat="0.793353 0 0 0.608761" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_11" pos="0 0 0" quat="0.75184 0 0 0.659346" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_12" pos="0 0 0" quat="0.707107 0 0 0.707107" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_13" pos="0 0 0" quat="0.659346 0 0 0.75184" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_14" pos="0 0 0" quat="0.608761 0 0 0.793353" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_15" pos="0 0 0" quat="0.55557 0 0 0.83147" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_16" pos="0 0 0" quat="0.5 0 0 0.866025" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_17" pos="0 0 0" quat="0.442289 0 0 0.896873" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_18" pos="0 0 0" quat="0.382683 0 0 0.92388" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_19" pos="0 0 0" quat="0.321439 0 0 0.94693" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_20" pos="0 0 0" quat="0.258819 0 0 0.965926" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_21" pos="0 0 0" quat="0.19509 0 0 0.980785" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_22" pos="0 0 0" quat="0.130526 0 0 0.991445" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_23" pos="0 0 0" quat="0.0654031 0 0 0.997859" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_24" pos="0 0 0" quat="0 0 0 1" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_25" pos="0 0 0" quat="-0.0654031 0 0 0.997859" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_26" pos="0 0 0" quat="-0.130526 0 0 0.991445" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_27" pos="0 0 0" quat="-0.19509 0 0 0.980785" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_28" pos="0 0 0" quat="-0.258819 0 0 0.965926" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_29" pos="0 0 0" quat="-0.321439 0 0 0.94693" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_30" pos="0 0 0" quat="-0.382683 0 0 0.92388" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_31" pos="0 0 0" quat="-0.442289 0 0 0.896873" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_32" pos="0 0 0" quat="-0.5 0 0 0.866025" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_33" pos="0 0 0" quat="-0.55557 0 0 0.83147" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_34" pos="0 0 0" quat="-0.608761 0 0 0.793353" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_35" pos="0 0 0" quat="-0.659346 0 0 0.75184" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_36" pos="0 0 0" quat="-0.707107 0 0 0.707107" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_37" pos="0 0 0" quat="-0.75184 0 0 0.659346" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_38" pos="0 0 0" quat="-0.793353 0 0 0.608761" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_39" pos="0 0 0" quat="-0.83147 0 0 0.55557" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_40" pos="0 0 0" quat="-0.866025 0 0 0.5" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_41" pos="0 0 0" quat="-0.896873 0 0 0.442289" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_42" pos="0 0 0" quat="-0.92388 0 0 0.382683" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_43" pos="0 0 0" quat="-0.94693 0 0 0.321439" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_44" pos="0 0 0" quat="-0.965926 0 0 0.258819" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_45" pos="0 0 0" quat="-0.980785 0 0 0.19509" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_46" pos="0 0 0" quat="-0.991445 0 0 0.130526" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+        <geom name="tire_1_3_sector_47" pos="0 0 0" quat="-0.997859 0 0 0.0654031" type="mesh" friction="1.1" rgba="0.045 0.045 0.05 1" mesh="tire_sector" solref="0.01" />
+      </body>
+    </body>
+    <body name="brick_bark_pit" pos="-6.35 0.35 0">
+      <geom name="pit_base_vertical" size="0.5 1 0.015" pos="0.5 1 0.015" type="box" rgba="0.36 0.24 0.12 1" friction="0.9" solref="0.01" />
+      <geom name="pit_base_horizontal" size="0.5 0.5 0.015" pos="1.5 1.5 0.015" type="box" rgba="0.55 0.28 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_rail_0" size="0.5 0.01 0.075" pos="0.5 0 0.075" type="box" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_rail_1" size="0.5 0.01 0.075" pos="1 0.5 0.075" quat="0.707107 0 0 0.707107" type="box" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_rail_2" size="0.5 0.01 0.075" pos="1.5 1 0.075" type="box" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_rail_3" size="0.5 0.01 0.075" pos="2 1.5 0.075" quat="0.707107 0 0 0.707107" type="box" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_rail_4" size="1 0.01 0.075" pos="1 2 0.075" quat="0 0 0 1" type="box" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_rail_5" size="1 0.01 0.075" pos="0 1 0.075" quat="0.707107 0 0 -0.707107" type="box" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_rail_6" size="0.707107 0.01 0.075" pos="0.5 1.5 0.075" quat="0.92388 0 0 -0.382683" type="box" rgba="0.35 0.62 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_0" size="0.00732026 0.00506782 0.00561241" pos="0.075 0.075 0.0356124" quat="0.803362 0 0 0.595491" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_1" size="0.00590032 0.00797668 0.00538341" pos="0.075 0.175 0.0353834" quat="0.472399 0 0 0.881385" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_2" size="0.0083011 0.00651081 0.00527353" pos="0.075 0.225 0.0352735" quat="0.380797 0 0 0.924659" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_3" size="0.00614245 0.00867035 0.00568797" pos="0.075 0.375 0.035688" quat="0.855804 0 0 0.5173" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_4" size="0.00726928 0.00582007 0.00795679" pos="0.075 0.425 0.0379568" quat="0.832454 0 0 0.554094" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_5" size="0.0092128 0.00884796 0.00840979" pos="0.075 0.525 0.0384098" quat="0.217567 0 0 0.976045" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_6" size="0.00737917 0.00762574 0.00536743" pos="0.075 0.575 0.0353674" quat="0.00398152 0 0 0.999992" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_7" size="0.00784005 0.00879674 0.00536427" pos="0.075 0.625 0.0353643" quat="0.993561 0 0 0.113299" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_8" size="0.00873739 0.00751393 0.00434124" pos="0.075 0.725 0.0343412" quat="0.935533 0 0 0.353238" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_9" size="0.00651482 0.00815116 0.00653495" pos="0.075 0.775 0.036535" quat="0.990004 0 0 0.141041" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_10" size="0.00813469 0.00805014 0.00568482" pos="0.075 0.825 0.0356848" quat="0.999762 0 0 0.0218258" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_11" size="0.00814101 0.00817339 0.00656578" pos="0.075 0.875 0.0365658" quat="0.705473 0 0 0.708737" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_12" size="0.00911876 0.00690202 0.00492782" pos="0.075 0.975 0.0349278" quat="0.731638 0 0 0.681693" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_13" size="0.00512678 0.00850108 0.00529926" pos="0.075 1.025 0.0352993" quat="0.536823 0 0 0.843695" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_14" size="0.00576262 0.00680724 0.00730292" pos="0.075 1.075 0.0373029" quat="0.934956 0 0 0.354762" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_15" size="0.00714292 0.0083389 0.00621982" pos="0.075 1.175 0.0362198" quat="0.0440312 0 0 0.99903" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_16" size="0.00973642 0.00620854 0.00686923" pos="0.075 1.325 0.0368692" quat="0.798411 0 0 0.602112" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_17" size="0.00826709 0.00917141 0.00830164" pos="0.075 1.525 0.0383016" quat="0.972123 0 0 0.234472" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_18" size="0.00602644 0.00679069 0.00691609" pos="0.075 1.575 0.0369161" quat="0.572757 0 0 0.819725" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_19" size="0.00646302 0.00635191 0.00820663" pos="0.075 1.625 0.0382066" quat="0.987045 0 0 0.160446" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_20" size="0.00543208 0.00733096 0.00780615" pos="0.075 1.675 0.0378062" quat="0.97619 0 0 0.216918" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_21" size="0.00791514 0.00655141 0.00836151" pos="0.075 1.725 0.0383615" quat="0.671451 0 0 0.741049" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_22" size="0.0054196 0.00981231 0.00525713" pos="0.075 1.775 0.0352571" quat="0.994266 0 0 0.106935" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_23" size="0.00693035 0.00781542 0.0072592" pos="0.075 1.825 0.0372592" quat="0.973844 0 0 0.227217" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_24" size="0.00828029 0.00985895 0.00828356" pos="0.125 0.075 0.0382836" quat="0.826845 0 0 0.562429" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_25" size="0.0078621 0.00964725 0.00651637" pos="0.125 0.225 0.0365164" quat="0.951397 0 0 0.307967" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_26" size="0.00732973 0.00852092 0.00436275" pos="0.125 0.325 0.0343628" quat="0.954627 0 0 0.297804" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_27" size="0.00783986 0.00891554 0.00660116" pos="0.125 0.375 0.0366012" quat="0.710909 0 0 0.703284" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_28" size="0.00967907 0.00751297 0.00666917" pos="0.125 0.425 0.0366692" quat="0.995666 0 0 0.0929995" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_29" size="0.00741351 0.00824064 0.00446654" pos="0.125 0.575 0.0344665" quat="0.442835 0 0 0.896603" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_30" size="0.00647769 0.0075886 0.00433786" pos="0.125 0.625 0.0343379" quat="0.0494036 0 0 0.998779" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_31" size="0.00730558 0.00508558 0.00484312" pos="0.125 0.675 0.0348431" quat="0.413459 0 0 0.910523" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_32" size="0.00723725 0.00953043 0.00425174" pos="0.125 0.725 0.0342517" quat="0.95411 0 0 0.299456" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_33" size="0.00580475 0.00791166 0.00532136" pos="0.125 0.775 0.0353214" quat="0.920778 0 0 0.390086" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_34" size="0.0092889 0.00802716 0.00533655" pos="0.125 0.825 0.0353365" quat="0.52125 0 0 0.853404" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_35" size="0.00581643 0.00943472 0.00716461" pos="0.125 0.875 0.0371646" quat="0.162087 0 0 0.986777" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_36" size="0.00951987 0.00585709 0.00720247" pos="0.125 0.925 0.0372025" quat="0.303996 0 0 0.952673" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_37" size="0.00826357 0.00764223 0.00778577" pos="0.125 0.975 0.0377858" quat="0.921608 0 0 0.388122" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_38" size="0.00738972 0.00857542 0.00499793" pos="0.125 1.025 0.0349979" quat="0.531472 0 0 0.847076" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_39" size="0.00534551 0.0062711 0.00629501" pos="0.125 1.275 0.036295" quat="0.765721 0 0 0.643173" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_40" size="0.00865007 0.0070477 0.00650579" pos="0.125 1.325 0.0365058" quat="0.075136 0 0 0.997173" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_41" size="0.00706165 0.00743192 0.00537337" pos="0.125 1.375 0.0353734" quat="0.843803 0 0 0.536654" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_42" size="0.00838389 0.00519011 0.00855534" pos="0.125 1.425 0.0385553" quat="0.769582 0 0 0.638548" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_43" size="0.00829047 0.00600654 0.00780573" pos="0.125 1.475 0.0378057" quat="0.0567115 0 0 0.998391" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_44" size="0.00538026 0.00975546 0.00551349" pos="0.125 1.525 0.0355135" quat="0.540058 0 0 0.841628" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_45" size="0.00900063 0.00950192 0.00555713" pos="0.125 1.625 0.0355571" quat="0.827198 0 0 0.561911" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_46" size="0.00774202 0.00715977 0.00597797" pos="0.125 1.675 0.035978" quat="0.116166 0 0 0.99323" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_47" size="0.00565455 0.00749 0.00729956" pos="0.175 0.075 0.0372996" quat="0.989693 0 0 0.143204" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_48" size="0.00804371 0.00948215 0.00802075" pos="0.175 0.125 0.0380207" quat="0.706564 0 0 0.707649" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_49" size="0.00904638 0.0054895 0.00449414" pos="0.175 0.175 0.0344941" quat="0.637172 0 0 0.770721" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_50" size="0.00621686 0.00839714 0.00459113" pos="0.175 0.225 0.0345911" quat="0.598658 0 0 0.801005" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_51" size="0.00798279 0.00691285 0.00899682" pos="0.175 0.275 0.0389968" quat="0.999954 0 0 0.00961425" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_52" size="0.00918503 0.00845266 0.00799637" pos="0.175 0.325 0.0379964" quat="0.356574 0 0 0.934267" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_53" size="0.00988785 0.0094526 0.00862675" pos="0.175 0.375 0.0386267" quat="0.692829 0 0 0.721102" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_54" size="0.00943155 0.00773586 0.0061667" pos="0.175 0.425 0.0361667" quat="0.0870162 0 0 0.996207" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_55" size="0.00759261 0.00862803 0.00741821" pos="0.175 0.525 0.0374182" quat="0.167133 0 0 0.985934" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_56" size="0.00786554 0.00907783 0.00593089" pos="0.175 0.775 0.0359309" quat="0.708246 0 0 0.705966" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_57" size="0.00983256 0.00774773 0.00478638" pos="0.175 0.875 0.0347864" quat="0.540472 0 0 0.841362" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_58" size="0.00994797 0.00989944 0.00506342" pos="0.175 0.925 0.0350634" quat="0.562164 0 0 0.827026" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_59" size="0.00870355 0.00691816 0.00655702" pos="0.175 1.125 0.036557" quat="0.578417 0 0 0.815741" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_60" size="0.007465 0.00795238 0.00498827" pos="0.175 1.175 0.0349883" quat="0.998898 0 0 0.0469435" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_61" size="0.00693353 0.00789627 0.00676041" pos="0.175 1.225 0.0367604" quat="0.17917 0 0 0.983818" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_62" size="0.00975075 0.00575682 0.00796947" pos="0.175 1.325 0.0379695" quat="0.910839 0 0 0.412762" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_63" size="0.00644479 0.00538869 0.00819461" pos="0.175 1.375 0.0381946" quat="0.952733 0 0 0.303808" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_64" size="0.0099131 0.0095251 0.00602933" pos="0.175 1.425 0.0360293" quat="0.832712 0 0 0.553706" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_65" size="0.00658828 0.00815924 0.00697781" pos="0.175 1.475 0.0369778" quat="0.508921 0 0 0.860813" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_66" size="0.00759985 0.00509494 0.00764704" pos="0.175 1.675 0.037647" quat="0.547181 0 0 0.837015" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_67" size="0.00832286 0.00587474 0.00544505" pos="0.225 0.075 0.0354451" quat="0.977501 0 0 0.210931" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_68" size="0.00835662 0.00650978 0.00502565" pos="0.225 0.125 0.0350256" quat="0.99771 0 0 0.0676401" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_69" size="0.00622428 0.00858486 0.00416299" pos="0.225 0.225 0.034163" quat="0.992741 0 0 0.120269" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_70" size="0.00712735 0.00653348 0.00560496" pos="0.225 0.375 0.035605" quat="0.696747 0 0 0.717317" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_71" size="0.00917774 0.00695641 0.00845701" pos="0.225 0.425 0.038457" quat="0.991516 0 0 0.129981" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_72" size="0.00946101 0.00734281 0.00548985" pos="0.225 0.525 0.0354899" quat="0.920531 0 0 0.39067" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_73" size="0.00702412 0.00962311 0.00848594" pos="0.225 0.625 0.0384859" quat="0.988779 0 0 0.149386" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_74" size="0.00807994 0.00696261 0.00609351" pos="0.225 0.675 0.0360935" quat="0.705788 0 0 0.708424" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_75" size="0.00696309 0.00829243 0.00414972" pos="0.225 0.775 0.0341497" quat="0.999904 0 0 0.013856" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_76" size="0.00820012 0.0098912 0.0089057" pos="0.225 0.825 0.0389057" quat="0.424625 0 0 0.905369" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_77" size="0.00756676 0.00517468 0.00669709" pos="0.225 0.875 0.0366971" quat="0.0973555 0 0 0.99525" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_78" size="0.00664008 0.00889611 0.00664018" pos="0.225 0.975 0.0366402" quat="0.853391 0 0 0.521271" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_79" size="0.00660955 0.00624184 0.00571936" pos="0.225 1.075 0.0357194" quat="0.0209405 0 0 0.999781" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_80" size="0.00724116 0.00975899 0.00604107" pos="0.225 1.175 0.0360411" quat="0.888494 0 0 0.458888" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_81" size="0.00624182 0.00610413 0.00605534" pos="0.225 1.275 0.0360553" quat="0.187974 0 0 0.982174" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_82" size="0.00845908 0.00830759 0.00462798" pos="0.225 1.425 0.034628" quat="0.891348 0 0 0.453321" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_83" size="0.00732516 0.00601684 0.007716" pos="0.225 1.475 0.037716" quat="0.985052 0 0 0.172257" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_84" size="0.00752173 0.0061832 0.00438277" pos="0.225 1.525 0.0343828" quat="0.307979 0 0 0.951393" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_85" size="0.00827246 0.00741183 0.00794527" pos="0.225 1.575 0.0379453" quat="0.882592 0 0 0.47014" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_86" size="0.00690426 0.00778602 0.00670836" pos="0.225 1.675 0.0367084" quat="0.914206 0 0 0.40525" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_0" size="0.036497 0.0204144 0.0267561" pos="0.225 1.925 0.0567561" quat="0.7137 0 0 0.700451" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_87" size="0.00773519 0.00632343 0.0042136" pos="0.275 0.075 0.0342136" quat="0.657673 0 0 0.753303" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_88" size="0.00927258 0.008662 0.00432589" pos="0.275 0.125 0.0343259" quat="0.974708 0 0 0.223484" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_89" size="0.00978307 0.00588077 0.00760768" pos="0.275 0.175 0.0376077" quat="0.873209 0 0 0.487346" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_90" size="0.00517239 0.00606529 0.00560583" pos="0.275 0.225 0.0356058" quat="0.926621 0 0 0.375997" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_91" size="0.00860167 0.00722013 0.00596968" pos="0.275 0.375 0.0359697" quat="0.730678 0 0 0.682722" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_92" size="0.00792308 0.00860299 0.00699107" pos="0.275 0.675 0.0369911" quat="0.973137 0 0 0.230229" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_93" size="0.00590177 0.00940364 0.0088046" pos="0.275 0.725 0.0388046" quat="0.860829 0 0 0.508894" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_94" size="0.00612597 0.00704099 0.00486573" pos="0.275 0.775 0.0348657" quat="0.817545 0 0 0.575865" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_95" size="0.00810941 0.00579716 0.00503137" pos="0.275 0.825 0.0350314" quat="0.703787 0 0 0.710411" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_96" size="0.00840161 0.00566237 0.00777461" pos="0.275 0.875 0.0377746" quat="0.813858 0 0 0.581064" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_97" size="0.00697391 0.00623531 0.00726124" pos="0.275 0.925 0.0372612" quat="0.381578 0 0 0.924336" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_98" size="0.00944146 0.00529927 0.00687667" pos="0.275 0.975 0.0368767" quat="0.380361 0 0 0.924838" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_99" size="0.00977924 0.00783677 0.00413737" pos="0.275 1.025 0.0341374" quat="0.868719 0 0 0.495305" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_100" size="0.00652632 0.00627326 0.00792552" pos="0.275 1.075 0.0379255" quat="0.883891 0 0 0.467693" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_101" size="0.00698876 0.00801704 0.00480036" pos="0.275 1.175 0.0348004" quat="0.393071 0 0 0.919508" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_102" size="0.00587108 0.00928299 0.00669947" pos="0.275 1.225 0.0366995" quat="0.99656 0 0 0.0828771" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_103" size="0.00713333 0.0076266 0.00426834" pos="0.275 1.325 0.0342683" quat="0.399161 0 0 0.916881" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_104" size="0.0077413 0.00776029 0.00678176" pos="0.275 1.375 0.0367818" quat="0.912199 0 0 0.409747" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_105" size="0.00781166 0.00597929 0.00810925" pos="0.275 1.425 0.0381093" quat="0.0465218 0 0 0.998917" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_106" size="0.0090583 0.00607439 0.00758188" pos="0.275 1.525 0.0375819" quat="0.954307 0 0 0.298828" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_107" size="0.0067404 0.00832011 0.00745413" pos="0.275 1.575 0.0374541" quat="0.999821 0 0 0.0189412" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_108" size="0.00765035 0.00596126 0.00739811" pos="0.275 1.625 0.0373981" quat="0.956119 0 0 0.292978" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_109" size="0.00517601 0.0058002 0.00667565" pos="0.325 0.125 0.0366756" quat="0.782392 0 0 0.622787" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_110" size="0.00985048 0.00516394 0.00677819" pos="0.325 0.275 0.0367782" quat="0.978272 0 0 0.207324" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_111" size="0.00682005 0.00724176 0.00405984" pos="0.325 0.325 0.0340598" quat="0.801011 0 0 0.59865" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_112" size="0.00677968 0.00735881 0.00495932" pos="0.325 0.375 0.0349593" quat="0.643829 0 0 0.765169" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_113" size="0.00584196 0.00639419 0.00799638" pos="0.325 0.475 0.0379964" quat="0.810255 0 0 0.586078" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_114" size="0.0070308 0.0085531 0.00449178" pos="0.325 0.575 0.0344918" quat="0.0115063 0 0 0.999934" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_115" size="0.00787546 0.00658433 0.00517599" pos="0.325 0.675 0.035176" quat="0.148908 0 0 0.988851" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_116" size="0.00758525 0.00629135 0.00757606" pos="0.325 0.725 0.0375761" quat="0.987836 0 0 0.155497" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_117" size="0.00596547 0.00928564 0.00861897" pos="0.325 0.775 0.038619" quat="0.97312 0 0 0.230297" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_118" size="0.00504444 0.0065689 0.00835636" pos="0.325 0.825 0.0383564" quat="0.588428 0 0 0.80855" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_119" size="0.00593592 0.00940304 0.00625294" pos="0.325 0.975 0.0362529" quat="0.129152 0 0 0.991625" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_120" size="0.00520217 0.00514195 0.00626949" pos="0.325 1.075 0.0362695" quat="0.705869 0 0 0.708343" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_121" size="0.00520021 0.0063234 0.00541132" pos="0.325 1.125 0.0354113" quat="0.877758 0 0 0.479105" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_122" size="0.00711396 0.00750917 0.004593" pos="0.325 1.175 0.034593" quat="0.673983 0 0 0.738747" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_123" size="0.0094134 0.00761628 0.00419381" pos="0.325 1.375 0.0341938" quat="0.0205779 0 0 0.999788" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_124" size="0.00573737 0.0088458 0.0056024" pos="0.325 1.425 0.0356024" quat="0.7926 0 0 0.609742" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_125" size="0.00572877 0.00829011 0.00731214" pos="0.325 1.475 0.0373121" quat="0.818691 0 0 0.574234" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_126" size="0.00573058 0.00596791 0.00506785" pos="0.325 1.575 0.0350679" quat="0.129044 0 0 0.991639" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_1" size="0.0231037 0.0165745 0.0206916" pos="0.325 1.825 0.0506916" quat="0.18337 0 0 0.983044" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_2" size="0.0279128 0.019783 0.0323485" pos="0.325 1.925 0.0623485" quat="0.999901 0 0 0.0140699" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_127" size="0.00624643 0.00877417 0.00861045" pos="0.375 0.075 0.0386105" quat="0.796492 0 0 0.604649" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_128" size="0.00586258 0.00789584 0.00503307" pos="0.375 0.125 0.0350331" quat="0.408177 0 0 0.912903" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_129" size="0.00905912 0.00885777 0.00792208" pos="0.375 0.225 0.0379221" quat="0.307911 0 0 0.951415" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_130" size="0.00671454 0.00687201 0.00411001" pos="0.375 0.275 0.03411" quat="0.688349 0 0 0.72538" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_131" size="0.00944212 0.00911578 0.00836457" pos="0.375 0.325 0.0383646" quat="0.557461 0 0 0.830203" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_132" size="0.00979016 0.00683218 0.00424181" pos="0.375 0.425 0.0342418" quat="0.953397 0 0 0.301718" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_133" size="0.00572021 0.00815339 0.00543697" pos="0.375 0.475 0.035437" quat="0.16032 0 0 0.987065" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_134" size="0.00737318 0.00631268 0.00677654" pos="0.375 0.525 0.0367765" quat="0.999907 0 0 0.0136535" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_135" size="0.00612882 0.00542551 0.00798537" pos="0.375 0.575 0.0379854" quat="0.577772 0 0 0.816199" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_136" size="0.00560796 0.00765185 0.00461945" pos="0.375 0.625 0.0346195" quat="0.726158 0 0 0.687528" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_137" size="0.00622991 0.00712661 0.00516097" pos="0.375 0.675 0.035161" quat="0.918086 0 0 0.396381" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_138" size="0.00706247 0.00908736 0.00614512" pos="0.375 0.725 0.0361451" quat="0.414655 0 0 0.909979" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_139" size="0.00622317 0.00763029 0.00749417" pos="0.375 0.775 0.0374942" quat="0.961607 0 0 0.27443" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_140" size="0.00972914 0.00955385 0.00858255" pos="0.375 0.825 0.0385826" quat="0.999997 0 0 0.00241036" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_141" size="0.00704985 0.00608403 0.00422138" pos="0.375 0.875 0.0342214" quat="0.746588 0 0 0.665286" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_142" size="0.00697568 0.00824561 0.0081079" pos="0.375 0.925 0.0381079" quat="0.940633 0 0 0.339424" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_143" size="0.00626499 0.00976132 0.00456482" pos="0.375 0.975 0.0345648" quat="0.290099 0 0 0.956997" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_144" size="0.00972452 0.0085302 0.00565582" pos="0.375 1.025 0.0356558" quat="0.288457 0 0 0.957493" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_145" size="0.00955701 0.00641382 0.00609479" pos="0.375 1.125 0.0360948" quat="0.999938 0 0 0.0111375" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_146" size="0.00711437 0.00522147 0.00773726" pos="0.375 1.225 0.0377373" quat="0.985856 0 0 0.167597" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_147" size="0.00910485 0.007026 0.00892824" pos="0.375 1.275 0.0389282" quat="0.999912 0 0 0.0132689" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_148" size="0.00591228 0.00649425 0.00555922" pos="0.375 1.325 0.0355592" quat="0.674727 0 0 0.738067" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_149" size="0.00582546 0.00669259 0.00400266" pos="0.375 1.525 0.0340027" quat="0.880121 0 0 0.474749" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_150" size="0.0084393 0.00583562 0.00643222" pos="0.425 0.075 0.0364322" quat="0.271151 0 0 0.962537" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_151" size="0.00710784 0.0057541 0.00715529" pos="0.425 0.125 0.0371553" quat="0.394867 0 0 0.918738" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_152" size="0.00897947 0.00981784 0.00789764" pos="0.425 0.175 0.0378976" quat="0.996144 0 0 0.0877362" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_153" size="0.00662039 0.00949971 0.00527317" pos="0.425 0.425 0.0352732" quat="0.72659 0 0 0.687071" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_154" size="0.00750112 0.00919964 0.0054497" pos="0.425 0.475 0.0354497" quat="0.41442 0 0 0.910086" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_155" size="0.00955796 0.00777641 0.00691846" pos="0.425 0.575 0.0369185" quat="0.563794 0 0 0.825916" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_156" size="0.00714737 0.0066785 0.00536307" pos="0.425 0.625 0.0353631" quat="0.331919 0 0 0.943308" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_157" size="0.00813256 0.00780075 0.00884176" pos="0.425 0.775 0.0388418" quat="0.16136 0 0 0.986896" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_158" size="0.00752355 0.00923088 0.00596454" pos="0.425 0.875 0.0359645" quat="0.428581 0 0 0.903503" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_159" size="0.00728802 0.00575982 0.00446066" pos="0.425 0.975 0.0344607" quat="0.999967 0 0 0.00814785" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_160" size="0.00772198 0.00609747 0.00829977" pos="0.425 1.025 0.0382998" quat="0.803119 0 0 0.595819" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_161" size="0.00962322 0.00607765 0.00831348" pos="0.425 1.075 0.0383135" quat="0.0281325 0 0 0.999604" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_162" size="0.00858701 0.0098035 0.00635995" pos="0.425 1.125 0.0363599" quat="0.365123 0 0 0.930959" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_163" size="0.007999 0.00956463 0.00832278" pos="0.425 1.175 0.0383228" quat="0.736969 0 0 0.675927" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_164" size="0.00624349 0.00626346 0.00599378" pos="0.425 1.275 0.0359938" quat="0.954976 0 0 0.296683" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_165" size="0.00553012 0.00505557 0.00547567" pos="0.425 1.325 0.0354757" quat="0.378636 0 0 0.925546" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_166" size="0.00585806 0.00758813 0.00587605" pos="0.425 1.475 0.035876" quat="0.374712 0 0 0.927141" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_3" size="0.0337183 0.0191588 0.0279963" pos="0.425 1.725 0.0579963" quat="0.960351 0 0 0.278792" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_4" size="0.0353716 0.017111 0.0135835" pos="0.425 1.825 0.0435835" quat="0.962836 0 0 0.270086" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_5" size="0.027682 0.0169372 0.027451" pos="0.425 1.925 0.057451" quat="0.574815 0 0 0.818283" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_167" size="0.00523071 0.00665897 0.00582984" pos="0.475 0.075 0.0358298" quat="0.0264015 0 0 0.999651" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_168" size="0.00894851 0.00998593 0.00832023" pos="0.475 0.125 0.0383202" quat="0.346952 0 0 0.937883" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_169" size="0.00600886 0.00993438 0.00409991" pos="0.475 0.175 0.0340999" quat="0.782934 0 0 0.622104" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_170" size="0.00832344 0.00913377 0.00710451" pos="0.475 0.225 0.0371045" quat="0.977409 0 0 0.211356" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_171" size="0.00681233 0.00711391 0.00850392" pos="0.475 0.275 0.0385039" quat="0.790119 0 0 0.612953" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_172" size="0.00937152 0.00999569 0.00400438" pos="0.475 0.375 0.0340044" quat="0.712397 0 0 0.701776" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_173" size="0.00762091 0.00715771 0.00836647" pos="0.475 0.425 0.0383665" quat="0.733345 0 0 0.679857" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_174" size="0.00650564 0.0099997 0.0052907" pos="0.475 0.475 0.0352907" quat="0.512377 0 0 0.85876" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_175" size="0.00936569 0.00732826 0.00410369" pos="0.475 0.525 0.0341037" quat="0.266741 0 0 0.963768" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_176" size="0.00991947 0.00557854 0.0073585" pos="0.475 0.575 0.0373585" quat="0.977001 0 0 0.213236" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_177" size="0.00789382 0.00587505 0.00852654" pos="0.475 0.675 0.0385265" quat="0.256429 0 0 0.966563" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_178" size="0.00940749 0.00867728 0.0066989" pos="0.475 0.725 0.0366989" quat="0.242251 0 0 0.970214" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_179" size="0.00795666 0.00515843 0.00888357" pos="0.475 0.775 0.0388836" quat="0.993761 0 0 0.111526" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_180" size="0.00511364 0.00767344 0.00416844" pos="0.475 0.875 0.0341684" quat="0.0228035 0 0 0.99974" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_181" size="0.00615319 0.00557303 0.00778887" pos="0.475 1.025 0.0377889" quat="0.301498 0 0 0.953467" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_182" size="0.00795174 0.00672193 0.00464857" pos="0.475 1.075 0.0346486" quat="0.63525 0 0 0.772307" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_183" size="0.0089683 0.00819662 0.00691709" pos="0.475 1.175 0.0369171" quat="0.397181 0 0 0.91774" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_184" size="0.00602622 0.00616049 0.00590318" pos="0.475 1.225 0.0359032" quat="0.221927 0 0 0.975063" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_185" size="0.00551845 0.00777595 0.00707942" pos="0.475 1.325 0.0370794" quat="0.927405 0 0 0.374058" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_186" size="0.00831312 0.00586408 0.00747892" pos="0.525 0.075 0.0374789" quat="0.862702 0 0 0.505712" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_187" size="0.00795685 0.00849842 0.00563909" pos="0.525 0.175 0.0356391" quat="0.981277 0 0 0.192601" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_188" size="0.00755365 0.00850089 0.00487257" pos="0.525 0.225 0.0348726" quat="0.906807 0 0 0.421547" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_189" size="0.00771364 0.007681 0.0052085" pos="0.525 0.275 0.0352085" quat="0.36869 0 0 0.929552" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_190" size="0.00784159 0.00861598 0.00892593" pos="0.525 0.325 0.0389259" quat="0.557437 0 0 0.830219" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_191" size="0.00601489 0.00564939 0.00509296" pos="0.525 0.425 0.035093" quat="0.707876 0 0 0.706337" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_192" size="0.00860783 0.00714386 0.00581067" pos="0.525 0.525 0.0358107" quat="0.884307 0 0 0.466906" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_193" size="0.00537492 0.00540595 0.00458345" pos="0.525 0.575 0.0345835" quat="0.891528 0 0 0.452966" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_194" size="0.0070236 0.00765032 0.00709885" pos="0.525 0.725 0.0370989" quat="0.982122 0 0 0.188246" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_195" size="0.00857348 0.00769703 0.00524571" pos="0.525 0.775 0.0352457" quat="0.987055 0 0 0.160385" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_196" size="0.00943082 0.00721389 0.00610743" pos="0.525 0.825 0.0361074" quat="0.104181 0 0 0.994558" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_197" size="0.00774648 0.00726243 0.008024" pos="0.525 0.925 0.038024" quat="0.360772 0 0 0.932654" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_198" size="0.00675402 0.00659215 0.00419868" pos="0.525 0.975 0.0341987" quat="0.737663 0 0 0.675169" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_199" size="0.00931552 0.00892459 0.0062748" pos="0.525 1.025 0.0362748" quat="0.990155 0 0 0.139978" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_200" size="0.00973677 0.00534938 0.0089199" pos="0.525 1.075 0.0389199" quat="0.923612 0 0 0.383329" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_201" size="0.00589352 0.00766515 0.006753" pos="0.525 1.125 0.036753" quat="0.411623 0 0 0.911354" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_202" size="0.00556854 0.00759781 0.00737454" pos="0.525 1.175 0.0373745" quat="0.41674 0 0 0.909026" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_203" size="0.0061745 0.00855784 0.00657835" pos="0.525 1.275 0.0365783" quat="0.608336 0 0 0.793679" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_204" size="0.00748407 0.00540762 0.0080568" pos="0.525 1.325 0.0380568" quat="0.922067 0 0 0.387031" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_205" size="0.00540781 0.00763147 0.00887338" pos="0.525 1.375 0.0388734" quat="0.0029236 0 0 0.999996" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_6" size="0.0248276 0.0178926 0.0332006" pos="0.525 1.625 0.0632006" quat="0.984743 0 0 0.174014" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_7" size="0.0264032 0.0222782 0.0278416" pos="0.525 1.725 0.0578416" quat="0.904472 0 0 0.426533" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_8" size="0.0343935 0.0223642 0.0340417" pos="0.525 1.825 0.0640417" quat="0.160372 0 0 0.987057" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_9" size="0.0366287 0.0214589 0.0186924" pos="0.525 1.925 0.0486924" quat="0.914187 0 0 0.405292" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_206" size="0.00917346 0.0099994 0.00418738" pos="0.575 0.125 0.0341874" quat="0.712955 0 0 0.70121" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_207" size="0.00663129 0.0069366 0.00535623" pos="0.575 0.275 0.0353562" quat="0.258615 0 0 0.965981" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_208" size="0.00660347 0.0079259 0.00750036" pos="0.575 0.375 0.0375004" quat="0.0499192 0 0 0.998753" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_209" size="0.00839856 0.00909313 0.00869917" pos="0.575 0.475 0.0386992" quat="0.968214 0 0 0.250125" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_210" size="0.00834399 0.00931014 0.0086765" pos="0.575 0.525 0.0386765" quat="0.614663 0 0 0.78879" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_211" size="0.00911566 0.00779789 0.00705624" pos="0.575 0.625 0.0370562" quat="0.00580249 0 0 0.999983" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_212" size="0.00973175 0.009557 0.00499865" pos="0.575 0.725 0.0349987" quat="0.75134 0 0 0.659915" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_213" size="0.00779985 0.00775469 0.00556632" pos="0.575 0.775 0.0355663" quat="0.603589 0 0 0.797296" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_214" size="0.00861797 0.00859234 0.00856289" pos="0.575 0.825 0.0385629" quat="0.645898 0 0 0.763424" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_215" size="0.00769333 0.00818642 0.00454502" pos="0.575 0.875 0.034545" quat="0.501427 0 0 0.8652" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_216" size="0.00598197 0.00882534 0.00497675" pos="0.575 0.975 0.0349768" quat="0.0801439 0 0 0.996783" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_217" size="0.00628247 0.0059509 0.00679046" pos="0.575 1.175 0.0367905" quat="0.985656 0 0 0.168769" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_218" size="0.00806123 0.00555359 0.00419013" pos="0.575 1.275 0.0341901" quat="0.997381 0 0 0.0723243" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_219" size="0.00543052 0.00734309 0.00830268" pos="0.575 1.325 0.0383027" quat="0.328383 0 0 0.944545" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_220" size="0.00822615 0.00770187 0.00627342" pos="0.625 0.075 0.0362734" quat="0.745347 0 0 0.666676" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_221" size="0.00971595 0.00731082 0.00496232" pos="0.625 0.175 0.0349623" quat="0.0505864 0 0 0.99872" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_222" size="0.00681864 0.006 0.00434919" pos="0.625 0.225 0.0343492" quat="0.988574 0 0 0.150734" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_223" size="0.00800318 0.00619407 0.00407542" pos="0.625 0.275 0.0340754" quat="0.688076 0 0 0.725638" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_224" size="0.00953459 0.00717233 0.00709626" pos="0.625 0.375 0.0370963" quat="0.576708 0 0 0.81695" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_225" size="0.0080417 0.00996393 0.00601468" pos="0.625 0.425 0.0360147" quat="0.104798 0 0 0.994494" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_226" size="0.00825969 0.00568965 0.0070086" pos="0.625 0.525 0.0370086" quat="0.517324 0 0 0.85579" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_227" size="0.00580674 0.0071007 0.0068097" pos="0.625 0.575 0.0368097" quat="0.82726 0 0 0.561819" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_228" size="0.00596141 0.0090359 0.00647664" pos="0.625 0.625 0.0364766" quat="0.479798 0 0 0.877379" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_229" size="0.00805009 0.00941885 0.0045214" pos="0.625 0.675 0.0345214" quat="0.587477 0 0 0.809241" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_230" size="0.00564317 0.00848497 0.00582807" pos="0.625 0.725 0.0358281" quat="0.971536 0 0 0.236893" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_231" size="0.00667797 0.00822339 0.00527581" pos="0.625 0.775 0.0352758" quat="0.832921 0 0 0.553392" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_232" size="0.00669437 0.00745528 0.00625546" pos="0.625 0.875 0.0362555" quat="0.569103 0 0 0.822266" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_233" size="0.00921155 0.00635479 0.00881102" pos="0.625 0.925 0.038811" quat="0.99196 0 0 0.12655" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_234" size="0.00525652 0.00934369 0.00764807" pos="0.625 0.975 0.0376481" quat="0.194324 0 0 0.980937" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_235" size="0.00640781 0.00980128 0.00893" pos="0.625 1.025 0.03893" quat="0.934443 0 0 0.356112" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_236" size="0.00609066 0.00651067 0.007017" pos="0.625 1.075 0.037017" quat="0.907437 0 0 0.420188" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_237" size="0.0059746 0.00579304 0.00877599" pos="0.625 1.125 0.038776" quat="0.432058 0 0 0.901846" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_238" size="0.00604258 0.00885517 0.00870107" pos="0.625 1.275 0.0387011" quat="0.999069 0 0 0.0431449" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_10" size="0.0260516 0.0186663 0.01336" pos="0.625 1.525 0.04336" quat="0.760493 0 0 0.649346" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_11" size="0.0366975 0.0163303 0.027407" pos="0.625 1.625 0.057407" quat="0.983224 0 0 0.182403" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_12" size="0.0333034 0.0185461 0.0342285" pos="0.625 1.725 0.0642285" quat="0.871888 0 0 0.489706" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_13" size="0.029215 0.0234732 0.0153394" pos="0.625 1.825 0.0453394" quat="0.941848 0 0 0.336038" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_14" size="0.0311794 0.0209101 0.0279455" pos="0.625 1.925 0.0579455" quat="0.0987497 0 0 0.995112" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_239" size="0.0063218 0.00502758 0.00599957" pos="0.675 0.075 0.0359996" quat="0.504114 0 0 0.863637" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_240" size="0.0082488 0.00767696 0.00547604" pos="0.675 0.125 0.035476" quat="0.318195 0 0 0.948025" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_241" size="0.00589846 0.00709332 0.00651529" pos="0.675 0.175 0.0365153" quat="0.862991 0 0 0.505219" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_242" size="0.00625336 0.0070042 0.00834496" pos="0.675 0.275 0.038345" quat="0.989592 0 0 0.143904" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_243" size="0.00628342 0.0079223 0.00673173" pos="0.675 0.325 0.0367317" quat="0.424042 0 0 0.905642" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_244" size="0.00526869 0.00938627 0.00582278" pos="0.675 0.425 0.0358228" quat="0.117908 0 0 0.993024" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_245" size="0.00593835 0.00628063 0.00595763" pos="0.675 0.725 0.0359576" quat="0.957394 0 0 0.288786" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_246" size="0.00574299 0.0087585 0.00537158" pos="0.675 0.775 0.0353716" quat="0.998082 0 0 0.0619047" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_247" size="0.00982682 0.0057363 0.00772904" pos="0.675 0.825 0.037729" quat="0.952275 0 0 0.305241" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_248" size="0.00582396 0.00506347 0.00484428" pos="0.675 0.925 0.0348443" quat="0.867165 0 0 0.498021" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_249" size="0.00682135 0.00603768 0.00413905" pos="0.675 1.025 0.034139" quat="0.99645 0 0 0.0841844" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_250" size="0.0073409 0.00893259 0.00888677" pos="0.675 1.075 0.0388868" quat="0.94997 0 0 0.312342" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_251" size="0.00857252 0.00766018 0.00764053" pos="0.675 1.125 0.0376405" quat="0.80528 0 0 0.592895" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_252" size="0.00765266 0.00626446 0.00551276" pos="0.675 1.175 0.0355128" quat="0.934261 0 0 0.356589" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_253" size="0.0096881 0.00539614 0.00823803" pos="0.725 0.075 0.038238" quat="0.0774749 0 0 0.996994" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_254" size="0.00638201 0.00563107 0.00457164" pos="0.725 0.175 0.0345716" quat="0.524718 0 0 0.851276" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_255" size="0.00808579 0.00748691 0.00573564" pos="0.725 0.475 0.0357356" quat="0.894872 0 0 0.446324" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_256" size="0.00586239 0.0080919 0.00459199" pos="0.725 0.525 0.034592" quat="0.999016 0 0 0.0443572" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_257" size="0.00638144 0.0077516 0.0062905" pos="0.725 0.575 0.0362905" quat="0.995166 0 0 0.0982104" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_258" size="0.00861716 0.00763797 0.00656739" pos="0.725 0.675 0.0365674" quat="0.201357 0 0 0.979518" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_259" size="0.00827225 0.0053377 0.00435296" pos="0.725 0.725 0.034353" quat="0.987387 0 0 0.158323" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_260" size="0.00721383 0.00541981 0.00541329" pos="0.725 0.775 0.0354133" quat="0.99062 0 0 0.136642" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_261" size="0.00628945 0.00911161 0.00835633" pos="0.725 0.825 0.0383563" quat="0.240328 0 0 0.970692" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_262" size="0.00576679 0.00715961 0.00503618" pos="0.725 0.875 0.0350362" quat="0.634851 0 0 0.772634" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_263" size="0.00928566 0.00626286 0.00636182" pos="0.725 0.925 0.0363618" quat="0.989945 0 0 0.141456" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_264" size="0.00848555 0.00873027 0.00699441" pos="0.725 0.975 0.0369944" quat="0.937038 0 0 0.349226" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_265" size="0.00870868 0.00610542 0.00454227" pos="0.725 1.075 0.0345423" quat="0.788956 0 0 0.61445" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_266" size="0.00851568 0.0092524 0.00892334" pos="0.725 1.125 0.0389233" quat="0.405314 0 0 0.914178" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_267" size="0.00610573 0.00818241 0.0076147" pos="0.725 1.175 0.0376147" quat="0.102572 0 0 0.994726" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_15" size="0.0368041 0.0207237 0.0308057" pos="0.725 1.425 0.0608057" quat="0.435131 0 0 0.900367" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_16" size="0.0334879 0.0213947 0.0127391" pos="0.725 1.525 0.0427391" quat="0.918501 0 0 0.39542" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_17" size="0.0364766 0.0195401 0.0335567" pos="0.725 1.625 0.0635567" quat="0.985415 0 0 0.170167" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_18" size="0.0221548 0.0163467 0.0192927" pos="0.725 1.725 0.0492927" quat="0.38222 0 0 0.924072" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_19" size="0.0254374 0.0216633 0.0317648" pos="0.725 1.825 0.0617648" quat="0.519227 0 0 0.854636" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_20" size="0.035982 0.018302 0.0257404" pos="0.725 1.925 0.0557404" quat="0.334645 0 0 0.942344" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_268" size="0.00750245 0.00750675 0.00736856" pos="0.775 0.125 0.0373686" quat="0.0277755 0 0 0.999614" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_269" size="0.00801199 0.00656134 0.00886741" pos="0.775 0.175 0.0388674" quat="0.923418 0 0 0.383796" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_270" size="0.00849385 0.00601071 0.00778985" pos="0.775 0.225 0.0377899" quat="0.988786 0 0 0.149337" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_271" size="0.00687348 0.00562439 0.00793478" pos="0.775 0.275 0.0379348" quat="0.911353 0 0 0.411627" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_272" size="0.00685982 0.00901482 0.00706202" pos="0.775 0.375 0.037062" quat="0.086974 0 0 0.996211" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_273" size="0.00909219 0.00904975 0.00583893" pos="0.775 0.425 0.0358389" quat="0.811088 0 0 0.584925" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_274" size="0.0080505 0.0055547 0.00887863" pos="0.775 0.475 0.0388786" quat="0.0969595 0 0 0.995288" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_275" size="0.00603458 0.00858163 0.00789426" pos="0.775 0.525 0.0378943" quat="0.996426 0 0 0.0844754" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_276" size="0.00715785 0.0071797 0.00435428" pos="0.775 0.575 0.0343543" quat="0.387813 0 0 0.921738" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_277" size="0.00681864 0.00783367 0.00635257" pos="0.775 0.625 0.0363526" quat="0.439321 0 0 0.89833" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_278" size="0.00568068 0.007052 0.00897911" pos="0.775 0.675 0.0389791" quat="0.495658 0 0 0.868518" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_279" size="0.00562513 0.00823798 0.00541883" pos="0.775 0.725 0.0354188" quat="0.999968 0 0 0.00802406" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_280" size="0.00984397 0.00904501 0.00872757" pos="0.775 0.825 0.0387276" quat="0.668021 0 0 0.744142" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_281" size="0.00934928 0.00750586 0.00710572" pos="0.775 0.875 0.0371057" quat="0.264104 0 0 0.964494" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_282" size="0.00923586 0.0054573 0.00483452" pos="0.775 0.925 0.0348345" quat="0.996782 0 0 0.0801629" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_283" size="0.00678201 0.00859584 0.00820755" pos="0.775 0.975 0.0382075" quat="0.0847189 0 0 0.996405" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_284" size="0.00666558 0.00907921 0.00794749" pos="0.775 1.025 0.0379475" quat="0.301241 0 0 0.953548" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_285" size="0.00874444 0.00786049 0.00775585" pos="0.775 1.075 0.0377559" quat="0.908837 0 0 0.417151" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_286" size="0.00574314 0.00864583 0.00818169" pos="0.775 1.125 0.0381817" quat="0.998779 0 0 0.0494112" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_287" size="0.00855282 0.00810979 0.00739359" pos="0.825 0.225 0.0373936" quat="0.458835 0 0 0.888522" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_288" size="0.00825337 0.00978026 0.00598499" pos="0.825 0.275 0.035985" quat="0.991984 0 0 0.126367" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_289" size="0.0062823 0.00901383 0.0056955" pos="0.825 0.325 0.0356955" quat="0.996782 0 0 0.0801602" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_290" size="0.00879724 0.006878 0.00483034" pos="0.825 0.375 0.0348303" quat="0.623046 0 0 0.782185" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_291" size="0.00691989 0.00861897 0.00644762" pos="0.825 0.425 0.0364476" quat="0.764227 0 0 0.644947" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_292" size="0.00827884 0.00801662 0.00799883" pos="0.825 0.475 0.0379988" quat="0.148626 0 0 0.988894" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_293" size="0.00991569 0.0090418 0.00862361" pos="0.825 0.525 0.0386236" quat="0.277283 0 0 0.960788" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_294" size="0.00607908 0.00894054 0.00472539" pos="0.825 0.625 0.0347254" quat="0.435787 0 0 0.90005" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_295" size="0.00541398 0.0077734 0.00523516" pos="0.825 0.675 0.0352352" quat="0.995031 0 0 0.0995613" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_296" size="0.00579843 0.00998954 0.00651068" pos="0.825 0.725 0.0365107" quat="0.196328 0 0 0.980538" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_297" size="0.00795005 0.00902173 0.00625368" pos="0.825 0.875 0.0362537" quat="0.0444874 0 0 0.99901" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_298" size="0.00664969 0.00503743 0.00534626" pos="0.825 0.925 0.0353463" quat="0.541959 0 0 0.840405" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_299" size="0.00763642 0.00546711 0.00745439" pos="0.825 0.975 0.0374544" quat="0.594347 0 0 0.804209" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_21" size="0.0289266 0.0168198 0.0315318" pos="0.825 1.325 0.0615318" quat="0.742822 0 0 0.669489" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_22" size="0.0341355 0.0215563 0.0228678" pos="0.825 1.425 0.0528678" quat="0.73921 0 0 0.673475" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_23" size="0.0331023 0.0200157 0.0286766" pos="0.825 1.525 0.0586766" quat="0.949823 0 0 0.312788" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_24" size="0.0252409 0.016241 0.0121956" pos="0.825 1.625 0.0421956" quat="0.261711 0 0 0.965146" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_25" size="0.0264008 0.0234237 0.0177747" pos="0.825 1.725 0.0477747" quat="0.981265 0 0 0.192661" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_26" size="0.0304737 0.0202247 0.0302217" pos="0.825 1.825 0.0602217" quat="0.461747 0 0 0.887012" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_27" size="0.0335178 0.0173371 0.0261043" pos="0.825 1.925 0.0561043" quat="0.121582 0 0 0.992581" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_300" size="0.00558313 0.00832493 0.00720012" pos="0.875 0.075 0.0372001" quat="0.99902 0 0 0.044267" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_301" size="0.00920347 0.00540138 0.00828074" pos="0.875 0.125 0.0382807" quat="0.626477 0 0 0.77944" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_302" size="0.0052096 0.00986796 0.0048524" pos="0.875 0.225 0.0348524" quat="0.670093 0 0 0.742277" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_303" size="0.00953012 0.00714383 0.00787767" pos="0.875 0.275 0.0378777" quat="0.984616 0 0 0.174733" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_304" size="0.00975654 0.00987882 0.00445581" pos="0.875 0.375 0.0344558" quat="0.667896 0 0 0.744255" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_305" size="0.00605048 0.005199 0.00420719" pos="0.875 0.575 0.0342072" quat="0.929499 0 0 0.368824" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_306" size="0.00502277 0.00578652 0.00595263" pos="0.875 0.625 0.0359526" quat="0.75484 0 0 0.655909" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_307" size="0.00702229 0.00924953 0.00841149" pos="0.875 0.675 0.0384115" quat="0.938982 0 0 0.343966" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_308" size="0.00599638 0.009559 0.00462268" pos="0.875 0.725 0.0346227" quat="0.972231 0 0 0.234024" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_309" size="0.00666322 0.00783312 0.00697546" pos="0.875 0.925 0.0369755" quat="0.78217 0 0 0.623065" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_310" size="0.009551 0.00939394 0.00673296" pos="0.875 0.975 0.036733" quat="0.0832876 0 0 0.996526" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_311" size="0.00555729 0.00968945 0.00629256" pos="0.925 0.075 0.0362926" quat="0.137896 0 0 0.990447" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_312" size="0.00966187 0.00791341 0.00437282" pos="0.925 0.125 0.0343728" quat="0.999897 0 0 0.0143756" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_313" size="0.00538642 0.0069402 0.00453176" pos="0.925 0.225 0.0345318" quat="0.404511 0 0 0.914533" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_314" size="0.00884571 0.00877029 0.00609549" pos="0.925 0.325 0.0360955" quat="0.974213 0 0 0.225629" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_315" size="0.00870302 0.00647658 0.00446457" pos="0.925 0.375 0.0344646" quat="0.722332 0 0 0.691547" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_316" size="0.00851398 0.00682869 0.00599578" pos="0.925 0.425 0.0359958" quat="0.825818 0 0 0.563936" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_317" size="0.00557465 0.00548218 0.00465277" pos="0.925 0.525 0.0346528" quat="0.709836 0 0 0.704367" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_318" size="0.00572779 0.00835692 0.00866996" pos="0.925 0.575 0.03867" quat="0.3083 0 0 0.951289" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_319" size="0.00764263 0.00940936 0.00867227" pos="0.925 0.625 0.0386723" quat="0.895579 0 0 0.444904" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_320" size="0.00931279 0.0078565 0.00506133" pos="0.925 0.675 0.0350613" quat="0.85994 0 0 0.510396" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_321" size="0.00521034 0.00978007 0.00538178" pos="0.925 0.725 0.0353818" quat="0.985468 0 0 0.169861" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_322" size="0.00579984 0.00779759 0.00462153" pos="0.925 0.775 0.0346215" quat="0.791126 0 0 0.611653" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_323" size="0.0090369 0.00985355 0.00503045" pos="0.925 0.825 0.0350305" quat="0.564604 0 0 0.825362" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_324" size="0.00693786 0.0075384 0.00535134" pos="0.925 0.875 0.0353513" quat="0.0994879 0 0 0.995039" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_325" size="0.00686347 0.00639976 0.00497144" pos="0.925 0.925 0.0349714" quat="0.0181551 0 0 0.999835" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_bark_326" size="0.00863104 0.00543893 0.00538617" pos="0.925 0.975 0.0353862" quat="0.141078 0 0 0.989998" type="box" rgba="0.33 0.19 0.09 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_28" size="0.0298889 0.0215415 0.0295295" pos="0.925 1.225 0.0595295" quat="0.997447 0 0 0.071409" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_29" size="0.0324552 0.0169291 0.0144442" pos="0.925 1.325 0.0444442" quat="0.717526 0 0 0.696531" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_30" size="0.0284681 0.0220576 0.0313652" pos="0.925 1.425 0.0613652" quat="0.572691 0 0 0.819771" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_31" size="0.0308353 0.0204518 0.0225705" pos="0.925 1.525 0.0525705" quat="0.566843 0 0 0.823826" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_32" size="0.03177 0.0228352 0.019486" pos="0.925 1.625 0.049486" quat="0.999036 0 0 0.0438976" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_33" size="0.0287897 0.0233734 0.0157573" pos="0.925 1.725 0.0457573" quat="0.648464 0 0 0.761245" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_34" size="0.0361409 0.0230513 0.0306003" pos="0.925 1.825 0.0606003" quat="0.833058 0 0 0.553185" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_35" size="0.0307429 0.0224752 0.0214399" pos="0.925 1.925 0.0514399" quat="0.948718 0 0 0.316124" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_36" size="0.0252177 0.020291 0.0223851" pos="1.025 1.125 0.0523851" quat="0.914288 0 0 0.405065" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_37" size="0.0261325 0.0178555 0.0335368" pos="1.025 1.225 0.0635368" quat="0.965658 0 0 0.259817" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_38" size="0.0278885 0.0224129 0.0122716" pos="1.025 1.325 0.0422716" quat="0.971379 0 0 0.237536" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_39" size="0.0348872 0.0195859 0.0161862" pos="1.025 1.425 0.0461862" quat="0.130709 0 0 0.991421" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_40" size="0.0337709 0.0235732 0.0179225" pos="1.025 1.525 0.0479225" quat="0.955475 0 0 0.295071" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_41" size="0.0347926 0.0179832 0.0245623" pos="1.025 1.625 0.0545623" quat="0.890555 0 0 0.454875" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_42" size="0.0232213 0.0198079 0.0257284" pos="1.025 1.725 0.0557284" quat="0.410364 0 0 0.911922" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_43" size="0.0304961 0.0163909 0.0230739" pos="1.025 1.825 0.0530739" quat="0.213542 0 0 0.976934" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_44" size="0.0361892 0.0210659 0.0337369" pos="1.025 1.925 0.0637369" quat="0.719352 0 0 0.694646" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_45" size="0.0245256 0.0236277 0.0251886" pos="1.125 1.125 0.0551886" quat="0.0909482 0 0 0.995856" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_46" size="0.0319225 0.0195635 0.022961" pos="1.125 1.225 0.052961" quat="0.972192 0 0 0.234185" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_47" size="0.0326234 0.0177174 0.0295299" pos="1.125 1.325 0.0595299" quat="0.867618 0 0 0.497232" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_48" size="0.0341648 0.0172468 0.0148122" pos="1.125 1.425 0.0448122" quat="0.852625 0 0 0.522523" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_49" size="0.0229199 0.0163072 0.0246829" pos="1.125 1.525 0.0546829" quat="0.141751 0 0 0.989902" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_50" size="0.033276 0.021814 0.0297709" pos="1.125 1.625 0.0597709" quat="0.949695 0 0 0.313177" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_51" size="0.0272444 0.0203571 0.0196613" pos="1.125 1.725 0.0496613" quat="0.981058 0 0 0.193712" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_52" size="0.0231459 0.0168134 0.0346184" pos="1.125 1.825 0.0646184" quat="0.880679 0 0 0.473714" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_53" size="0.0361393 0.0163342 0.0348562" pos="1.125 1.925 0.0648562" quat="0.526255 0 0 0.850327" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_54" size="0.0228395 0.023676 0.0227855" pos="1.225 1.125 0.0527855" quat="0.0560569 0 0 0.998428" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_55" size="0.0301552 0.0201592 0.0242659" pos="1.225 1.225 0.0542659" quat="0.435504 0 0 0.900187" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_56" size="0.0260162 0.0167269 0.0160204" pos="1.225 1.325 0.0460204" quat="0.154322 0 0 0.988021" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_57" size="0.0305695 0.0211405 0.0131802" pos="1.225 1.425 0.0431802" quat="0.385835 0 0 0.922568" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_58" size="0.0249473 0.0161716 0.0301525" pos="1.225 1.525 0.0601525" quat="0.207281 0 0 0.978281" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_59" size="0.0267304 0.0225073 0.0323284" pos="1.225 1.625 0.0623284" quat="0.577765 0 0 0.816203" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_60" size="0.0317163 0.0231952 0.0318609" pos="1.225 1.725 0.0618609" quat="0.792589 0 0 0.609757" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_61" size="0.029144 0.0218882 0.0312426" pos="1.225 1.825 0.0612426" quat="0.0892774 0 0 0.996007" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_62" size="0.037762 0.019492 0.0286485" pos="1.225 1.925 0.0586485" quat="0.983261 0 0 0.1822" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_63" size="0.0328105 0.016162 0.0346827" pos="1.325 1.125 0.0646827" quat="0.935357 0 0 0.353706" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_64" size="0.0330176 0.0210466 0.02883" pos="1.325 1.225 0.05883" quat="0.687663 0 0 0.72603" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_65" size="0.0254533 0.0218469 0.0132455" pos="1.325 1.325 0.0432455" quat="0.102593 0 0 0.994723" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_66" size="0.0332316 0.017562 0.0212942" pos="1.325 1.425 0.0512942" quat="0.99996 0 0 0.00898914" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_67" size="0.0238354 0.0221916 0.0157087" pos="1.325 1.525 0.0457087" quat="0.993699 0 0 0.112086" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_68" size="0.0268765 0.0184624 0.0208383" pos="1.325 1.625 0.0508383" quat="0.97688 0 0 0.213787" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_69" size="0.0298889 0.0166678 0.0266582" pos="1.325 1.725 0.0566582" quat="0.946793 0 0 0.321844" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_70" size="0.0319403 0.0206169 0.0182084" pos="1.325 1.825 0.0482084" quat="0.591494 0 0 0.80631" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_71" size="0.0251579 0.0232869 0.0127352" pos="1.325 1.925 0.0427352" quat="0.799351 0 0 0.600864" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_72" size="0.0329195 0.0182982 0.0202196" pos="1.425 1.125 0.0502196" quat="0.927502 0 0 0.373819" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_73" size="0.0301009 0.0186312 0.0274665" pos="1.425 1.225 0.0574665" quat="0.693953 0 0 0.720021" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_74" size="0.0281039 0.0216548 0.0227729" pos="1.425 1.325 0.0527729" quat="0.998401 0 0 0.0565215" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_75" size="0.0276883 0.0172716 0.0186139" pos="1.425 1.425 0.0486139" quat="0.662348 0 0 0.749196" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_76" size="0.0241628 0.0187087 0.0273821" pos="1.425 1.525 0.0573821" quat="0.764197 0 0 0.644983" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_77" size="0.0354365 0.0199193 0.0194649" pos="1.425 1.625 0.0494649" quat="0.98373 0 0 0.179652" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_78" size="0.0269856 0.0237464 0.0170605" pos="1.425 1.725 0.0470605" quat="0.982196 0 0 0.187857" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_79" size="0.0317263 0.016087 0.0189409" pos="1.425 1.825 0.0489409" quat="0.864242 0 0 0.503077" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_80" size="0.0261451 0.0236701 0.0239619" pos="1.425 1.925 0.0539619" quat="0.765994 0 0 0.642848" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_81" size="0.029912 0.0186688 0.0279806" pos="1.525 1.125 0.0579806" quat="0.24283 0 0 0.970069" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_82" size="0.0284495 0.0193025 0.015375" pos="1.525 1.225 0.045375" quat="0.762467 0 0 0.647027" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_83" size="0.023767 0.0182263 0.0194795" pos="1.525 1.325 0.0494795" quat="0.877158 0 0 0.480203" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_84" size="0.0357464 0.0165329 0.0135002" pos="1.525 1.425 0.0435002" quat="0.925605 0 0 0.378491" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_85" size="0.0330449 0.0227985 0.0184595" pos="1.525 1.525 0.0484595" quat="0.767407 0 0 0.641161" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_86" size="0.0378904 0.0201355 0.0293051" pos="1.525 1.625 0.0593051" quat="0.551879 0 0 0.833924" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_87" size="0.027718 0.0211712 0.0235358" pos="1.525 1.725 0.0535358" quat="0.973012 0 0 0.230753" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_88" size="0.0232026 0.01806 0.0277521" pos="1.525 1.825 0.0577521" quat="0.990202 0 0 0.139643" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_89" size="0.037589 0.0183015 0.0152098" pos="1.525 1.925 0.0452098" quat="0.418558 0 0 0.90819" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_90" size="0.0301729 0.016203 0.020005" pos="1.625 1.125 0.050005" quat="0.526716 0 0 0.850041" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_91" size="0.0312315 0.0193462 0.0246129" pos="1.625 1.225 0.0546129" quat="0.189438 0 0 0.981893" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_92" size="0.0378623 0.0166039 0.0173151" pos="1.625 1.325 0.0473151" quat="0.653065 0 0 0.757302" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_93" size="0.0302076 0.0234524 0.0139246" pos="1.625 1.425 0.0439246" quat="0.217214 0 0 0.976124" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_94" size="0.0241858 0.0201894 0.0254221" pos="1.625 1.525 0.0554221" quat="0.998023 0 0 0.0628496" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_95" size="0.0277402 0.0180882 0.0173966" pos="1.625 1.625 0.0473966" quat="0.849099 0 0 0.528234" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_96" size="0.0305613 0.0194403 0.0140647" pos="1.625 1.725 0.0440647" quat="0.526352 0 0 0.850267" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_97" size="0.0256964 0.0237188 0.0147942" pos="1.625 1.825 0.0447942" quat="0.153904 0 0 0.988086" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_98" size="0.0224329 0.0222506 0.0202461" pos="1.625 1.925 0.0502461" quat="0.804878 0 0 0.593441" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_99" size="0.0332907 0.0191394 0.0298446" pos="1.725 1.125 0.0598446" quat="0.542268 0 0 0.840206" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_100" size="0.0229957 0.0164793 0.0217778" pos="1.725 1.225 0.0517778" quat="0.0463437 0 0 0.998926" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_101" size="0.0308074 0.0220063 0.0164653" pos="1.725 1.325 0.0464653" quat="0.934301 0 0 0.356486" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_102" size="0.0287213 0.0184091 0.0268888" pos="1.725 1.425 0.0568888" quat="0.0630384 0 0 0.998011" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_103" size="0.0379883 0.0214037 0.0145475" pos="1.725 1.525 0.0445475" quat="0.306082 0 0 0.952005" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_104" size="0.0272705 0.0191116 0.0161219" pos="1.725 1.625 0.0461219" quat="0.780493 0 0 0.625165" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_105" size="0.0358689 0.0207822 0.0121266" pos="1.725 1.725 0.0421266" quat="0.685513 0 0 0.72806" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_106" size="0.0318467 0.0232283 0.0299022" pos="1.725 1.825 0.0599022" quat="0.95174 0 0 0.306904" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_107" size="0.025786 0.0211221 0.0307443" pos="1.725 1.925 0.0607443" quat="0.509376 0 0 0.860544" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_108" size="0.0375512 0.0234706 0.0186967" pos="1.825 1.125 0.0486967" quat="0.771887 0 0 0.63576" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_109" size="0.0291058 0.0233805 0.0124744" pos="1.825 1.225 0.0424744" quat="0.92948 0 0 0.368874" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_110" size="0.0228158 0.0223536 0.0336175" pos="1.825 1.325 0.0636175" quat="0.998227 0 0 0.0595219" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_111" size="0.0334189 0.0229203 0.0164265" pos="1.825 1.425 0.0464265" quat="0.0842052 0 0 0.996448" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_112" size="0.0258955 0.022019 0.0169809" pos="1.825 1.525 0.0469809" quat="0.428295 0 0 0.903639" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_113" size="0.0243891 0.0221286 0.0215605" pos="1.825 1.625 0.0515605" quat="0.888204 0 0 0.459449" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_114" size="0.0241867 0.0174719 0.0122739" pos="1.825 1.725 0.0422739" quat="0.624275 0 0 0.781205" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_115" size="0.0222086 0.0168874 0.0225719" pos="1.825 1.825 0.0525719" quat="0.260831 0 0 0.965384" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_116" size="0.0307591 0.0211626 0.0242928" pos="1.825 1.925 0.0542928" quat="0.817194 0 0 0.576362" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_117" size="0.0343358 0.0174633 0.0333024" pos="1.925 1.125 0.0633024" quat="0.84637 0 0 0.532595" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_118" size="0.0362525 0.0221262 0.0314722" pos="1.925 1.225 0.0614722" quat="0.9989 0 0 0.0468831" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_119" size="0.0258984 0.0165597 0.0178621" pos="1.925 1.325 0.0478621" quat="0.689874 0 0 0.723929" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_120" size="0.0377263 0.0183624 0.0258136" pos="1.925 1.425 0.0558136" quat="0.8832 0 0 0.468996" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_121" size="0.0310324 0.0171185 0.0128284" pos="1.925 1.525 0.0428284" quat="0.462371 0 0 0.886687" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_122" size="0.0236473 0.0224205 0.0243341" pos="1.925 1.625 0.0543341" quat="0.846114 0 0 0.533001" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_123" size="0.031557 0.0164905 0.030213" pos="1.925 1.725 0.060213" quat="0.103991 0 0 0.994578" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_124" size="0.0344886 0.0173589 0.0135033" pos="1.925 1.825 0.0435033" quat="0.963888 0 0 0.266307" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+      <geom name="pit_brick_125" size="0.0329516 0.0196895 0.0132065" pos="1.925 1.925 0.0432065" quat="0.923857 0 0 0.382739" type="box" rgba="0.6 0.3 0.2 1" friction="0.9" solref="0.01" />
+    </body>
+  </worldbody>
+</mujoco>

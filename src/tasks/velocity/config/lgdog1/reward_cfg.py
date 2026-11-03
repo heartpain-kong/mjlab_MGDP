@@ -81,7 +81,9 @@ REWARD_PROFILES = {
     "weights": {
       "foot_clearance": 0.0,
       "feet_stumble": -0.5,
-      "feet_air_time": 1.0,
+      # 计数口径返回 0~4，权重 0.25 让每秒贡献（实测约 0.15）与跟踪/姿态同量级；
+      # 旧单点口径同样写 1.0 时实测只有 0.02，基本等于没开。
+      "feet_air_time": 0.25,
       "soft_landing": -0.002,
       "track_linear_velocity": 2.0,
       "pose": 1.5,
@@ -203,7 +205,11 @@ def make_lgdog_rewards(profile, *, base_body, foot_sites, terrain_ray_names=()):
     ),
     "feet_air_time": term(
       "feet_air_time", mdp.feet_air_time, sensor_name="feet_ground_contact",
-      threshold=0.4, command_name="twist", command_threshold=0.1,
+      # mjlab 口径：数有多少只脚处在 (0.05, 0.5) s 的腾空时间里（0~4）。
+      # 实测本策略腾空 0.10 s / p90 0.225 s，所以下界 0.05 只滤掉抖动，
+      # 上界 0.5 覆盖到"迈大步"。旧版单点阈值 0.4 永远够不到，已废弃。
+      threshold_min=0.05, threshold_max=0.5,
+      command_name="twist", command_threshold=0.1,
     ),
     "leg_contact_force": term(
       "leg_contact_force", mdp.leg_contact_force, sensor_name="nonfoot_ground_touch",

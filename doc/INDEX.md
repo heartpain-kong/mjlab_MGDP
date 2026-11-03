@@ -5,8 +5,10 @@
 | 想做什么 | 文档 |
 |---|---|
 | 使用浏览器面板、短命令、了解目录迁移 | [WORKBENCH.md](WORKBENCH.md) |
+| MGDP 深度感知迁移、预训练与训练（默认任务） | [MGDP_MJLAB.md](MGDP_MJLAB.md) |
 | 一个网页看全部：环境 / GPU / 进程 / 轮次 / 日志（总览） | [WEBHUB.md](WEBHUB.md) |
 | 把训练曲线当 K 线看（曲线终端） | [KLINE.md](KLINE.md) |
+| 2027 比赛场地：训练地形 + sim2sim 真场地 | [RACE_COURSE.md](RACE_COURSE.md) |
 | LP-ACRL地形自动采样、参数与对照实验 | [LP_ACRL_INTEGRATION.md](LP_ACRL_INTEGRATION.md) |
 | HIM三帧历史、训练开销与旧模型兼容 | [HIM_HISTORY_3.md](HIM_HISTORY_3.md) |
 | 抬腿异常、连续摆动净空与LP参数 | [CLEARANCE_HEIGHT_LP_TUNING.md](CLEARANCE_HEIGHT_LP_TUNING.md) |

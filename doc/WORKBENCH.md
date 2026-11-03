@@ -5,6 +5,30 @@
 
 现在主工程只有一层目录：`E:\mjlab\unitree_rl_mjlab_lgdog`。打开面板后，可用同一套界面选择方案、训练、play、sim2sim 和查看奖励。
 
+## 代码结构（2026-11 重构）
+
+| 模块 | 职责 |
+|---|---|
+| `src/dashboard/tasks.py` | `TaskSpec`：任务能力声明（观测维度、奖励 profile、是否需要预训练、文档、是否支持自动课程） |
+| `src/dashboard/catalog.py` | 任务/算法/场景/地图目录与默认任务解析 |
+| `src/dashboard/routes.py` | API 路由表；新增接口 = 一个处理函数 + 一条表项，不再堆 `if path == ...` |
+| `src/dashboard/server.py` | 仅 HTTP 管道：回环校验、token/Origin、静态资源白名单、JSON 编码 |
+| `src/dashboard/web/js/format.js` | 纯格式化与标签（无 DOM 依赖，可在 Node 里单测） |
+| `src/dashboard/web/app.js` | DOM 渲染与交互，通过 `window.LgDogFormat` 复用上面的纯函数 |
+| `tests/test_tasks.py` | 任务能力、路由表、前后端契约（JS 用到的 id/API 路径是否都存在） |
+
+**扩展任务**：在 `catalog._TASK_LIST` 里新增 `TaskSpec` 即可，面板下拉、命令预览、模型发现会自动出现；
+需要预训练的任务把 `requires_pretrain` / `pretrain_command` / `pretrain_checkpoint` 写全，
+命令构建会先检查检查点并给出可执行的提示。
+
+**新增接口**：在 `routes.py` 写 `def foo(ctx, query)`，登记到 `GET_ROUTES` 或 `POST_ROUTES`；
+响应形状由函数返回 `(status, payload)`，`server.py` 不再感知具体业务。
+
+**页面布局（2026-11）**：顶部是「任务上下文」卡片——任务下拉列出**全部任务**（按算法分组），算法 / 场景只做展示并随任务自动变化，不会再因为筛选条件把 `mgdp` 等任务藏起来；卡片里同时显示能力标签（`需预训练`、`无自动课程`、`文档`）。
+下面是模式页签（训练 / 回放 / Sim2Sim / 查看奖励）。主区默认「并排」：左侧运行设置（训练参数默认折叠，展开后才显示环境数/课程等长表单），右侧监控卡片；
+顶部「并排 / 仅设置 / 仅监控」可切换，选择记在 localStorage（键 `lgdog-workbench-view-v2`）。
+侧栏新增「曲线终端」（:8766）、「运行总览」（:8770）快捷入口和「MGDP 深度感知」文档。
+
 ## 启动
 
 推荐在 Linux GPU 训练机上先激活已安装 mjlab 依赖的环境，再进入工程：

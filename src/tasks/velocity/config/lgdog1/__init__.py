@@ -12,6 +12,17 @@ from .him_env_cfg import (
   lgdog1_him_flat_env_cfg,
   lgdog1_him_standard_env_cfg,
   lgdog1_him_runner_cfg,
+  lgdog1_race_env_cfg,
+)
+from .mgdp_env_cfg import lgdog1_mgdp_env_cfg
+from .mgdp_rl_cfg import lgdog1_mgdp_runner_cfg
+
+register_mjlab_task(
+  task_id="LgDog1-Rough-MGDP",
+  env_cfg=lgdog1_mgdp_env_cfg(),
+  play_env_cfg=lgdog1_mgdp_env_cfg(play=True),
+  rl_cfg=lgdog1_mgdp_runner_cfg(),
+  runner_cls=PPOHIMRunner,
 )
 
 register_mjlab_task(
@@ -27,6 +38,16 @@ register_mjlab_task(
   env_cfg=lgdog1_him_flat_env_cfg(),
   play_env_cfg=lgdog1_him_flat_env_cfg(play=True),
   rl_cfg=lgdog1_him_runner_cfg("lgdog1_velocity_flat_him_standard_v1"),
+  runner_cls=PPOHIMRunner,
+)
+
+# 2027 比赛场地地形：观测/奖励与标准 HIM 相同，只有地形换成按规则尺寸拼的障碍。
+# 真场地验证：python scripts/sim2sim.py LgDog1-Race-Blind-HIM --map race
+register_mjlab_task(
+  task_id="LgDog1-Race-Blind-HIM",
+  env_cfg=lgdog1_race_env_cfg(),
+  play_env_cfg=lgdog1_race_env_cfg(play=True),
+  rl_cfg=lgdog1_him_runner_cfg("lgdog1_velocity_race_him_v1"),
   runner_cls=PPOHIMRunner,
 )
 

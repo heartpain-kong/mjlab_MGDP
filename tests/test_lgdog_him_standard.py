@@ -103,7 +103,7 @@ class StandardHIMTests(unittest.TestCase):
     self.assertEqual(cfg.rewards["track_linear_velocity"].weight, 2.0)
     self.assertEqual(cfg.rewards["track_linear_velocity"].params["relative_weight"], 0.0)
     self.assertEqual(cfg.rewards["feet_stumble"].weight, -0.5)
-    self.assertEqual(cfg.rewards["feet_air_time"].weight, 1.0)
+    self.assertEqual(cfg.rewards["feet_air_time"].weight, 0.25)
     self.assertEqual(cfg.rewards["foot_clearance"].weight, 0.0)
     self.assertEqual(cfg.rewards["pose"].weight, 1.5)
     self.assertEqual(cfg.rewards["soft_landing"].weight, -0.002)
@@ -115,7 +115,8 @@ class StandardHIMTests(unittest.TestCase):
     self.assertEqual(cfg.curriculum["command_vel"].params["regress_min_progress_ratio"], 0.4)
     self.assertIs(cfg.rewards["foot_clearance"].func, blind_mdp.feet_clearance_swing)
     self.assertNotIn('base_height',cfg.rewards)
-    self.assertEqual(cfg.rewards["feet_air_time"].params['threshold'],0.4)
+    self.assertEqual(cfg.rewards["feet_air_time"].params['threshold_min'],0.05)
+    self.assertEqual(cfg.rewards["feet_air_time"].params['threshold_max'],0.5)
     clearance=cfg.rewards['foot_clearance'].params
     gait=cfg.rewards['foot_gait'].params
     self.assertEqual(clearance['period'],gait['period'])

@@ -37,17 +37,42 @@ python lgdog.py
 
 浏览器打开 **http://127.0.0.1:8765**。选择任务后，可以启动训练、play 回放、sim2sim、查看奖励和真实日志。默认任务是 **HIM-PPO + 标准崎岖地形盲走**。
 
+MGDP 深度感知作为独立任务（别名 `mgdp`）使用，首次训练前先跑一次感知预训练（见 [MGDP 说明](doc/MGDP_MJLAB.md)）：
+
 ```bash
-python lgdog.py tasks                      # 看 8 个任务的短名称
+python scripts/pretrain_mgdp.py --num-envs 256 --steps 4000 --iterations 3000
+```
+
+```bash
+python lgdog.py tasks                      # 看全部任务的短名称（默认 standard）
 python lgdog.py web                        # 总览：环境/GPU/进程/轮次/日志一页看完（端口 8770）
 python lgdog.py kline                      # 曲线终端：把 TensorBoard 曲线当 K 线看（端口 8766）
-python lgdog.py train standard --envs 64 --iterations 2
+python lgdog.py train standard --envs 1024 --iterations 16000
 python lgdog.py play standard              # 自动选对应任务最新 checkpoint
 python lgdog.py sim standard --vx 0.4      # 自动选对应任务最新 ONNX
 python lgdog.py rewards standard --term foot_clearance
+
+# MGDP 深度感知（需先预训练）
+python lgdog.py train mgdp --envs 2048 --iterations 10000
+# 2027 比赛场地：python lgdog.py train race --envs 4096
 ```
 
 正式训练示例：`python lgdog.py train standard --envs 1024 --iterations 16000 --run-name V8_him_standard_seed42`。环境数应按显存调整。面板本身仅用 Python 标准库；训练仍需要原来的 mjlab / MuJoCo / PyTorch 环境。
+
+## 2027 比赛场地
+
+`27rc-dog-race` 的障碍赛/任务赛场地已经接入训练和 sim2sim：
+
+```bash
+# 真场地：启动区起步，0.4 m/s 往前走
+python scripts/sim2sim.py LgDog1-Race-Blind-HIM --onnx=<policy.onnx> --map race --vx 0.4 --duration 5
+
+# 比赛地形课程：梅花桩 0.2×0.2×0.1、单木桥 0.4 宽、台阶 0.12/0.32、砖木坑、绕桩、0.3 m 高墙
+python lgdog.py train race --envs 4096 --iterations 16000
+```
+
+训练地形是「按规则尺寸拼的近似」：轮胎阵和限高框架不是地面高度场，只在 sim2sim 的真场地里练。
+完整对照表、坐标、换规则时怎么重新转换，见 [doc/RACE_COURSE.md](doc/RACE_COURSE.md)。
 
 ## 一个网页看全部：mjlab 总览
 
@@ -86,6 +111,8 @@ python lgdog.py kline            # 浏览器打开 http://127.0.0.1:8766
 | `logs/web/` | 总览拉起的三个服务的输出日志 |
 | `src/kline/` | 曲线终端：event 解析、窗口聚合、只读 HTTP 服务与页面 |
 | `src/portal/` | mjlab 总览：环境/GPU/进程采集、服务管理、只读 HTTP 服务与页面 |
+| `src/assets/terrains/` | 地形资产：LgDog 测试图 + 2027 比赛场地（`race_*.xml`） |
+| `scripts/import_race_course.py` | 把比赛场地仓库转换成工程地形 XML（规则更新时重跑） |
 | [doc/](doc/INDEX.md) | 使用与技术文档 |
 | `archive/` | 旧补丁、旧验证记录和历史清单 |
 
@@ -94,7 +121,9 @@ python lgdog.py kline            # 浏览器打开 http://127.0.0.1:8766
 - [面板操作与目录迁移说明](doc/WORKBENCH.md)
 - [mjlab 总览（一个网页看全部）](doc/WEBHUB.md)
 - [曲线终端（TensorBoard 转 K 线）](doc/KLINE.md)
+- [2027 比赛场地：训练与 sim2sim](doc/RACE_COURSE.md)
 - [标准地形 HIM 训练说明](doc/LGDOG_HIM_STANDARD.md)
+- [MGDP 深度感知迁移与训练](doc/MGDP_MJLAB.md)
 - [奖励调参](doc/REWARDS.md)
 - [环境安装](doc/setup_zh.md)
 - [GPUFree Ubuntu 部署记录](doc/DEPLOYMENT_GPUFREE.md)
