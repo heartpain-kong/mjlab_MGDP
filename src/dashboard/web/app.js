@@ -93,6 +93,7 @@ function updateTask() {
     $("task-description").textContent=`${$("algorithm")?.value||"算法"} + ${$("scene")?.value||"场景"} 没有对应的训练任务，请更换组合。`;
     $("critic-chip").textContent="";$("profile-chip").textContent="";$("experiment-path").textContent="—";
     $("task-capabilities")?.replaceChildren();
+    $("task-prereq")?.classList.add("hidden");
     $("model-hint").textContent="任务由算法和场景决定；当前组合没有可用模型。";
     updateRunNameHint();
     return;
@@ -103,6 +104,7 @@ function updateTask() {
   $("critic-chip").textContent=`critic ${t.critic} 维`;
   $("profile-chip").textContent=`reward: ${t.profile}`;
   renderTaskCapabilities(t);
+  renderTaskPrerequisite(t);
   $("experiment-path").textContent=`logs/rsl_rl/${t.experiment}`;
   $("model-hint").textContent=t.shared?"Flat/Rough 共用目录，请手动选择与任务匹配的模型。":"续训只能使用当前算法和场景的 checkpoint。";
   updateRunNameHint();
@@ -116,6 +118,18 @@ function renderTaskCapabilities(t){
   if(cap.supports_curriculum===false) add("无自动课程","平地任务不使用地形采样课程","muted");
   if(cap.docs) add("文档",cap.docs,"muted");
   if(!box.children.length) add("就绪","");
+}
+function renderTaskPrerequisite(t){
+  const box=$("task-prereq"); if(!box)return;
+  const cap=t.capabilities||{};
+  if(!cap.needs_pretrain){ box.className="task-prereq hidden"; return; }
+  if(cap.pretrain_ready){
+    box.className="task-prereq ready";
+    box.textContent=`感知模型已就绪：${cap.pretrain_checkpoint}`;
+  }else{
+    box.className="task-prereq missing";
+    box.textContent=`该任务需要先预训练感知模型：${cap.pretrain_command||"python scripts/pretrain_mgdp.py"}（检查点 ${cap.pretrain_checkpoint||""} 不存在）`;
+  }
 }
 function updateCurriculumOptions(){
   const select=$("terrain-curriculum");if(!select)return;
@@ -587,7 +601,9 @@ async function start() {
     let savedView="both";
     try{savedView=localStorage.getItem("lgdog-workbench-view-v2")||"both";}catch{}
     setWorkspaceView(savedView);
-    renderModelSceneSelectors("standard");
+    const requested=new URLSearchParams(location.search).get("task");
+    const initialTask=requested&&state.tasks.some(item=>item.alias===requested)?requested:"standard";
+    renderModelSceneSelectors(initialTask);
     renderSimMaps();
     $("copy-root").textContent=state.root;$("python-path").textContent=state.python;
     updateTask();renderGpu(state.gpu);await updateRunNameHint();await loadModels();showMode();await preview();renderJobs();await loadActionMetrics();await loadTerrainEditor();await loadLog();

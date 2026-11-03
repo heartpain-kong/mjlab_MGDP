@@ -11,7 +11,7 @@
 
 | MGDP 原始实现 | 本仓库实现 |
 |---|---|
-| Isaac Gym 内置相机 / Warp 射线相机（120×120→16×16） | `RayCastSensor` 针孔图案（16×16 条射线，FOV 87°，前下方 45°） |
+| Isaac Gym 内置相机 / Warp 射线相机（120×120→16×16） | `RayCastSensor` 针孔图案（16×16 条射线，FOV 87°，前头顶水平朝前） |
 | 深度图 + 高程图双模态编码器 | `MGPDPerception.depth_encoder` / `height_encoder` |
 | 对比学习（InfoNCE）+ 双重重构 | 同一套损失，见 `mgdp_perception.py::losses` |
 | 以干净深度为重构目标（去噪） | 训练时注入高斯噪声 + dropout，目标仍是干净帧 |
@@ -25,7 +25,7 @@
 ## 2. 数据流
 
 ```
-trunk 上的 mgdp_depth site (0.34, 0, 0.06)，俯仰 -45°
+trunk 上的 mgdp_depth site (0.02, 0, 0.075)，前头顶、光轴水平朝前（站立时与地面平行）
         │
         ▼
 RayCastSensor "depth_rays"  16×16 = 256 条射线，max_distance=5 m
@@ -84,6 +84,15 @@ python scripts/play.py LgDog1-Rough-MGDP \
 ```
 
 任务名已出现在 `python scripts/list_envs.py` 的第 9 项。
+
+### 2027 比赛地形（`LgDog1-Race-MGDP`）
+
+- 地形：`race_depth_terrain_cfg.py` 在 race 地形上增加**限高框架**（0.36→0.28 m 横梁 + 两根立柱）
+  和**轮胎环**（12 段 box 拼成的环），这两类悬空/环形障碍高度扫描表达不了，深度相机可以；
+- 相机：前头顶 `(0.02, 0, 0.075)`，光轴水平朝前，FOV 87°（示意图见
+  `E:\rl_vision\deploy\out\camera_mount_diagram.png`）；
+- 训练：`python lgdog.py train race_mgdp --envs 4096 --iterations 16000`（同样需要先预训练感知）；
+- 真场地复测：`python scripts/sim2sim.py LgDog1-Race-MGDP --onnx=... --map race`。
 
 ### 常用可调项
 

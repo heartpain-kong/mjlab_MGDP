@@ -26,6 +26,15 @@ _TASK_LIST = (
     description="MGDP 对比感知 + PPO：actor = 4×47 本体历史 + 64 维深度特征；训练前先跑 scripts/pretrain_mgdp.py。",
   ),
   TaskSpec(
+    alias="race_mgdp", id="LgDog1-Race-MGDP",
+    label="MGDP · 2027 比赛地形（深度）", algorithm="ppo", scene="race_depth",
+    experiment="lgdog1_velocity_race_mgdp_v1", obs=252, critic=261, profile="rough",
+    docs="doc/RACE_COURSE.md", requires_pretrain=True,
+    pretrain_command="python scripts/pretrain_mgdp.py --num-envs 256 --steps 4000 --iterations 3000",
+    pretrain_checkpoint="logs/mgdp/perception/mgdp_perception.pt",
+    description="MGDP 深度感知 + 比赛地形：新增限高框架（0.36→0.28 m 横梁）和轮胎环；前头顶相机水平朝前。",
+  ),
+  TaskSpec(
     alias="him_flat", id="LgDog1-Flat-Blind-HIM-Standard",
     label="HIM-PPO · 平地", algorithm="him", scene="flat",
     experiment="lgdog1_velocity_flat_him_standard_v1", obs=HIM_INPUT_DIM,
@@ -93,6 +102,7 @@ SCENES = {
   "rough": {"label": "标准崎岖地形", "description": "课程地形，包含台阶、坡面、随机起伏和波浪。"},
   "race": {"label": "2027 比赛场地", "description": "按比赛规则尺寸拼的障碍地形：梅花桩、单木桥、沟壑台阶、砖木坑、绕桩、高墙。"},
   "rough_depth": {"label": "深度感知崎岖地形", "description": "标准崎岖地形 + 16×16 深度射线；actor 使用感知特征而不是高度扫描。"},
+  "race_depth": {"label": "2027 比赛地形（深度）", "description": "比赛地形 + 限高横梁 + 轮胎环；深度相机可感知悬空障碍。"},
   "rough_gentle": {"label": "温和崎岖地形", "description": "降低台阶和坡面难度的过渡场景。"},
   "rough_scan": {"label": "带扫描崎岖地形", "description": "actor 使用地形扫描，不能与盲走模型直接互换。"},
   "rough_terrain_v4": {"label": "TerrainV4 崎岖地形", "description": "PPO TerrainV4 课程，独立于标准盲走任务。"},
@@ -123,3 +133,4 @@ def task_payload(alias: str) -> dict:
   """Serialised task entry for /api/state (keeps the flat shape + capabilities)."""
   spec = TASKS[alias]
   return {"alias": alias, **spec.as_dict(), "capabilities": capabilities(spec)}
+

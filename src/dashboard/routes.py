@@ -54,10 +54,22 @@ class ApiContext:
 # --------------------------------------------------------------------------- #
 # GET
 # --------------------------------------------------------------------------- #
+def _task_state(ctx: ApiContext, alias: str) -> dict:
+  """Task payload plus live prerequisite state (checkpoint on disk)."""
+  payload = task_payload(alias)
+  cap = payload["capabilities"]
+  checkpoint = cap.get("pretrain_checkpoint") or ""
+  if cap.get("needs_pretrain"):
+    cap["pretrain_ready"] = bool(checkpoint) and (ctx.root / checkpoint).is_file()
+  else:
+    cap["pretrain_ready"] = True
+  return payload
+
+
 def state(ctx: ApiContext, query) -> tuple[int, dict]:
   return 200, {
     "token": ctx.token, "root": str(ctx.root), "python": str(ctx.python),
-    "tasks": [task_payload(alias) for alias in TASKS],
+    "tasks": [_task_state(ctx, alias) for alias in TASKS],
     "algorithms": [{"alias": alias, **item} for alias, item in ALGORITHMS.items()],
     "scenes": [{"alias": alias, **item} for alias, item in SCENES.items()],
     "sim2sim_maps": [{"alias": alias, **item} for alias, item in SIM2SIM_MAPS.items()],

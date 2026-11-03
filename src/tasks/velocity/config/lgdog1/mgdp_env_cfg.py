@@ -25,6 +25,9 @@ from mjlab.sensor import ObjRef, PinholeCameraPatternCfg, RayCastSensorCfg
 
 from src.assets.robots.lgdog1.lgdog1_constants import get_lgdog1_robot_cfg, get_spec
 from src.tasks.velocity.config.lgdog1.env_cfgs import BASE_BODY, lgdog1_rough_env_cfg
+from src.tasks.velocity.config.lgdog1.race_depth_terrain_cfg import (
+    lgdog1_race_depth_terrain_cfg,
+)
 from src.tasks.velocity.mdp.mgdp_observations import mgdp_depth_feature
 from src.tasks.velocity.mdp.mgdp_perception import MGPDPerceptionCfg
 
@@ -34,10 +37,10 @@ DEPTH_FOVY = 87.0
 DEPTH_MAX = 5.0
 PROPRIO_HISTORY = 4
 
-# Camera pose from MGDP's Go2 table, applied to LgDog1's trunk:
-# 0.34 m forward, 0.06 m up, pitched 45 deg down (MuJoCo cameras look along -Z).
-DEPTH_SITE_POS = (0.34, 0.0, 0.06)
-DEPTH_SITE_QUAT = (0.9238795325, 0.0, -0.3826834324, 0.0)
+# 前头顶安装，站立不动时光轴水平朝前（+X），与地面平行。
+# MuJoCo 相机沿 -Z 看，绕 Y 轴 -90° 即可把光轴转到 +X。
+DEPTH_SITE_POS = (0.02, 0.0, 0.075)
+DEPTH_SITE_QUAT = (0.7071067812, 0.0, -0.7071067812, 0.0)
 
 DEFAULT_CHECKPOINT = str(
     Path("logs") / "mgdp" / "perception" / "mgdp_perception.pt"
@@ -117,4 +120,19 @@ def lgdog1_mgdp_env_cfg(
     # Critic keeps one frame of the privileged set.
     cfg.observations["critic"].history_length = 1
     cfg.observations["critic"].flatten_history_dim = True
+    return cfg
+
+
+def lgdog1_race_mgdp_env_cfg(
+    play: bool = False,
+    checkpoint: str = DEFAULT_CHECKPOINT,
+    with_perception: bool = True,
+):
+    """MGDP task on the 2027 race terrain, including overhead beam + tyre ring."""
+    cfg = lgdog1_mgdp_env_cfg(
+        play=play, checkpoint=checkpoint, with_perception=with_perception
+    )
+    assert cfg.scene.terrain is not None
+    cfg.scene.terrain.terrain_type = "generator"
+    cfg.scene.terrain.terrain_generator = lgdog1_race_depth_terrain_cfg()
     return cfg

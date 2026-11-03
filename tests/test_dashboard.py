@@ -10,6 +10,7 @@ import time
 import unittest
 from unittest.mock import patch
 
+from src.dashboard.catalog import TASKS
 from src.dashboard.commands import build_command, discover_models
 from src.dashboard.jobs import JobManager
 from src.dashboard.server import create_server, read_terrain_curriculum_status
@@ -181,7 +182,7 @@ class HTTPTests(unittest.TestCase):
     status, body = self.request("GET", "/api/state")
     self.assertEqual(status, 200)
     state = json.loads(body)
-    self.assertEqual(len(state["tasks"]), 10)
+    self.assertEqual(len(state["tasks"]), len(TASKS))
     self.assertEqual({item["alias"] for item in state["algorithms"]}, {"him", "ppo"})
     self.assertIn("lgdog1", {item["alias"] for item in state["sim2sim_maps"]})
     self.assertIn("race", {item["alias"] for item in state["sim2sim_maps"]})

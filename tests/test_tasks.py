@@ -75,6 +75,26 @@ class RouteTableTests(unittest.TestCase):
     status, payload = routes.dispatch_get(self.ctx, "/api/metrics", {"task": ["standard"]})
     self.assertEqual((status, payload["task"]), (200, "standard"))
 
+  def test_pretrain_readiness_follows_checkpoint_on_disk(self):
+    import tempfile
+    from types import SimpleNamespace as NS
+
+    with tempfile.TemporaryDirectory() as tmp:
+      ctx = NS(root=Path(tmp), python=Path("python"), token="t",
+               jobs=NS(list=lambda: [], counts=lambda: {}, lock=None, jobs={}),
+               gpu=lambda: {"available": False, "gpus": []},
+               metrics=lambda task: {"task": task, "available": False})
+      _, payload = routes.dispatch_get(ctx, "/api/state", {})
+      mgdp = next(item for item in payload["tasks"] if item["alias"] == "mgdp")
+      self.assertFalse(mgdp["capabilities"]["pretrain_ready"])
+
+      checkpoint = Path(tmp) / mgdp["capabilities"]["pretrain_checkpoint"]
+      checkpoint.parent.mkdir(parents=True, exist_ok=True)
+      checkpoint.write_text("fixture", encoding="utf-8")
+      _, payload = routes.dispatch_get(ctx, "/api/state", {})
+      mgdp = next(item for item in payload["tasks"] if item["alias"] == "mgdp")
+      self.assertTrue(mgdp["capabilities"]["pretrain_ready"])
+
 
 class FrontendContractTests(unittest.TestCase):
   """Static wiring checks: JS ids exist, JS API paths are served, JS parses."""

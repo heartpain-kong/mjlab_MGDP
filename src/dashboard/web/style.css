@@ -139,3 +139,6 @@
 .workspace-grid.workspace-both .right-column{display:grid;gap:18px;align-content:start;height:auto}
 .workspace-grid.workspace-both .left-column .settings{grid-column:auto;grid-row:auto;height:auto}
 .workspace-grid.workspace-monitor .left-column{display:none}
+.task-prereq{margin:10px 0 0;padding:9px 12px;border-radius:6px;font-size:11px;line-height:1.7;overflow-wrap:anywhere}
+.task-prereq.missing{background:#fbf1e4;border:1px solid #f0dcc3;color:#8a5a2b}
+.task-prereq.ready{background:#eef6f3;border:1px solid #d6e9e3;color:#3f6f64}

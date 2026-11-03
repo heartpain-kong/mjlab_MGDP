@@ -80,6 +80,21 @@ python lgdog.py train race --envs 4096 --iterations 16000
 3. 如果障碍尺寸变了，同步改 `race_terrain_cfg.py` 里对应拼块的参数
    （文件头有「规则尺寸 → 拼块参数」的对照表），跑 `python -m unittest tests.test_race_course`。
 
+## 深度感知版本：`LgDog1-Race-MGDP`
+
+高度扫描表达不了头顶横梁和轮胎环，但深度相机可以，所以另开了一份地形
+`race_depth_terrain_cfg.py`（只在深度任务里用，HIM 的 `race` 任务不变）：
+
+| 新增障碍 | 几何 | 说明 |
+|---|---|---|
+| 限高框架 `clearance_frame` | 两根 0.04 m 立柱 + 横梁，梁底 0.36→0.28 m（随难度降低） | 机器人需要低头/趴下通过 |
+| 轮胎阵 `tire_ring` | 12 段 box 拼成环，外径 0.22–0.28 m、高 0.10 m | 深度看到环和孔，策略可踩入/跨过 |
+
+- 相机：前头顶 `(0.02, 0, 0.075)`，光轴水平朝前，FOV 87°、16×16 射线；
+- 任务：`python lgdog.py train race_mgdp --envs 4096 --iterations 16000`
+  （需要先跑 `scripts/pretrain_mgdp.py`）；
+- 真场地复测仍用 `--map race`，几何与比赛一致。
+
 ## 许可与来源
 
 - 场地几何、物资箱标识（食品/工具/仪器/药品）来自 `27rc-dog-race`，依据比赛规则 PDF 建模；

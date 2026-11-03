@@ -9,6 +9,12 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from src.dashboard.catalog import SIM2SIM_MAPS, TASKS, resolve_task
+from src.tasks.velocity.config.lgdog1.race_depth_terrain_cfg import (
+  RACE_DEPTH_PROPORTIONS,
+  BoxClearanceFrameTerrainCfg,
+  TireRingTerrainCfg,
+  lgdog1_race_depth_terrain_cfg,
+)
 from src.tasks.velocity.config.lgdog1.race_terrain_cfg import (
   RACE_PROPORTIONS,
   lgdog1_race_terrain_cfg,
@@ -100,6 +106,46 @@ class RaceAssetTests(unittest.TestCase):
     self.assertEqual(set(module.COURSE_MAPS), {"race", "race_task"})
     for kind, filename in module.COURSE_MAPS.items():
       self.assertTrue((module.TERRAIN_DIR / filename).is_file(), kind)
+
+
+class RaceDepthTerrainTests(unittest.TestCase):
+  """深度感知用的比赛地形：多了限高横梁和轮胎环。"""
+
+  def test_proportions_sum_to_one(self):
+    self.assertAlmostEqual(sum(RACE_DEPTH_PROPORTIONS.values()), 1.0, places=6)
+
+  def test_depth_terrain_contains_overhang_and_tires(self):
+    cfg = lgdog1_race_depth_terrain_cfg()
+    self.assertEqual(set(cfg.sub_terrains), set(RACE_DEPTH_PROPORTIONS))
+    self.assertIsInstance(
+      cfg.sub_terrains["clearance_frame"], BoxClearanceFrameTerrainCfg)
+    self.assertIsInstance(cfg.sub_terrains["tire_ring"], TireRingTerrainCfg)
+
+  def test_overhang_geometry_is_real_3d(self):
+    import mujoco
+    import numpy as np
+
+    spec = mujoco.MjSpec()
+    spec.worldbody.add_body(name="terrain")
+    cfg = BoxClearanceFrameTerrainCfg(proportion=1.0)
+    cfg.size = (8.0, 8.0)
+    output = cfg.function(0.5, spec, np.random.default_rng(0))
+    # plane + 2 posts + beam
+    self.assertEqual(len(output.geometries), 4)
+    beam = output.geometries[-1].geom
+    self.assertGreater(float(beam.pos[2]), 0.2)
+    self.assertLess(float(beam.pos[2]), 0.4)
+
+  def test_tire_ring_has_segments(self):
+    import mujoco
+    import numpy as np
+
+    spec = mujoco.MjSpec()
+    spec.worldbody.add_body(name="terrain")
+    cfg = TireRingTerrainCfg(proportion=1.0)
+    cfg.size = (8.0, 8.0)
+    output = cfg.function(0.5, spec, np.random.default_rng(0))
+    self.assertEqual(len(output.geometries), 1 + cfg.segments)
 
 
 if __name__ == "__main__":
