@@ -6,11 +6,36 @@ const {modeNames, statuses, rewardLabels, metricValue, healthText} = window.LgDo
 const pendingStops = new Set();
 let pendingDelete = null, deletingJobs = false;
 
-async function api(path, body) {
+// 面板每次重启都会换一个 token（server.py 用 secrets 生成）。页面只在加载时取一次，
+// 所以重启过服务后所有 POST 都会被 403 拒绝、启动按钮变灰。这里静默重取 token 再重试一次。
+let tokenRefresh = null;
+async function refreshToken() {
+  if (!tokenRefresh) {
+    tokenRefresh = (async () => {
+      const response = await fetch("/api/state", {cache:"no-store"});
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "无法重新连接本地面板服务");
+      state = data;
+      $("connection").lastChild.textContent = " 本地服务运行中";
+      return data.token;
+    })().finally(() => { tokenRefresh = null; });
+  }
+  return tokenRefresh;
+}
+async function api(path, body, retry = true) {
   const options = body === undefined ? {} : {method:"POST", headers:{"Content-Type":"application/json", "X-LgDog-Token":state.token}, body:JSON.stringify(body)};
   const response = await fetch(path, options);
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || "请求失败");
+  let data;
+  try { data = await response.json(); } catch { data = {error:`服务返回 HTTP ${response.status}`}; }
+  if (response.status === 403 && retry) {
+    await refreshToken();
+    toast("面板服务重启过，已自动重连并重试");
+    return api(path, body, false);
+  }
+  if (!response.ok) {
+    if (response.status === 403) throw new Error("面板服务已重启，请刷新页面（Ctrl+R）后重试");
+    throw new Error(data.error || "请求失败");
+  }
   return data;
 }
 function toast(text) { $("toast").textContent=text; $("toast").classList.remove("hidden"); clearTimeout(timer); timer=setTimeout(()=>$("toast").classList.add("hidden"),4500); }
@@ -180,6 +205,9 @@ function updateCurriculumOptions(){
   $("terrain-difficulty-max").disabled=unsupported;
   const automatic=select.value!=="manual";
   $("lp-options").classList.toggle("hidden",!automatic);
+  // 隐藏的输入框仍会参与表单校验并被打包。手工模式下必须真正禁用它们：
+  // 否则被隐藏的 LP 字段一旦不合法，浏览器无法聚焦提示，表现成「点启动没反应」。
+  $("lp-options").querySelectorAll("input,select,button").forEach(control=>{control.disabled=!automatic;});
   $("terrain-curriculum-hint").textContent=unsupported?"平地任务不使用地形采样课程。":automatic?"自动模式固定使用填写的速度包络，关闭原地形升降与扩速；先固定奖励做对照。":"手工模式按已有进度、存活与跟踪质量升降地形和扩速。";
 }
 async function updateRunNameHint(){
@@ -462,9 +490,11 @@ async function preview() {
     if(version!==previewVersion)return;
     lastCommand="";$("command").textContent="准备好参数和模型后，这里会显示实际执行命令。";
     $("preview-error").textContent=error.message;$("preview-error").classList.remove("hidden");$("launch").disabled=true;
+    // 启动按钮被禁用时必须在显眼处提示原因，否则表现为「按键点了没反应」。
+    if (error.message !== lastPreviewError) { toast(`无法启动：${error.message}`); lastPreviewError = error.message; }
   }
 }
-let previewTimer;
+let previewTimer, lastPreviewError = "";
 function queuePreview() {clearTimeout(previewTimer);previewTimer=setTimeout(preview,180);}
 function renderJobs() {
   const list=$("jobs");
