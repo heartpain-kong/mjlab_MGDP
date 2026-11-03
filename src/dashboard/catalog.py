@@ -32,7 +32,7 @@ _TASK_LIST = (
     docs="doc/RACE_COURSE.md", requires_pretrain=True,
     pretrain_command="python scripts/pretrain_mgdp.py --num-envs 256 --steps 4000 --iterations 3000",
     pretrain_checkpoint="logs/mgdp/perception/mgdp_perception.pt",
-    description="MGDP 深度感知 + 比赛地形：新增限高框架（0.36→0.28 m 横梁）和轮胎环；前头顶相机水平朝前。",
+    description="MGDP 深度感知 + 比赛地形：限高框架按比赛 0.8×0.8×0.3 m 笼子（每格 2 个，梁底 0.34→0.28 m），轮胎阵 2×4、间距 0.55 m；前头顶相机水平朝前。",
   ),
   TaskSpec(
     alias="him_flat", id="LgDog1-Flat-Blind-HIM-Standard",

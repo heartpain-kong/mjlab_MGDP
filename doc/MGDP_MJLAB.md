@@ -89,8 +89,10 @@ python scripts/play.py LgDog1-Rough-MGDP \
 
 ### 2027 比赛地形（`LgDog1-Race-MGDP`）
 
-- 地形：`race_depth_terrain_cfg.py` 在 race 地形上增加**限高框架**（0.36→0.28 m 横梁 + 两根立柱）
-  和**轮胎环**（12 段 box 拼成的环），这两类悬空/环形障碍高度扫描表达不了，深度相机可以；
+- 地形：`race_depth_terrain_cfg.py` 在 race 地形上按比赛真实尺寸增加
+  **限高框架**（0.8×0.8×0.3 m 笼子，每格 2 个，梁底 0.34→0.28 m）和
+  **轮胎阵**（2×4 平放轮胎、中心距 0.55 m、外径 0.549 m），
+  这两类悬空/环形障碍高度扫描表达不了，深度相机可以；
 - 相机：前头顶 `(0.02, 0, 0.075)`，光轴水平朝前，FOV 87°（示意图见
   `E:\rl_vision\deploy\out\camera_mount_diagram.png`）；
 - 训练：`python lgdog.py train race_mgdp --envs 4096 --iterations 16000`（同样需要先预训练感知）；

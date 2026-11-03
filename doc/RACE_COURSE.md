@@ -55,8 +55,9 @@ python lgdog.py train race --envs 4096 --iterations 16000
 | 限高框架 `clearance_frame` | 横梁下表面 0.29 | 无（头顶障碍） | ⚠️ 只在 sim2sim |
 | 启动区 | 0.8×0.8 平地 | `BoxFlatTerrainCfg` | ✅ |
 
-轮胎和限高框架是「头顶/单独刚体」类障碍，mjlab 的程序化地形表达不了 —— 它们在 `--map race`
-里是真几何，训练里靠 `foot_clearance` 类奖励和 sim2sim 复测兜底。
+轮胎和限高框架是「头顶/单独刚体」类障碍，**HIM 的高度场地形表达不了** —— 它们在 `--map race`
+里是真几何，HIM 训练里只能靠 `foot_clearance` 类奖励和 sim2sim 复测兜底；
+深度感知的 `race_mgdp` 任务则用 `race_depth_terrain_cfg.py` 把这两类障碍按比赛尺寸真正建进了训练地形。
 
 ## 场地与坐标（来自建模说明）
 
@@ -82,13 +83,14 @@ python lgdog.py train race --envs 4096 --iterations 16000
 
 ## 深度感知版本：`LgDog1-Race-MGDP`
 
-高度扫描表达不了头顶横梁和轮胎环，但深度相机可以，所以另开了一份地形
-`race_depth_terrain_cfg.py`（只在深度任务里用，HIM 的 `race` 任务不变）：
+高度扫描表达不了头顶横梁和轮胎阵，但深度相机可以，所以另开了一份地形
+`race_depth_terrain_cfg.py`（只在深度任务里用，HIM 的 `race` 任务不变），
+两类障碍都按比赛场地的真实尺寸建：
 
-| 新增障碍 | 几何 | 说明 |
+| 新增障碍 | 几何（与比赛一致） | 说明 |
 |---|---|---|
-| 限高框架 `clearance_frame` | 两根 0.04 m 立柱 + 横梁，梁底 0.36→0.28 m（随难度降低） | 机器人需要低头/趴下通过 |
-| 轮胎阵 `tire_ring` | 12 段 box 拼成环，外径 0.22–0.28 m、高 0.10 m | 深度看到环和孔，策略可踩入/跨过 |
+| 限高框架 `clearance_frame` | 0.8×0.8×0.3 m 笼子：6 根立柱 + 3 根横梁 + 2 根纵梁；每格 **2 个**，梁底 0.34→0.28 m | 机器人需要低头/趴下通过 |
+| 轮胎阵 `tire_array` | **2×4 共 8 个**平放轮胎，中心距 0.55 m，外径 0.549 m、内径 0.329 m、高 0.165 m | 与障碍赛 `tire_array` 排布一致 |
 
 - 相机：前头顶 `(0.02, 0, 0.075)`，光轴水平朝前，FOV 87°、16×16 射线；
 - 任务：`python lgdog.py train race_mgdp --envs 4096 --iterations 16000`

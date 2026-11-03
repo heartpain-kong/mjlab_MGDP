@@ -12,7 +12,7 @@ from src.dashboard.catalog import SIM2SIM_MAPS, TASKS, resolve_task
 from src.tasks.velocity.config.lgdog1.race_depth_terrain_cfg import (
   RACE_DEPTH_PROPORTIONS,
   BoxClearanceFrameTerrainCfg,
-  TireRingTerrainCfg,
+  TireArrayTerrainCfg,
   lgdog1_race_depth_terrain_cfg,
 )
 from src.tasks.velocity.config.lgdog1.race_terrain_cfg import (
@@ -119,7 +119,7 @@ class RaceDepthTerrainTests(unittest.TestCase):
     self.assertEqual(set(cfg.sub_terrains), set(RACE_DEPTH_PROPORTIONS))
     self.assertIsInstance(
       cfg.sub_terrains["clearance_frame"], BoxClearanceFrameTerrainCfg)
-    self.assertIsInstance(cfg.sub_terrains["tire_ring"], TireRingTerrainCfg)
+    self.assertIsInstance(cfg.sub_terrains["tire_array"], TireArrayTerrainCfg)
 
   def test_overhang_geometry_is_real_3d(self):
     import mujoco
@@ -130,23 +130,28 @@ class RaceDepthTerrainTests(unittest.TestCase):
     cfg = BoxClearanceFrameTerrainCfg(proportion=1.0)
     cfg.size = (8.0, 8.0)
     output = cfg.function(0.5, spec, np.random.default_rng(0))
-    # plane + 2 posts + beam
-    self.assertEqual(len(output.geometries), 4)
+    # plane + 2 cages x (6 legs + 3 crossbars + 2 longbars)
+    self.assertEqual(len(output.geometries), 1 + 2 * 11)
     beam = output.geometries[-1].geom
     self.assertGreater(float(beam.pos[2]), 0.2)
     self.assertLess(float(beam.pos[2]), 0.4)
 
-  def test_tire_ring_has_segments(self):
+  def test_tire_array_matches_competition_layout(self):
     import mujoco
     import numpy as np
 
     spec = mujoco.MjSpec()
     spec.worldbody.add_body(name="terrain")
-    cfg = TireRingTerrainCfg(proportion=1.0)
+    cfg = TireArrayTerrainCfg(proportion=1.0)
     cfg.size = (8.0, 8.0)
+    self.assertEqual((cfg.rows, cfg.cols, cfg.spacing), (2, 4, 0.55))
+    self.assertAlmostEqual(cfg.outer_radius, 0.2744, places=4)
+    self.assertAlmostEqual(cfg.inner_radius, 0.1646, places=4)
     output = cfg.function(0.5, spec, np.random.default_rng(0))
-    self.assertEqual(len(output.geometries), 1 + cfg.segments)
+    # plane + 2x4 tyres x 16 segments
+    self.assertEqual(len(output.geometries), 1 + cfg.rows * cfg.cols * cfg.segments)
 
 
 if __name__ == "__main__":
   unittest.main()
+
