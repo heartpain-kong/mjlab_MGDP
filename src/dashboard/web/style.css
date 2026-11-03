@@ -142,3 +142,5 @@
 .task-prereq{margin:10px 0 0;padding:9px 12px;border-radius:6px;font-size:11px;line-height:1.7;overflow-wrap:anywhere}
 .task-prereq.missing{background:#fbf1e4;border:1px solid #f0dcc3;color:#8a5a2b}
 .task-prereq.ready{background:#eef6f3;border:1px solid #d6e9e3;color:#3f6f64}
+.task-prereq-actions{display:flex;align-items:center;gap:12px;margin-top:8px;flex-wrap:wrap}
+.pretrain-button{font-size:11px;padding:8px 14px;border-radius:6px}

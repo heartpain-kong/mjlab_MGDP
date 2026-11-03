@@ -121,15 +121,56 @@ function renderTaskCapabilities(t){
 }
 function renderTaskPrerequisite(t){
   const box=$("task-prereq"); if(!box)return;
+  const actions=$("task-prereq-actions");
   const cap=t.capabilities||{};
-  if(!cap.needs_pretrain){ box.className="task-prereq hidden"; return; }
+  if(!cap.needs_pretrain){ box.className="task-prereq hidden"; actions?.classList.add("hidden"); return; }
   if(cap.pretrain_ready){
     box.className="task-prereq ready";
     box.textContent=`感知模型已就绪：${cap.pretrain_checkpoint}`;
+    actions?.classList.add("hidden");
   }else{
     box.className="task-prereq missing";
     box.textContent=`该任务需要先预训练感知模型：${cap.pretrain_command||"python scripts/pretrain_mgdp.py"}（检查点 ${cap.pretrain_checkpoint||""} 不存在）`;
+    actions?.classList.remove("hidden");
   }
+}
+async function startPretrain(){
+  const button=$("pretrain");
+  if(!button)return;
+  button.disabled=true; button.textContent="预训练启动中…";
+  try{
+    const data=await api("/api/pretrain", {});
+    $("pretrain-state").textContent=`已启动 ${data.job.id}，日志在运行记录里`;
+    toast("预训练已启动，完成后会自动刷新状态");
+    await refresh();
+    pollPretrain(data.job.id);
+  }catch(error){
+    toast(error.message);
+    button.disabled=false; button.textContent="预训练感知模型";
+  }
+}
+function pollPretrain(jobId){
+  const timer=setInterval(async()=>{
+    try{
+      const data=await api("/api/state");
+      state=data;
+      updateTask();
+      if(task()?.capabilities?.pretrain_ready){
+        clearInterval(timer);
+        $("pretrain-state").textContent="感知模型已就绪";
+        toast("感知模型已就绪，可以启动训练");
+        await preview(); await refresh();
+        return;
+      }
+      const job=(data.jobs||[]).find(item=>item.id===jobId);
+      if(job && ["failed","stopped","completed","finished"].includes(job.status)){
+        clearInterval(timer);
+        $("pretrain-state").textContent=`预训练结束（${job.status}），检查点未生成，查看运行日志`;
+        const button=$("pretrain");
+        if(button){ button.disabled=false; button.textContent="重新预训练"; }
+      }
+    }catch(error){ /* panel polling is best-effort */ }
+  },4000);
 }
 function updateCurriculumOptions(){
   const select=$("terrain-curriculum");if(!select)return;
@@ -645,6 +686,7 @@ async function start() {
     $("both-view").addEventListener("click",()=>setWorkspaceView("both"));
     $("settings-view").addEventListener("click",()=>setWorkspaceView("settings"));
     $("monitor-view").addEventListener("click",()=>setWorkspaceView("monitor"));
+    $("pretrain")?.addEventListener("click",()=>startPretrain());
     setInterval(()=>refresh(),1800);
   }catch(error){toast(error.message);$("command").textContent="面板初始化失败，请检查服务终端。";}
 }

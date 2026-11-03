@@ -152,6 +152,25 @@ def run(ctx: ApiContext, data: dict) -> tuple[int, dict]:
   return 200, {"job": ctx.jobs.launch(argv, data.get("mode", "train"), alias)}
 
 
+def pretrain(ctx: ApiContext, data: dict) -> tuple[int, dict]:
+  """Launch MGDP perception pretraining from the workbench."""
+  script = ctx.root / "scripts" / "pretrain_mgdp.py"
+  if not script.is_file():
+    raise ValueError("找不到 scripts/pretrain_mgdp.py")
+  envs = integer(data.get("envs", 256), "环境数", 1, 4096)
+  steps = integer(data.get("steps", 4000), "采集步数", 10, 200000)
+  iterations = integer(data.get("iterations", 3000), "训练迭代", 1, 200000)
+  output = ctx.root / "logs" / "mgdp" / "perception" / "mgdp_perception.pt"
+  argv = [
+    str(ctx.python), str(script),
+    "--num-envs", str(envs),
+    "--steps", str(steps),
+    "--iterations", str(iterations),
+    "--out", str(output),
+  ]
+  return 200, {"job": ctx.jobs.launch(argv, "pretrain", "mgdp"), "output": str(output)}
+
+
 def reward_save(ctx: ApiContext, data: dict) -> tuple[int, dict]:
   alias, task = resolve_task(data.get("task", DEFAULT_TASK))
   before = {item["name"]: {"weight": item["weight"], "params": item["params"]}
@@ -209,6 +228,7 @@ POST_ROUTES = {
   "/api/rewards/save": reward_save,
   "/api/terrain/save": terrain_save,
   "/api/terrain/view": terrain_view,
+  "/api/pretrain": pretrain,
   "/api/stop": stop,
   "/api/jobs/delete": jobs_delete,
   "/api/jobs/clear-finished": jobs_clear,
@@ -227,4 +247,5 @@ def dispatch_post(ctx: ApiContext, path: str, data: dict) -> tuple[int, dict]:
   if handler is None:
     return 404, {"error": "操作不存在"}
   return handler(ctx, data)
+
 

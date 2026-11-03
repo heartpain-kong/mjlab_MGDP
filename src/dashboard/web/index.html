@@ -32,6 +32,10 @@
       </div>
       <div class="task-info"><p id="task-description"></p><div class="task-chips"><span id="critic-chip"></span><span id="profile-chip"></span></div><div id="task-capabilities" class="capabilities"></div></div>
       <p id="task-prereq" class="task-prereq hidden"></p>
+      <div id="task-prereq-actions" class="task-prereq-actions hidden">
+        <button id="pretrain" class="primary pretrain-button" type="button">预训练感知模型</button>
+        <span id="pretrain-state" class="hint"></span>
+      </div>
     </section>
     <div class="mode-tabs" role="tablist" aria-label="操作模式"><button class="selected" data-mode="train" role="tab" aria-selected="true">01 <span>训练</span></button><button data-mode="play" role="tab" aria-selected="false">02 <span>Play 回放</span></button><button data-mode="sim" role="tab" aria-selected="false">03 <span>Sim2Sim</span></button><button data-mode="rewards" role="tab" aria-selected="false">04 <span>查看奖励</span></button></div>
     <div class="workspace-grid">

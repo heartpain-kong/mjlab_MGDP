@@ -85,6 +85,8 @@ python scripts/play.py LgDog1-Rough-MGDP \
 
 任务名已出现在 `python scripts/list_envs.py` 的第 9 项。
 
+也可以在面板的任务卡片里直接点 **「预训练感知模型」** 按钮（参数用默认值 256 envs / 4000 步 / 3000 迭代），日志会进入「运行记录」；完成后横幅变绿、启动按钮自动恢复。
+
 ### 2027 比赛地形（`LgDog1-Race-MGDP`）
 
 - 地形：`race_depth_terrain_cfg.py` 在 race 地形上增加**限高框架**（0.36→0.28 m 横梁 + 两根立柱）

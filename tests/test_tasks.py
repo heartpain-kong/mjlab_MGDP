@@ -95,6 +95,28 @@ class RouteTableTests(unittest.TestCase):
       mgdp = next(item for item in payload["tasks"] if item["alias"] == "mgdp")
       self.assertTrue(mgdp["capabilities"]["pretrain_ready"])
 
+  def test_pretrain_route_launches_mgdp_pretraining(self):
+    launched = {}
+
+    class Jobs:
+      def launch(self, argv, mode, task):
+        launched.update(argv=argv, mode=mode, task=task)
+        return {"id": "pretrain01"}
+
+    ctx = SimpleNamespace(
+      root=ROOT, python=Path("python"), token="t", jobs=Jobs(),
+      gpu=lambda: {"available": False, "gpus": []},
+      metrics=lambda task: {"task": task, "available": False},
+    )
+    status, payload = routes.dispatch_post(ctx, "/api/pretrain", {})
+    self.assertEqual(status, 200)
+    self.assertEqual(payload["job"]["id"], "pretrain01")
+    self.assertEqual(launched["mode"], "pretrain")
+    joined = " ".join(launched["argv"])
+    self.assertIn("pretrain_mgdp.py", joined)
+    self.assertIn("--num-envs", joined)
+    self.assertIn("mgdp_perception.pt", joined)
+
 
 class FrontendContractTests(unittest.TestCase):
   """Static wiring checks: JS ids exist, JS API paths are served, JS parses."""
