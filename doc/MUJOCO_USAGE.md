@@ -135,6 +135,33 @@ python -m scripts.sim2sim LgDog1-Race-MGDP --onnx "/path/to/MGDP_V3/policy.onnx"
 
 `E:/mjlab/数据/MGDP_V3` 的归档目前缺少该感知文件，不能用新预训练文件随意替代。旧 V3 也不能完整续训成 v2；新任务说明见 [MGDP_PASSAGE.md](MGDP_PASSAGE.md)。
 
+## 7. 机器人相机小窗（原生 MuJoCo）
+
+`play --viewer native` 和 `sim2sim --viewer` 默认在左下角显示机器人 RGB 相机，
+主画面仍可用鼠标自由观察。点击 MuJoCo 窗口后按 **F8** 隐藏/恢复小窗。
+直接打开原始资产 XML 的独立 simulate 不会自动运行这段 Python 小窗逻辑。
+
+相机随 trunk 固定运动：局部位置 `(0.02, 0, 0.075)` m，站立基座 z=0.31 m 时
+镜头约高 0.385 m；光轴沿机器人 +X 水平朝前，画面右侧为 -Y、上方为 +Z。
+俯仰和侧倾会随机器人变化，不是始终锁定世界地平线。方形图像垂直/水平视场角均为 87°。
+参数统一在 `src/config/lgdog1.py` 的 `FRONT_CAMERA_*` 中，属于仿真安装参数。
+
+默认小窗 256×256、10 FPS；窗口较小时自动缩小到主视口宽高的三分之一以内。
+可选 `bottom-left`、`bottom-right`、`top-left`、`top-right`，例如：
+
+```bash
+python -m scripts.play LgDog1-Flat --agent zero --num-envs 1 --viewer native --camera-inset-size 320 --camera-inset-fps 15 --camera-inset-corner top-right
+python -m scripts.sim2sim LgDog1-Race-MGDP --onnx "/path/to/policy.onnx" --map race --viewer --camera-inset-corner bottom-right
+```
+
+禁用：直接调用 `scripts.play` 用 `--camera-inset False`；`scripts.sim2sim` 及短入口
+`lgdog.py play/sim` 用 `--no-camera-inset`。无 viewer 的 sim2sim 不创建离屏渲染器。
+Viser 暂无这个角落小窗，选择原生查看器才会显示。
+
+小窗是便于观察的 RGB 图像，和 MGDP 深度射线使用相同安装位置、前向光轴及视场角。
+小窗已将画面上方向校正为机器人 +Z；策略原有 16×16 深度图的像素排列保持不变，
+不会在显示功能中旋转已有策略的输入。
+
 ## 当前 Windows 工作区的 CPU 环境
 
 本轮已经在下列解释器中完成 CPU 验证。PowerShell 可以直接调用，避免误用系统里没有依赖的 Python：

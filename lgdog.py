@@ -76,6 +76,11 @@ def main():
       child.add_argument("--velocity-max-abs", type=float, default=None,
                          help="最高速度绝对值；训练命令上限会自动取正值")
       child.add_argument("--resume", action="store_true")
+    if mode in {"play", "sim"}:
+      child.add_argument("--camera-inset", action=argparse.BooleanOptionalAction, default=True)
+      child.add_argument("--camera-inset-size", type=int, default=256)
+      child.add_argument("--camera-inset-fps", type=float, default=10.)
+      child.add_argument("--camera-inset-corner", choices=("bottom-left","bottom-right","top-left","top-right"), default="bottom-left")
     if mode == "play":
       child.add_argument("--viewer", choices=("viser", "native"), default="viser")
     if mode == "sim":

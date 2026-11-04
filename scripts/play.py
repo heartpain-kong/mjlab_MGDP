@@ -16,7 +16,7 @@ from mjlab.tasks.tracking.mdp import MotionCommandCfg
 from mjlab.utils.os import get_checkpoint_path
 from mjlab.utils.torch import configure_torch_backends
 from mjlab.utils.wrappers import VideoRecorder
-from mjlab.viewer import NativeMujocoViewer, ViserPlayViewer
+from mjlab.viewer import ViserPlayViewer
 
 from src.tasks.velocity.rl.action_monitor import ActionMonitorVecEnvWrapper
 from src.him_contract import apply_him_play_contract
@@ -40,6 +40,10 @@ class PlayConfig:
   video_width: int | None = None
   camera: int | str | None = None
   viewer: Literal["auto", "native", "viser"] = "auto"
+  camera_inset: bool = True
+  camera_inset_size: int = 256
+  camera_inset_fps: float = 10.0
+  camera_inset_corner: Literal["bottom-left", "bottom-right", "top-left", "top-right"] = "bottom-left"
   no_terminations: bool = False
   """Disable all termination conditions (useful for viewing motions with dummy agents)."""
 
@@ -246,7 +250,9 @@ def run_play(task_id: str, cfg: PlayConfig):
     resolved_viewer = cfg.viewer
 
   if resolved_viewer == "native":
-    NativeMujocoViewer(env, policy).run()
+    from src.camera_inset import native_viewer_with_inset
+    native_viewer_with_inset(env, policy, cfg.camera_inset, cfg.camera_inset_size,
+                            cfg.camera_inset_fps, cfg.camera_inset_corner).run()
   elif resolved_viewer == "viser":
     ViserPlayViewer(env, policy).run()
   else:

@@ -647,10 +647,19 @@ def run(args) -> int:
   decim = int(round(CTRL_DT / model.opt.timestep))
 
   viewer = None
+  inset = None
   if args.viewer:
     from mujoco import viewer as mj_viewer  # 别写 import mujoco.viewer，会把模块级 mujoco 遮蔽掉
 
-    viewer = mj_viewer.launch_passive(model, data)
+    from src.camera_inset import CameraInset, KEY_F8
+    if getattr(args, "camera_inset", True):
+      inset = CameraInset(model, args.camera_inset_size, args.camera_inset_fps, args.camera_inset_corner)
+    def viewer_key(key):
+      if key == KEY_F8 and inset is not None:
+        inset.toggle()
+    viewer = mj_viewer.launch_passive(model, data, key_callback=viewer_key)
+    if inset is not None:
+      print("  相机小窗    前头顶水平朝前，F8 开关（RGB，非策略深度图）")
 
   # 键盘（pynput 全局钩子，不依赖查看器窗口；没有查看器也能遥控，只是看不见）
   kb = None
@@ -681,107 +690,114 @@ def run(args) -> int:
   raw_action_samples = 0
   t0 = time.time()
   n_reset = 0
-  for step in range(n_ctrl):
-    cur_hdg = heading_of_quat_wxyz(data.qpos[3:7])
-    turning = False
+  try:
+    for step in range(n_ctrl):
+      cur_hdg = heading_of_quat_wxyz(data.qpos[3:7])
+      turning = False
 
-    # ── 输入 ──────────────────────────────────────────────────────────
-    if kb is not None:
-      kx, ky, kyaw, do_reset, do_exit = kb.poll()
-      if do_exit:
-        print("\n  [Esc] 退出")
-        break
-      if do_reset:
-        reset(model, data, meta, args.spawn_x, args.spawn_y, args.spawn_yaw)
-        last_action[:] = 0.0
-        hdg_target = None
-        n_reset += 1
-        history.reset()
-        episode_step = 0
-        if viewer is not None:
-          viewer.sync()
-        continue
+      # ── 输入 ──────────────────────────────────────────────────────────
+      if kb is not None:
+        kx, ky, kyaw, do_reset, do_exit = kb.poll()
+        if do_exit:
+          print("\n  [Esc] 退出")
+          break
+        if do_reset:
+          reset(model, data, meta, args.spawn_x, args.spawn_y, args.spawn_yaw)
+          last_action[:] = 0.0
+          hdg_target = None
+          n_reset += 1
+          history.reset()
+          episode_step = 0
+          if viewer is not None:
+            viewer.sync()
+          continue
 
-      # x/y：按键按下就覆盖命令行给的固定速度
-      cmd[0] = kx * args.speed_x if kx != 0 else args.vx
-      cmd[1] = ky * args.speed_y if ky != 0 else args.vy
-      # yaw：有转向按键 → 直接透传该速率，并把目标同步到当前朝向（松手后从这里保持）
-      if kyaw != 0:
-        cmd[2] = kyaw * args.speed_yaw
-        hdg_target = cur_hdg
-        turning = True
-
-    # yaw 的兜底（键盘没在转向，或干脆没键盘）：
-    #   · 命令行给了固定 wz → 直接下发（开环）
-    #   · 否则若开了朝向保持 → 复刻训练的 heading 控制律
-    if not turning:
-      if args.wz != 0:
-        cmd[2] = args.wz
-      elif hdg_hold:
-        if hdg_target is None:
+        # x/y：按键按下就覆盖命令行给的固定速度
+        cmd[0] = kx * args.speed_x if kx != 0 else args.vx
+        cmd[1] = ky * args.speed_y if ky != 0 else args.vy
+        # yaw：有转向按键 → 直接透传该速率，并把目标同步到当前朝向（松手后从这里保持）
+        if kyaw != 0:
+          cmd[2] = kyaw * args.speed_yaw
           hdg_target = cur_hdg
-        err = wrap_pi(hdg_target - cur_hdg)
-        cmd[2] = float(np.clip(HEADING_KP * err, -WZ_MAX, WZ_MAX))
-      else:
-        cmd[2] = 0.0
+          turning = True
 
-    # ── 策略 ──────────────────────────────────────────────────────────
-    # Append exactly once, after updating commands. Reset also restarts phase.
-    # Like mjlab, refresh derived/sensor quantities after the final mj_step.
-    mujoco.mj_forward(model, data)
-    frame = build_obs(model, data, meta, cmd, episode_step * CTRL_DT, last_action)
-    obs = history.push(frame, model, data) if mgdp else history.push(frame)
-    raw_action = sess.run(None, {iname: obs[None, :]})[0][0].astype(np.float64)
-    raw_abs = np.abs(raw_action)
-    raw_action_abs_max = max(raw_action_abs_max, float(raw_abs.max()))
-    raw_action_abs_sum += float(raw_abs.mean())
-    raw_action_saturated += int(np.count_nonzero(raw_abs >= args.action_clip))
-    raw_action_samples += raw_action.size
-    action = np.clip(raw_action, -args.action_clip, args.action_clip)
+      # yaw 的兜底（键盘没在转向，或干脆没键盘）：
+      #   · 命令行给了固定 wz → 直接下发（开环）
+      #   · 否则若开了朝向保持 → 复刻训练的 heading 控制律
+      if not turning:
+        if args.wz != 0:
+          cmd[2] = args.wz
+        elif hdg_hold:
+          if hdg_target is None:
+            hdg_target = cur_hdg
+          err = wrap_pi(hdg_target - cur_hdg)
+          cmd[2] = float(np.clip(HEADING_KP * err, -WZ_MAX, WZ_MAX))
+        else:
+          cmd[2] = 0.0
 
-    # 关节序目标 → 执行器序 ctrl（见 build_model 里的 perm 说明）
-    target_joint = meta["default_qpos"] + meta["action_scale"] * action
-    data.ctrl[:] = target_joint[meta["ctrl_joint_perm"]]
+      # ── 策略 ──────────────────────────────────────────────────────────
+      # Append exactly once, after updating commands. Reset also restarts phase.
+      # Like mjlab, refresh derived/sensor quantities after the final mj_step.
+      mujoco.mj_forward(model, data)
+      frame = build_obs(model, data, meta, cmd, episode_step * CTRL_DT, last_action)
+      obs = history.push(frame, model, data) if mgdp else history.push(frame)
+      raw_action = sess.run(None, {iname: obs[None, :]})[0][0].astype(np.float64)
+      raw_abs = np.abs(raw_action)
+      raw_action_abs_max = max(raw_action_abs_max, float(raw_abs.max()))
+      raw_action_abs_sum += float(raw_abs.mean())
+      raw_action_saturated += int(np.count_nonzero(raw_abs >= args.action_clip))
+      raw_action_samples += raw_action.size
+      action = np.clip(raw_action, -args.action_clip, args.action_clip)
 
-    for _ in range(decim):
-      mujoco.mj_step(model, data)
+      # 关节序目标 → 执行器序 ctrl（见 build_model 里的 perm 说明）
+      target_joint = meta["default_qpos"] + meta["action_scale"] * action
+      data.ctrl[:] = target_joint[meta["ctrl_joint_perm"]]
 
-    last_action = action.astype(np.float32)
-    episode_step += 1
+      for _ in range(decim):
+        mujoco.mj_step(model, data)
 
-    # 量测
-    pos = data.qpos[0:3].copy()
-    w, x, y, z = data.qpos[3:7]
-    R = np.array(
-      [
-        [1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y)],
-        [2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x)],
-        [2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y)],
-      ]
-    )
-    z_axis = R[:, 2]
-    tilt = np.degrees(np.arccos(np.clip(z_axis[2], -1, 1)))
-    vel_b = R.T @ data.qvel[0:3]
-    log.append((pos, tilt, vel_b, float(np.abs(data.qvel[0:3]).max()), cur_hdg))
+      last_action = action.astype(np.float32)
+      episode_step += 1
 
-    if viewer is not None:
-      viewer.sync()
-      time.sleep(max(0.0, CTRL_DT * 0.6))
-    elif step % max(1, n_ctrl // 10) == 0:
-      print(
-        f"  t={step * CTRL_DT:6.2f}s  z={pos[2]:.3f}  tilt={tilt:5.1f}°  "
-        f"vx={vel_b[0]:+.3f} (指令 {cmd[0]:+.2f})  |v|={np.linalg.norm(data.qvel[0:3]):.3f}"
+      # 量测
+      pos = data.qpos[0:3].copy()
+      w, x, y, z = data.qpos[3:7]
+      R = np.array(
+        [
+          [1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y)],
+          [2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x)],
+          [2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y)],
+        ]
       )
+      z_axis = R[:, 2]
+      tilt = np.degrees(np.arccos(np.clip(z_axis[2], -1, 1)))
+      vel_b = R.T @ data.qvel[0:3]
+      log.append((pos, tilt, vel_b, float(np.abs(data.qvel[0:3]).max()), cur_hdg))
 
-    # 摔了就停
-    if tilt > 70.0 or pos[2] < 0.08:
-      print(f"\n  ✗ 第 {step} 步摔倒：t={step * CTRL_DT:.2f}s  z={pos[2]:.3f}  tilt={tilt:.1f}°")
-      break
+      if viewer is not None:
+        mujoco.mj_forward(model, data)
+        viewer.sync()
+        if inset is not None:
+          inset.update(viewer, data)
+        time.sleep(max(0.0, CTRL_DT * 0.6))
+      elif step % max(1, n_ctrl // 10) == 0:
+        print(
+          f"  t={step * CTRL_DT:6.2f}s  z={pos[2]:.3f}  tilt={tilt:5.1f}°  "
+          f"vx={vel_b[0]:+.3f} (指令 {cmd[0]:+.2f})  |v|={np.linalg.norm(data.qvel[0:3]):.3f}"
+        )
 
-  if kb is not None:
-    kb.stop()
-  if viewer is not None:
-    viewer.close()
+      # 摔了就停
+      if tilt > 70.0 or pos[2] < 0.08:
+        print(f"\n  ✗ 第 {step} 步摔倒：t={step * CTRL_DT:.2f}s  z={pos[2]:.3f}  tilt={tilt:.1f}°")
+        break
+
+  finally:
+    if inset is not None:
+      inset.close()
+    if kb is not None:
+      kb.stop()
+    if viewer is not None:
+      viewer.close()
 
   # ── 汇总 ──
   log = np.array([(l[0][2], l[1], l[2][0], l[2][1], l[2][2], l[3], l[4], l[0][0]) for l in log])
@@ -901,6 +917,10 @@ def main():
   ap.add_argument("--vy", type=float, default=0.0, help="侧向速度指令 [m/s]")
   ap.add_argument("--wz", type=float, default=0.0, help="偏航角速度指令 [rad/s]")
   ap.add_argument("--duration", type=float, default=20.0, help="跑多久 [s]")
+  ap.add_argument("--camera-inset", action=argparse.BooleanOptionalAction, default=True, help="显示机器人第一视角角落小窗，F8 开关")
+  ap.add_argument("--camera-inset-size", type=int, default=256)
+  ap.add_argument("--camera-inset-fps", type=float, default=10.)
+  ap.add_argument("--camera-inset-corner", choices=("bottom-left","bottom-right","top-left","top-right"), default="bottom-left")
   ap.add_argument("--viewer", action="store_true", help="弹 MuJoCo 窗口（键盘控制需要它）")
   ap.add_argument(
     "--map",

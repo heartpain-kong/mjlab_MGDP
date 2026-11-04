@@ -30,3 +30,10 @@ INITIAL_JOINT_POSITIONS = (
 INITIAL_JOINT_VELOCITY = 0.0
 SOFT_JOINT_POS_LIMIT_FACTOR = 0.9
 ACTION_SCALE = 0.25
+
+# Front-top camera: MuJoCo -Z optical axis rotated to robot +X.
+FRONT_CAMERA_NAME = "robot_front"
+FRONT_CAMERA_POS = (0.02, 0.0, 0.075)
+# MuJoCo camera axes: right=-Y, up=+Z, optical forward=+X.
+FRONT_CAMERA_QUAT = (0.5, 0.5, -0.5, -0.5)
+FRONT_CAMERA_FOVY = 87.0

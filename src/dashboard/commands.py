@@ -82,6 +82,18 @@ def terrain_xml_path(root, value):
   return path
 
 
+def camera_inset_flags(options, tyro=False):
+  size = integer(options.get("camera_inset_size", 256), "相机小窗尺寸", 64, 512)
+  fps = number(options.get("camera_inset_fps", 10), "相机小窗帧率", 1, 60)
+  corner = options.get("camera_inset_corner", "bottom-left")
+  if corner not in {"bottom-left", "bottom-right", "top-left", "top-right"}:
+    raise ValueError("未知相机小窗位置")
+  enabled = options.get("camera_inset", True) is not False
+  toggle = [f"--camera-inset={enabled}"] if tyro else ([] if enabled else ["--no-camera-inset"])
+  return toggle + [
+    f"--camera-inset-size={size}", f"--camera-inset-fps={fps}", f"--camera-inset-corner={corner}"]
+
+
 def build_command(root, python, options):
   root = Path(root).resolve()
   mode = options.get("mode", "train")
@@ -171,7 +183,7 @@ def build_command(root, python, options):
     if viewer not in {"viser", "native"}:
       raise ValueError("play viewer 只能是 viser 或 native")
     return [str(python), str(scripts / "play.py"), task["id"], f"--checkpoint_file={checkpoint}",
-            f"--num_envs={integer(options.get('envs', 4), '环境数', 1, 128)}", "--viewer", viewer]
+            f"--num_envs={integer(options.get('envs', 4), '环境数', 1, 128)}", "--viewer", viewer] + camera_inset_flags(options, tyro=True)
   if mode == "sim":
     path = model_path(root, task_value, options.get("onnx"), "onnx")
     map_name = options.get("map", "flat")
@@ -202,7 +214,7 @@ def build_command(root, python, options):
       argv.append("--viewer")
     if not options.get("keyboard", False):
       argv.append("--no-keyboard")
-    return argv
+    return argv + camera_inset_flags(options)
   if mode == "rewards":
     argv = [str(python), str(scripts / "list_rewards.py"), task["id"]]
     term = str(options.get("term", "")).strip()

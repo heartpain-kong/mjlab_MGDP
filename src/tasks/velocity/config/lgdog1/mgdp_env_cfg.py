@@ -6,7 +6,7 @@ contrastive perception model.
 
 Pipeline
 --------
-    RayCastSensor (16x16 pinhole, 87 deg FOV, forward/down 45 deg)
+    RayCastSensor (16x16 pinhole, 87 deg FOV, horizontal forward)
         -> normalised depth in [0, 1] (metres / depth_max)
         -> two-frame stack
         -> MGPDPerception (U-Net encoder + GRU)  [frozen, pretrained]
@@ -49,6 +49,8 @@ PROPRIO_HISTORY = 4
 # 前头顶安装，站立不动时光轴水平朝前（+X），与地面平行。
 # MuJoCo 相机沿 -Z 看，绕 Y 轴 -90° 即可把光轴转到 +X。
 DEPTH_SITE_POS = (0.02, 0.0, 0.075)
+# Keep the trained depth tensor's original pixel ordering. The RGB display
+# uses an upright camera at the same mount and optical axis instead.
 DEPTH_SITE_QUAT = (0.7071067812, 0.0, -0.7071067812, 0.0)
 
 DEFAULT_CHECKPOINT = str(
@@ -57,7 +59,7 @@ DEFAULT_CHECKPOINT = str(
 
 
 def _mgdp_robot_spec():
-    """Robot spec with the forward/down depth site added to the trunk."""
+    """Robot spec with the horizontal forward depth site added to the trunk."""
     spec = get_spec()
     body = spec.body(BASE_BODY)
     if not any(site.name == DEPTH_SITE for site in body.sites):

@@ -33,6 +33,10 @@ def get_assets(meshdir: str) -> dict[str, bytes]:
 def get_spec() -> mujoco.MjSpec:
   spec = mujoco.MjSpec.from_file(str(LGDOG1_XML))
   spec.assets = get_assets(spec.meshdir)
+  body = spec.body("trunk")
+  if not any(camera.name == params.FRONT_CAMERA_NAME for camera in body.cameras):
+    body.add_camera(name=params.FRONT_CAMERA_NAME, pos=params.FRONT_CAMERA_POS,
+                    quat=params.FRONT_CAMERA_QUAT, fovy=params.FRONT_CAMERA_FOVY)
   return spec
 
 
