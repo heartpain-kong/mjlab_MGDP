@@ -66,7 +66,56 @@ python -m scripts.sim2sim LgDog1-Race-MGDP --onnx "logs/rsl_rl/lgdog1_velocity_r
 
 固定 vx 不会自动规划全赛道路线。单类训练通道的通过率、完整场地的通过情况应分别记录；“未摔倒”不等于“越过障碍”。
 
-## 4. 键盘控制
+## 4. MuJoCo 原生窗口的键盘和鼠标
+
+以下针对 `native` / `--viewer` 打开的 MuJoCo 窗口；先把焦点放到窗口。浏览器 `viser` 的控件另有自己的操作方式。
+
+| 键盘/鼠标 | 功能 |
+|---|---|
+| F1 | 显示/隐藏帮助，直接查看当前窗口的操作表 |
+| F2 | 显示/隐藏运行信息 |
+| F3 / F4 | 切换性能分析图 / 传感器图；被动查看器中内容可能受外部循环限制 |
+| F5 | 切换全屏 |
+| F6 / F7 | 循环切换坐标系显示 / 标签显示 |
+| Tab / Shift+Tab | 显示或隐藏左侧 / 右侧面板 |
+| `[` / `]` | 切换模型中定义的固定相机；模型没有固定相机时无可切换项 |
+| 鼠标左键拖动 | 旋转观察视角 |
+| 鼠标右键拖动，配合 Shift | 平移视角，Shift 改变移动方向 |
+| 滚轮 / 中键拖动 | 缩放视角 |
+| 左键双击部件 | 选中该部件 |
+| 右键双击部件 | 将视角中心移到该位置 |
+| Ctrl+右键双击 | 跟踪选中的物体 |
+| Page Up | 将选中对象切换到其父 body |
+| 选中后 Ctrl+左键拖动 / Ctrl+右键拖动 | 对所选物体做旋转 / 平移扰动；配合 Shift 改变方向。运行与暂停状态下的响应不同 |
+| 在 UI 区域按住右键 | 查看面板控件的快捷键 |
+| 双击 UI 分区标题 | 展开/折叠各分区 |
+
+常用抗扰动操作：双击机器人部件选中，然后按 Ctrl+右键拖拽，观察受到推拉后的恢复情况。
+
+### `play --viewer native` 的仿真控制（mjlab 1.2.0）
+
+该入口通过 mjlab 给被动查看器补上了以下控制，不能与下一节的 sim2sim 遥控键混用：
+
+| 按键 | 功能 |
+|---|---|
+| Space | 暂停/继续策略与仿真循环 |
+| Enter | 复位环境 |
+| 右方向键 | 暂停后单步推进 |
+| `=` / `-` | 加速 / 减速播放 |
+| `,` / `.` | 切换上一个 / 下一个环境 |
+| P | 显示/隐藏奖励图 |
+| R | 显示/隐藏任务调试可视化 |
+| A | 切换是否显示全部环境 |
+
+MuJoCo 原生 Esc 用于回到自由相机；本项目 sim2sim 若启用键盘遥控，还会将 Esc 作为退出键。
+
+### 独立 simulate 与 sim2sim 的区别
+
+独立 MuJoCo simulate 自己驱动物理循环，支持 Space 暂停、`=`/`-` 调速、左右方向键查看历史/单步。本项目 sim2sim 用 Python 循环驱动物理，并使用 `launch_passive()`；原生暂停/调速按钮不会自动控制这个外部循环。当前 sim2sim 未接入暂停与单步：启用项目遥控时，**Space/R 是复位，Esc 是退出**。使用 `--no-keyboard` 会禁用这组项目遥控，但不会因此获得 sim2sim 暂停功能。
+
+核对来源：[MuJoCo 3.5.0 simulate 源码](https://github.com/google-deepmind/mujoco/blob/3.5.0/simulate/simulate.cc)（帮助表及 passive 分支），以及当前安装的 `mjlab/viewer/native/viewer.py::_safe_key_callback`。
+
+## 5. 项目 sim2sim 机器人遥控
 
 键盘监听使用可选的 `pynput`（缺少时可在同一环境执行 `python -m pip install pynput`）：
 
@@ -76,7 +125,7 @@ python -m scripts.sim2sim LgDog1-Race-MGDP --onnx "logs/rsl_rl/lgdog1_velocity_r
 
 W/S 前后、A/D 转向、Q/E 横移，空格或 R 复位，Esc 退出。复位会清空本体历史、两帧深度和 GRU 状态；键盘未能初始化时终端会提示原因。
 
-## 5. 回放旧 MGDP_V3
+## 6. 回放旧 MGDP_V3
 
 旧 ONNX 没有绑定感知文件，需要显式指定**当时训练所用的原感知权重**：
 
