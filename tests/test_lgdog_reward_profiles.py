@@ -18,7 +18,7 @@ class RewardProfileTests(unittest.TestCase):
         self.assertEqual(lgdog1_him_env_cfg(play).rewards["foot_clearance"].weight, -0.8)
         self.assertEqual(lgdog1_blind_terrain_env_cfg(play).rewards["foot_clearance"].weight, -1.0)
         self.assertEqual(lgdog1_flat_env_cfg(play).rewards["foot_clearance"].weight, -1.0)
-        self.assertEqual(lgdog1_rough_env_cfg(play).rewards["foot_clearance"].weight, -1.0)
+        self.assertEqual(lgdog1_rough_env_cfg(play).rewards["foot_clearance"].weight, 0.0)
 
   def test_parameter_override_reaches_relative_clearance(self):
     with patch.dict(REWARD_PROFILES["him"]["params"]["foot_clearance"], {"target_height": 0.12}):

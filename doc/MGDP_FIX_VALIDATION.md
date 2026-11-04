@@ -28,3 +28,25 @@ python -B -m unittest tests.test_mgdp_pipeline tests.test_mgdp_perception tests.
 ```
 
 既有预训练文件不会因源码修复自动获得训练后的 GRU。新感知模型需配套新的策略训练；已有策略回放应保留其原感知权重。使用说明见 [MGDP_MJLAB.md](MGDP_MJLAB.md)。
+
+## 2026-11-04：修复损失下降测试的随机失败
+
+`test_losses_backward_and_decrease` 原先未固定模型初始化和深度扰动，使用
+`lr=3e-3` 训练 12 步，再比较首尾两个单点。该学习率是预训练默认值的 30 倍；
+循环损失的目标还会随深度编码器变化，仅增加步数不能保证稳定。
+
+测试现在用 `torch.random.fork_rng(devices=[])` 隔离 CPU 随机状态并设 seed=0，
+保留噪声和 dropout，按预训练默认 `lr=1e-4`、weight_decay=1e-5、梯度裁剪 1.0
+训练 40 步。断言每步损失/梯度有限、GRU 输入权重实际变化，且末 5 步平均总损失
+小于首 5 步的 80%。这些修改只作用于测试，不修改训练算法或脚本默认值。
+
+本机 CPU 验证：
+
+- 独立探测 seed=0/1/7/42/123，末段/初段平均损失比分别约为
+  0.345/0.369/0.345/0.391/0.356。
+- 在不同外部 RNG 状态下重复修复后的测试 5 次全部通过，调用前后 RNG 状态相同。
+- 禁用 Adam 更新的反例被断言拒绝，不能靠只计算损失通过测试。
+- 同时将 `REWARD_PROFILES['rough'].weights['foot_clearance']` 正式设为 0；
+  线速度、角速度和 air-time 权重保持当前基线。Rough / Blind / Gentle 共用此配置。
+
+这证明测试可重复和配置路由正确，不代表真实训练收敛或越障性能已验证。

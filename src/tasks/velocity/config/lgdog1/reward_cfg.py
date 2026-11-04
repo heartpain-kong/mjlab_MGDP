@@ -75,7 +75,7 @@ REWARD_PROFILES = {
     "params": {"foot_clearance": {"target_height": 0.10}},
   },
   "rough": {
-    "weights": {},
+    "weights": {"foot_clearance": 0.0},
     "params": {},
   },
   "terrain_v4": {

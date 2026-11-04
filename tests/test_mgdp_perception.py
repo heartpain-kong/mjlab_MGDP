@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from statistics import mean
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -56,20 +57,30 @@ class MGPDPerceptionTests(unittest.TestCase):
     self.assertFalse(torch.allclose(feature, feature2))
 
   def test_losses_backward_and_decrease(self):
-    cfg = MGPDPerceptionCfg()
-    model = MGPDPerception(cfg).train()
-    depth, height = _batch(16)
-    opt = torch.optim.Adam(model.parameters(), lr=3e-3)
-    first = None
-    for _ in range(12):
-      loss, metrics = model.losses(depth, height)
-      opt.zero_grad(set_to_none=True)
-      loss.backward()
-      opt.step()
-      first = metrics["total"] if first is None else first
-    self.assertTrue(first is not None)
-    self.assertLess(metrics["total"], first)
-    self.assertTrue(all(torch.isfinite(torch.tensor(v)) for v in metrics.values()))
+    # Isolate initialization AND noisy-depth augmentation from suite order,
+    # without changing the RNG state seen by the other tests.
+    with torch.random.fork_rng(devices=[]):
+      torch.manual_seed(0)
+      model = MGPDPerception(MGPDPerceptionCfg()).train()
+      depth, height = _batch(16)
+      # Match the pretraining defaults; the old 3e-3 was 30x the training LR
+      # and could destabilize the recurrent loss's moving encoder target.
+      opt = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5)
+      before = model.memory.weight_ih_l0.detach().clone()
+      totals = []
+      for _ in range(40):
+        loss, metrics = model.losses(depth, height)
+        self.assertTrue(all(torch.isfinite(torch.tensor(v)) for v in metrics.values()))
+        opt.zero_grad(set_to_none=True)
+        loss.backward()
+        norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        self.assertTrue(torch.isfinite(norm))
+        opt.step()
+        totals.append(metrics["total"])
+      self.assertFalse(torch.equal(before, model.memory.weight_ih_l0))
+      # Compare windows, not two individual noisy training steps. Require a
+      # meaningful improvement so a frozen/broken optimizer cannot pass.
+      self.assertLess(mean(totals[-5:]), 0.8 * mean(totals[:5]))
 
   def test_checkpoint_roundtrip(self):
     cfg = MGPDPerceptionCfg()
