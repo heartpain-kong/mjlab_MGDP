@@ -51,6 +51,25 @@ COMMON_WEIGHTS = {
 # Rough / Blind / Gentle 共用 rough；TerrainV4 与两类 HIM 使用相对地面高度。
 # 只改 HIM 示例：在 him.weights 中填 "foot_clearance": -0.8。
 REWARD_PROFILES = {
+  "mgdp": {
+    "weights": {
+      "foot_clearance": 0.0,
+      "feet_air_time": 0.25,
+      "track_linear_velocity": 2.0,
+      "track_angular_velocity": 1.0,
+      "pose": 0.5,
+      "foot_gait": 0.0,
+      "action_rate_l2": -0.1,
+      "soft_landing": -0.002,
+      "leg_contact_force": -0.25,
+    },
+    "params": {
+      "track_linear_velocity": {"relative_weight": 0.5, "relative_std": 0.5,
+                                 "min_command_speed": 0.2},
+      "feet_air_time": {"threshold_min": 0.05, "threshold_max": 0.35},
+      "leg_contact_force": {"sensor_name": "legs_ground_contact"},
+    },
+  },
   "flat": {
     "weights": {"feet_stumble": 0.0, "feet_air_time": 0.0, "leg_contact_force": 0.0},
     "params": {"foot_clearance": {"target_height": 0.10}},
@@ -237,4 +256,14 @@ def make_lgdog_rewards(profile, *, base_body, foot_sites, terrain_ray_names=()):
         raise ValueError(f"foot_clearance 已改为连续摆动净空；请从面板参数删除旧字段 {sorted(obsolete)}，只保留 target_height/tolerance")
       gait=rewards["foot_gait"].params
       params.update(period=gait["period"],offset=deepcopy(gait["offset"]),stance_fraction=gait["threshold"])
+  return rewards
+
+
+def make_mgdp_passage_rewards(*, base_body, foot_sites):
+  """MGDP's editable base profile plus the directed task's terminal objective."""
+  from src.tasks.velocity.mdp import passage
+  rewards = make_lgdog_rewards("mgdp", base_body=base_body, foot_sites=foot_sites)
+  rewards["is_terminated"].func = passage.failure_cost
+  rewards["passage_progress"] = RewardTermCfg(func=passage.ForwardProgress, weight=1.0)
+  rewards["passage_success"] = RewardTermCfg(func=passage.success_bonus, weight=5.0)
   return rewards

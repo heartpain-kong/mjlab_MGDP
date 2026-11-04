@@ -7,6 +7,7 @@ MGDP perception module with its original losses:
     depth reconstruction (clean target) + Sobel edge
   + height reconstruction
   + InfoNCE between depth and height tokens
+  + recurrent feature prediction on episode-contiguous sequences
 
 The resulting checkpoint is what ``LgDog1-Rough-MGDP`` loads as a frozen
 observation encoder.
@@ -47,6 +48,7 @@ from src.tasks.velocity.mdp.mgdp_perception import MGPDPerception, MGPDPerceptio
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--num-envs", type=int, default=256)
+    p.add_argument("--sequence-length", type=int, default=8, help="consecutive steps for GRU training, minimum 2")
     p.add_argument("--sample-envs", type=int, default=32,
                    help="how many envs are recorded per step")
     p.add_argument("--steps", type=int, default=3000, help="policy steps to collect")
@@ -64,12 +66,20 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     p.add_argument("--out", default=DEFAULT_CHECKPOINT)
     p.add_argument("--init-from", default="", help="released MGDP wm_best.pt (optional)")
-    return p.parse_args()
+    args = p.parse_args()
+    if args.sequence_length < 2 or args.steps < args.sequence_length + 2:
+        p.error("sequence-length must be >=2 and steps must exceed sequence-length+1")
+    if not 0 < args.val_fraction < 1:
+        p.error("val-fraction must be in (0,1)")
+    if min(args.iterations, args.num_envs, args.sample_envs, args.batch_size) < 1:
+        p.error("iterations, num-envs, sample-envs and batch-size must be positive")
+    return args
 
 
 def build_env(args) -> ManagerBasedRlEnv:
     cfg = lgdog1_mgdp_env_cfg(with_perception=False)
     cfg.scene.num_envs = args.num_envs
+    cfg.seed = args.seed
     terrain = cfg.scene.terrain
     if terrain is not None and terrain.terrain_generator is not None:
         tg = terrain.terrain_generator
@@ -83,6 +93,7 @@ def build_env(args) -> ManagerBasedRlEnv:
 def collect(args, env: ManagerBasedRlEnv) -> tuple[torch.Tensor, torch.Tensor]:
     """Roll random actions and record consecutive (depth pair, height) samples."""
     h, w = DEPTH_HW
+    depth_min = MGPDPerceptionCfg().depth_min
     k = min(args.sample_envs, args.num_envs)
     stacks: list[torch.Tensor] = []
     heights: list[torch.Tensor] = []
@@ -90,7 +101,9 @@ def collect(args, env: ManagerBasedRlEnv) -> tuple[torch.Tensor, torch.Tensor]:
     env.reset()
     actions = torch.zeros((env.num_envs, 12), device=env.device)
     prev_depth = None
-    prev_valid = torch.zeros(k, dtype=torch.bool)
+    previous_episode = None
+    pending_depth, pending_height = [], []
+    pending_continuity = []
     for step in range(args.steps):
         if step % max(1, args.action_hold) == 0:
             actions = (torch.rand((env.num_envs, 12), device=env.device) - 0.5) * 0.3
@@ -99,24 +112,28 @@ def collect(args, env: ManagerBasedRlEnv) -> tuple[torch.Tensor, torch.Tensor]:
         depth = env.scene["depth_rays"].data.distances[:k].reshape(k, 1, h, w)
         miss = depth < 0
         depth = torch.where(miss, torch.full_like(depth, DEPTH_MAX), depth)
-        depth = (depth.clamp(0.0, DEPTH_MAX) / DEPTH_MAX).float().cpu()
+        depth = (depth.clamp(depth_min, DEPTH_MAX) / DEPTH_MAX).float().cpu()
 
         height = height_scan(env, "terrain_scan")[:k]
         height = (height / 5.0).clamp(-1.0, 1.0).float().cpu()
 
         eplen = env.episode_length_buf[:k].cpu()
-        valid = eplen > 0
         if prev_depth is not None:
-            take = valid & prev_valid
-            if take.any():
-                idx = take.nonzero(as_tuple=False).squeeze(-1)
-                stacks.append(torch.cat([prev_depth[idx], depth[idx]], dim=1))
-                heights.append(height[idx])
+            continuous = (eplen > 0) & (eplen == previous_episode + 1)
+            pending_depth.append(torch.cat([prev_depth, depth], dim=1))
+            pending_height.append(height)
+            pending_continuity.append(continuous)
+            if len(pending_depth) == args.sequence_length:
+                take = torch.stack(pending_continuity).all(dim=0)
+                if take.any():
+                    stacks.append(torch.stack(pending_depth, dim=1)[take])
+                    heights.append(torch.stack(pending_height, dim=1)[take])
+                pending_depth, pending_height, pending_continuity = [], [], []
         prev_depth = depth
-        prev_valid = valid
+        previous_episode = eplen.clone()
 
         if step % 200 == 0:
-            print(f"[collect] {step}/{args.steps}  pairs={sum(s.shape[0] for s in stacks)}")
+            print(f"[collect] {step}/{args.steps}  sequences={sum(s.shape[0] for s in stacks)}")
 
     if not stacks:
         raise RuntimeError("no valid samples collected; increase --steps")
@@ -126,7 +143,7 @@ def collect(args, env: ManagerBasedRlEnv) -> tuple[torch.Tensor, torch.Tensor]:
 def evaluate(model, stacks, heights_flat, cfg) -> dict:
     model.eval()
     with torch.no_grad():
-        _, metrics = model.losses(stacks, heights_flat.view(-1, 1, *cfg.height_hw))
+        _, metrics = model.losses(stacks, heights_flat.reshape(*heights_flat.shape[:-1], 1, *cfg.height_hw))
     model.train()
     return metrics
 
@@ -144,7 +161,7 @@ def main() -> None:
     print(f"[collect] {args.steps} steps in {time.time() - t0:.1f}s  "
           f"stacks={tuple(stacks.shape)} height={tuple(heights.shape)}")
 
-    print(f"[data] pairs={stacks.shape[0]}  stack={tuple(stacks.shape)}  "
+    print(f"[data] sequences={stacks.shape[0]}  stack={tuple(stacks.shape)}  "
           f"height={tuple(heights.shape)}")
 
     cfg = MGPDPerceptionCfg(depth_hw=DEPTH_HW, height_hw=(17, 11), depth_max=DEPTH_MAX)
@@ -155,7 +172,9 @@ def main() -> None:
     model.train()
 
     perm = torch.randperm(stacks.shape[0])
-    n_val = max(1, int(stacks.shape[0] * args.val_fraction))
+    if stacks.shape[0] < 2:
+        raise RuntimeError("Need at least two valid sequences; increase --steps or --sample-envs")
+    n_val = min(stacks.shape[0] - 1, max(1, int(stacks.shape[0] * args.val_fraction)))
     val_idx, train_idx = perm[:n_val], perm[n_val:]
 
     val_stacks = stacks[val_idx].to(args.device)
@@ -166,7 +185,7 @@ def main() -> None:
     for it in range(1, args.iterations + 1):
         idx = train_idx[torch.randint(0, train_idx.numel(), (batch,))]
         s = stacks[idx].to(args.device)
-        hh = heights[idx].to(args.device).view(-1, 1, *cfg.height_hw)
+        hh = heights[idx].to(args.device).reshape(-1, args.sequence_length, 1, *cfg.height_hw)
 
         loss, metrics = model.losses(s, hh)
         opt.zero_grad(set_to_none=True)
@@ -179,14 +198,17 @@ def main() -> None:
             print(
                 f"[train] {it:5d}  total={metrics['total']:.4f}  "
                 f"depth={metrics['depth_mse']:.4f}  edge={metrics['edge']:.4f}  "
-                f"height={metrics['height_mse']:.4f}  nce={metrics['contrastive']:.4f}  "
+                f"height={metrics['height_mse']:.4f}  nce={metrics['contrastive']:.4f}  temporal={metrics['temporal']:.4f}  "
                 f"| val total={val['total']:.4f} depth={val['depth_mse']:.4f}"
             )
 
     out = Path(args.out)
     model.save(out, extra={
         "iterations": args.iterations,
-        "pairs": int(stacks.shape[0]),
+        "sequences": int(stacks.shape[0]),
+        "sequence_length": args.sequence_length,
+        "pairs": int(stacks.shape[0] * args.sequence_length),
+        "gru_trained": True,
         "val": evaluate(model, val_stacks, val_heights, cfg),
         "source": "mjlab-random-rollout",
     })

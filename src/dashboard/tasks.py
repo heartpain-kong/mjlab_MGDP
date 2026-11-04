@@ -33,6 +33,7 @@ class TaskSpec(Mapping):
     pretrain_command: str = ""
     pretrain_checkpoint: str = ""
     supports_curriculum: bool = True
+    directed_passage: bool = False
     shared: bool = False
     resume_sources: tuple[str, ...] = field(default_factory=tuple)
 

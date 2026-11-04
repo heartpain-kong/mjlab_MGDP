@@ -19,7 +19,7 @@ _TASK_LIST = (
   TaskSpec(
     alias="mgdp", id="LgDog1-Rough-MGDP",
     label="MGDP · 深度感知", algorithm="ppo", scene="rough_depth",
-    experiment="lgdog1_velocity_mgdp_v1", obs=252, critic=261, profile="rough",
+    experiment="lgdog1_velocity_mgdp_v2", obs=252, critic=261, profile="mgdp",
     docs="doc/MGDP_MJLAB.md", requires_pretrain=True,
     pretrain_command="python scripts/pretrain_mgdp.py --num-envs 256 --steps 4000 --iterations 3000",
     pretrain_checkpoint="logs/mgdp/perception/mgdp_perception.pt",
@@ -27,12 +27,12 @@ _TASK_LIST = (
   ),
   TaskSpec(
     alias="race_mgdp", id="LgDog1-Race-MGDP",
-    label="MGDP · 2027 比赛地形（深度）", algorithm="ppo", scene="race_depth",
-    experiment="lgdog1_velocity_race_mgdp_v1", obs=252, critic=261, profile="rough",
-    docs="doc/RACE_COURSE.md", requires_pretrain=True,
+    label="MGDP · 定向越障训练", algorithm="ppo", scene="race_depth",
+    experiment="lgdog1_velocity_race_mgdp_v2", obs=252, critic=261, profile="mgdp",
+    docs="doc/MGDP_PASSAGE.md", requires_pretrain=True, directed_passage=True,
     pretrain_command="python scripts/pretrain_mgdp.py --num-envs 256 --steps 4000 --iterations 3000",
     pretrain_checkpoint="logs/mgdp/perception/mgdp_perception.pt",
-    description="MGDP 深度感知 + 比赛地形：限高框架按比赛 0.8×0.8×0.3 m 笼子（每格 2 个，梁底 0.34→0.28 m），轮胎阵 2×4、间距 0.55 m；前头顶相机水平朝前。",
+    description="低速从入口穿过障碍到出口；越界失败，各类通过率与跟踪达标后扩速。奖励关闭抬腿高度，启用 feet_air_time。",
   ),
   TaskSpec(
     alias="him_flat", id="LgDog1-Flat-Blind-HIM-Standard",

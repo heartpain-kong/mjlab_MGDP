@@ -21,15 +21,24 @@ from dataclasses import replace
 from pathlib import Path
 
 from mjlab.managers.observation_manager import ObservationGroupCfg, ObservationTermCfg
-from mjlab.sensor import ObjRef, PinholeCameraPatternCfg, RayCastSensorCfg
+from mjlab.managers import TerminationTermCfg
+from src.tasks.velocity import mdp
+from mjlab.managers.curriculum_manager import CurriculumTermCfg
+from mjlab.managers.metrics_manager import MetricsTermCfg
+from mjlab.sensor import ContactMatch, ContactSensorCfg, ObjRef, PinholeCameraPatternCfg, RayCastSensorCfg
 
 from src.assets.robots.lgdog1.lgdog1_constants import get_lgdog1_robot_cfg, get_spec
-from src.tasks.velocity.config.lgdog1.env_cfgs import BASE_BODY, lgdog1_rough_env_cfg
+from src.tasks.velocity.config.lgdog1.env_cfgs import BASE_BODY, FOOT_GEOMS, FOOT_SITES, lgdog1_rough_env_cfg
 from src.tasks.velocity.config.lgdog1.race_depth_terrain_cfg import (
     lgdog1_race_depth_terrain_cfg,
 )
 from src.tasks.velocity.mdp.mgdp_observations import mgdp_depth_feature
 from src.tasks.velocity.mdp.mgdp_perception import MGPDPerceptionCfg
+from src.tasks.velocity.mdp.curriculums import RewardBasedVelocityCurriculum
+from src.tasks.velocity.mdp import passage
+from . import blind_mdp
+from .reward_cfg import make_lgdog_rewards, make_mgdp_passage_rewards
+from .passage_terrain_cfg import lgdog1_passage_terrain_cfg, GOAL_X, LANE_HALF_WIDTH
 
 DEPTH_SITE = "mgdp_depth"
 DEPTH_HW = (16, 16)
@@ -120,7 +129,46 @@ def lgdog1_mgdp_env_cfg(
     # Critic keeps one frame of the privileged set.
     cfg.observations["critic"].history_length = 1
     cfg.observations["critic"].flatten_history_dim = True
+    _configure_mgdp_training(cfg, play)
     return cfg
+
+
+def _configure_mgdp_training(cfg, play):
+    trunk = ContactSensorCfg(name="trunk_ground_contact",
+      primary=ContactMatch(mode="geom", pattern="trunk_collision", entity="robot"),
+      secondary=ContactMatch(mode="body", pattern="terrain"),
+      fields=("found", "force"), reduce="netforce", num_slots=1, history_length=4)
+    legs = ContactSensorCfg(name="legs_ground_contact",
+      primary=ContactMatch(mode="geom", pattern=r".*_collision\d*$", entity="robot",
+                           exclude=(*FOOT_GEOMS, "trunk_collision")),
+      secondary=ContactMatch(mode="body", pattern="terrain"),
+      fields=("found", "force"), reduce="none", num_slots=1, history_length=4)
+    cfg.scene.sensors = tuple(s for s in cfg.scene.sensors if s.name != "nonfoot_ground_touch") + (trunk, legs)
+    cfg.terminations["illegal_contact"] = TerminationTermCfg(func=mdp.illegal_contact,
+      params={"sensor_name": trunk.name, "force_threshold": 10.0})
+    cfg.terminations["sustained_leg_contact"] = TerminationTermCfg(func=blind_mdp.sustained_leg_contact,
+      params={"sensor_name": legs.name, "force_threshold": 10.0,
+              "severe_threshold": 80.0, "duration_s": 0.1})
+    cfg.rewards = make_lgdog_rewards("mgdp", base_body=BASE_BODY, foot_sites=FOOT_SITES)
+    cfg.metrics.update({name: MetricsTermCfg(func=func) for name, func in (
+      ("velocity_error_xy_mps", blind_mdp.velocity_error_xy),
+      ("velocity_tracking_score", blind_mdp.velocity_tracking_score),
+      ("velocity_tracking_active", blind_mdp.velocity_tracking_active),
+      ("tracking_progress", blind_mdp.tracking_progress),
+      ("commanded_distance", blind_mdp.commanded_distance))})
+    if not play:
+      cfg.commands["twist"].ranges.lin_vel_x = (-.2, .35)
+      cfg.commands["twist"].ranges.lin_vel_y = (-.1, .1)
+      cfg.commands["twist"].ranges.ang_vel_z = (-.4, .4)
+      cfg.curriculum["command_vel"] = CurriculumTermCfg(func=RewardBasedVelocityCurriculum,
+        params={"command_name": "twist", "score_metric_name": "velocity_tracking_score",
+          "active_metric_name": "velocity_tracking_active", "progress_metric_name": "tracking_progress",
+          "distance_metric_name": "commanded_distance", "min_progress_ratio": .6,
+          "regress_min_progress_ratio": .4, "linear_threshold": .78, "linear_increment": .025,
+          "linear_patience": 3, "linear_regress_threshold": .62, "linear_regress_patience": 2,
+          "min_episode_fraction": .8, "max_failure_fraction": .25,
+          "regress_min_episode_fraction": .65, "regress_max_failure_fraction": .35,
+          "lin_vel_x_limit": (-.4, .6), "lin_vel_y_limit": (-.2, .2), "check_interval_s": 20.})
 
 
 def lgdog1_race_mgdp_env_cfg(
@@ -134,5 +182,22 @@ def lgdog1_race_mgdp_env_cfg(
     )
     assert cfg.scene.terrain is not None
     cfg.scene.terrain.terrain_type = "generator"
-    cfg.scene.terrain.terrain_generator = lgdog1_race_depth_terrain_cfg()
+    cfg.scene.terrain.terrain_generator = lgdog1_passage_terrain_cfg()
+    cfg.scene.terrain.max_init_terrain_level = 0
+    cfg.episode_length_s = 30.
+    # Safe pad at the terrain origin, always facing the obstacle strip.
+    cfg.events["reset_base"].params["pose_range"] = {
+      "x": (-.03, .03), "y": (-.03, .03), "z": (0., 0.), "yaw": (-.03, .03)}
+    cfg.events["reset_base"].params["velocity_range"] = {}
+    cfg.events.pop("push_robot", None)
+    cfg.events.pop("randomize_terrain", None)
+    cfg.commands["twist"] = passage.PassageCommandCfg(entity_name="robot",
+      resampling_time_range=(31., 31.), heading_command=True,
+      ranges=passage.PassageCommandCfg.Ranges(lin_vel_x=(.25,.35), lin_vel_y=(-.1,.1),
+        ang_vel_z=(-.4,.4), heading=(0.,0.)), goal_x=GOAL_X, lane_half_width=LANE_HALF_WIDTH)
+    cfg.terminations["passage_success"] = TerminationTermCfg(func=passage.passage_success)
+    cfg.terminations["left_lane"] = TerminationTermCfg(func=passage.left_lane)
+    cfg.rewards = make_mgdp_passage_rewards(base_body=BASE_BODY, foot_sites=FOOT_SITES)
+    cfg.curriculum = {} if play else {"passage": CurriculumTermCfg(func=passage.PassageCurriculum,
+      params={"min_episodes": 32, "success_threshold": .7, "max_error": .25, "speed_limit": .6})}
     return cfg

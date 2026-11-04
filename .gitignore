@@ -14,6 +14,7 @@ __pycache__/
 *.bak
 *.tmp
 outputs
+.artifacts/
 logs
 wandb
 MUJOCO_LOG.TXT

@@ -16,6 +16,8 @@ def configure_terrain_curriculum(cfg, mode="manual", *, temperature=2.0, uniform
                                  max_task_probability=0.25):
   if mode not in {"manual", "uniform", "lp_acrl"}:
     raise ValueError("Unknown terrain curriculum mode")
+  if "passage" in cfg.curriculum and mode != "manual":
+    raise ValueError("定向越障已使用通过率门控，不能叠加 LP 或 uniform 课程")
   if mode == "manual":
     return
   terrain = cfg.scene.terrain

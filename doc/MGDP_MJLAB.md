@@ -9,13 +9,15 @@
 
 ## 1. 迁移了什么
 
+2026-11-04：MGDP 的 reward、接触和课程升级为 v2；`race_mgdp` 改为有明确入口/出口的定向越障训练。`foot_clearance=0`、`feet_air_time=0.25`。使用与验证见 [MGDP_PASSAGE.md](MGDP_PASSAGE.md)，下文比赛随机地形描述属于 v1 的历史背景。
+
 | MGDP 原始实现 | 本仓库实现 |
 |---|---|
 | Isaac Gym 内置相机 / Warp 射线相机（120×120→16×16） | `RayCastSensor` 针孔图案（16×16 条射线，FOV 87°，前头顶水平朝前） |
 | 深度图 + 高程图双模态编码器 | `MGPDPerception.depth_encoder` / `height_encoder` |
 | 对比学习（InfoNCE）+ 双重重构 | 同一套损失，见 `mgdp_perception.py::losses` |
 | 以干净深度为重构目标（去噪） | 训练时注入高斯噪声 + dropout，目标仍是干净帧 |
-| GRU 聚合时序 | 模块自带 GRU 状态，按 episode 复位 |
+| GRU 聚合时序 | 连续序列上的 GRU 特征重构损失；推理状态按 episode 复位 |
 | PPO actor = obs45 + 本体 token + 视觉 token | actor = 4×47 本体历史 + 64 维感知特征 |
 | 地形自适应奖励 | **尚未迁移**（见第 6 节） |
 
@@ -108,12 +110,41 @@ python scripts/play.py LgDog1-Rough-MGDP \
 | `--init-from` | 空 | 官方 `wm_best.pt` 路径，可直接热启动 |
 | `DEPTH_HW` | `(16,16)` | 改大（如 24×24）需要同步改 `depth_hw` 并重新预训练 |
 
-### 显存与耗时（经验值，4090）
+### 显存与耗时（旧版经验值，4090）
+
+下表对应修复前的单样本预训练。连续序列训练的有效帧批量增大，GPU 显存和耗时尚未重测，应先小批量运行。
 
 | 阶段 | 显存 | 时间 |
 |---|---|---|
 | 预训练（256 envs，32 采样） | < 2 GB | 采集约 1–2 min，训练 3000 iter 约 5–10 min |
 | 策略训练（2048 envs） | 约 14–18 GB | 比盲走任务多约 10–20% 迭代时间 |
+
+## 预训练与部署修复（2026-11-04）
+
+预训练默认使用 `--sequence-length 8` 的连续序列，跨 episode 的序列整条丢弃。
+保留深度/高程重构与对比损失，新增 GRU 输出对干净深度 token 的 MSE（`temporal_weight=1.0`）。
+这是本工程为训练循环权重增加的辅助目标；梯度通过整个序列回传。
+旧版不带 `--init-from` 的预训练没有训练 GRU，已有检查点不能因此视为已修复。
+重新预训练后应启动新的策略训练；已有策略回放需要继续使用其训练时的原感知权重。
+
+新策略导出会同时写入 `policy.onnx` 和 `policy.perception.pt`，ONNX metadata 记录
+感知文件名、SHA-256、历史长度、拼接顺序及控制周期。部署时需一起复制两个文件：
+
+```bash
+python scripts/sim2sim.py LgDog1-Race-MGDP --onnx path/to/policy.onnx --map race --vx 0.4 --no-keyboard
+```
+
+CPU MuJoCo 通过同一针孔射线图案、相机 site 姿态、几何组和父 body 排除配置读取深度，
+按训练侧归一化及两帧堆叠计算 GRU 特征；四帧本体历史按“逐观测项内部由旧到新”展开，
+再拼接 64 维感知特征。键盘复位同时清空两帧深度、GRU 状态和本体历史。
+
+旧 ONNX 未绑定感知权重，需要明确给出原感知检查点：
+
+```bash
+python scripts/sim2sim.py LgDog1-Race-MGDP --onnx old/policy.onnx --perception old/original_perception.pt --map race --vx 0.4 --no-keyboard
+```
+
+旧格式没有指纹，调用者需确认所给文件来自该策略训练。新格式会拒绝指纹不同的文件。
 
 ## 5. 与论文实现的差异
 
@@ -134,7 +165,7 @@ python scripts/play.py LgDog1-Rough-MGDP \
 - **感知联合微调**：在 runner 的 `learn` 循环里加一次 `losses()` 反向传播，
   用 rollout 中缓存的深度/高程对做自监督。
 - **真机部署**：`policy.onnx` 只包含 actor（输入 252 维），
-  64 维感知特征需要用单独的 TorchScript/ONNX 模块计算；
+  64 维感知特征目前由 sim2sim 加载配套 PyTorch 感知模型计算；若实机要求纯 ONNX，还需单独导出该循环模型；
   实机深度需先转成同样的 16×16 归一化图（RealSense → 裁剪 [0,5] m → 双线性缩放）。
 
 ## 7. 已做的验证（本机 CPU，无 NVIDIA GPU）

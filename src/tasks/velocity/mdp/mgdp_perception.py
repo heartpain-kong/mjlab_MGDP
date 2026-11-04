@@ -212,6 +212,7 @@ class MGPDPerceptionCfg:
     edge_weight: float = 0.3
     height_mse_weight: float = 1.0
     contrastive_weight: float = 0.3
+    temporal_weight: float = 1.0
     frames: int = 2
     feature_dim: int = 64
     gru_hidden: int = 64
@@ -304,9 +305,17 @@ class MGPDPerception(nn.Module):
     def losses(self, depth_clean: torch.Tensor, height: torch.Tensor) -> tuple[torch.Tensor, dict]:
         """Compute the MGDP perception loss.
 
-        depth_clean: (B, frames, h, w) in [0, 1]
-        height:      (B, 1, H, W)     in [-1, 1]
+        depth_clean: (B,T,frames,h,w) or (B,frames,h,w), in [0,1]
+        height: (B,T,1,H,W) or (B,1,H,W), in [-1,1].
+        T must contain consecutive steps from a single episode.
         """
+        # Sequences are [B,T,frames,H,W]; legacy single-pair callers use T=1.
+        if depth_clean.ndim == 5:
+            batch, steps = depth_clean.shape[:2]
+            depth_clean = depth_clean.flatten(0, 1)
+            height = height.flatten(0, 1)
+        else:
+            batch, steps = depth_clean.shape[0], 1
         depth_noisy = self._corrupt(depth_clean)
         depth_token = self.depth_encoder(depth_noisy)
         depth_recon = self.depth_decoder(
@@ -330,11 +339,22 @@ class MGPDPerception(nn.Module):
         labels = torch.arange(depth_token.size(0), device=depth_token.device)
         contrastive = F.cross_entropy(logits, labels)
 
+        # Train the actual recurrent feature used during policy rollout. Predict
+        # the clean depth token at each step, with gradients through the whole
+        # sequence (including recurrent weights); detach the target branch.
+        with torch.no_grad():
+            clean_token = self.depth_encoder(depth_clean)
+        temporal, _ = self.memory(depth_token.reshape(batch, steps, -1))
+        if temporal.shape[-1] != clean_token.shape[-1]:
+            raise ValueError("GRU hidden width must match depth feature width")
+        temporal_loss = F.mse_loss(temporal.flatten(0, 1), clean_token)
+
         total = (
             self.cfg.depth_mse_weight * depth_mse
             + self.cfg.edge_weight * edge
             + self.cfg.height_mse_weight * height_mse
             + self.cfg.contrastive_weight * contrastive
+            + self.cfg.temporal_weight * temporal_loss
         )
         return total, {
             "total": float(total.detach()),
@@ -342,6 +362,7 @@ class MGPDPerception(nn.Module):
             "edge": float(edge.detach()),
             "height_mse": float(height_mse.detach()),
             "contrastive": float(contrastive.detach()),
+            "temporal": float(temporal_loss.detach()),
         }
 
     # ------------------------------------------------------------------ #

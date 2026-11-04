@@ -108,6 +108,8 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
     status_path=log_dir / "curriculum" / "terrain_sampling.json",
   )
 
+  if "passage" in cfg.env.curriculum and (cfg.velocity_min_abs is not None or cfg.velocity_max_abs is not None):
+    raise ValueError("定向越障速度由通过率门控管理，不接受正负速度包络覆盖")
   if cfg.velocity_min_abs is not None or cfg.velocity_max_abs is not None:
     min_abs = 0.4 if cfg.velocity_min_abs is None else float(cfg.velocity_min_abs)
     max_abs = 0.8 if cfg.velocity_max_abs is None else float(cfg.velocity_max_abs)

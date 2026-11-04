@@ -10,7 +10,7 @@ from __future__ import annotations
 from src.tasks.velocity.config.lgdog1.rl_cfg import lgdog1_ppo_runner_cfg
 
 
-def lgdog1_mgdp_runner_cfg(experiment_name: str = "lgdog1_velocity_mgdp_v1"):
+def lgdog1_mgdp_runner_cfg(experiment_name: str = "lgdog1_velocity_mgdp_v2"):
     cfg = lgdog1_ppo_runner_cfg(experiment_name)
     # Two actor groups: proprio history (4 x 47) and perception (64).
     cfg.obs_groups = {

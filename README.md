@@ -54,10 +54,14 @@ python lgdog.py rewards standard --term foot_clearance
 
 # MGDP 深度感知（需先预训练）
 python lgdog.py train mgdp --envs 2048 --iterations 10000
+# 定向越障 v2：入口→障碍→出口，按各类通过率门控扩速
+python lgdog.py train race_mgdp --envs 1024 --iterations 16000
 # 2027 比赛场地：python lgdog.py train race --envs 4096
 ```
 
 正式训练示例：`python lgdog.py train standard --envs 1024 --iterations 16000 --run-name V8_him_standard_seed42`。环境数应按显存调整。面板本身仅用 Python 标准库；训练仍需要原来的 mjlab / MuJoCo / PyTorch 环境。
+
+MGDP v2 关闭抬腿高度奖励，启用 `feet_air_time`，区分机身与腿部擦碰；使用新的 `_v2` 实验目录。`race_mgdp` 的方向、低速起点和通过率门控由任务管理，不能直接完整续训旧 MGDP_V3。详见 [定向越障配置与验证](doc/MGDP_PASSAGE.md)。
 
 ## 2027 比赛场地
 

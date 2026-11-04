@@ -4,8 +4,10 @@
 
 | 想做什么 | 文档 |
 |---|---|
+| MuJoCo 模型查看、策略回放、比赛场地与键盘控制 | [MUJOCO_USAGE.md](MUJOCO_USAGE.md) |
 | 使用浏览器面板、短命令、了解目录迁移 | [WORKBENCH.md](WORKBENCH.md) |
-| MGDP 深度感知迁移、预训练与训练（默认任务） | [MGDP_MJLAB.md](MGDP_MJLAB.md) |
+| MGDP 定向越障、reward、通过率门控与接触规则 | [MGDP_PASSAGE.md](MGDP_PASSAGE.md) |
+| MGDP 深度感知迁移、预训练与训练 | [MGDP_MJLAB.md](MGDP_MJLAB.md) |
 | 一个网页看全部：环境 / GPU / 进程 / 轮次 / 日志（总览） | [WEBHUB.md](WEBHUB.md) |
 | 把训练曲线当 K 线看（曲线终端） | [KLINE.md](KLINE.md) |
 | 2027 比赛场地：训练地形 + sim2sim 真场地 | [RACE_COURSE.md](RACE_COURSE.md) |

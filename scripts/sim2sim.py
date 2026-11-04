@@ -566,15 +566,44 @@ def run(args) -> int:
   #   history_length / frame_dim / history_order / history_reset，就是为了让部署侧
   #   不需要训练配置；env_cfg 只作为元数据缺失时的兜底。
   onnx_meta = sess.get_modelmeta().custom_metadata_map
-  if "history_length" in onnx_meta:
-    history_length = int(onnx_meta["history_length"])
-    frame_dim = int(onnx_meta.get("frame_dim", 47))
+  mgdp = "perception" in meta["env_cfg"].observations
+  if mgdp:
+    from src.mgdp_deployment import MGDPPolicyInput, file_digest
+    architecture = onnx_meta.get("policy_architecture")
+    if architecture == "lgdog_mgdp_v1":
+      history_length = int(onnx_meta["history_length"])
+      if (onnx_meta.get("history_order") != "term_major_oldest_to_newest"
+          or onnx_meta.get("frame_dim") != "47"
+          or not np.isclose(float(onnx_meta.get("control_dt", "nan")), CTRL_DT)):
+        raise ValueError("MGDP policy history/control contract mismatch")
+      checkpoint = Path(getattr(args, "perception", None) or
+                        onnx_path.parent / onnx_meta["perception_checkpoint"])
+      if file_digest(checkpoint) != onnx_meta["perception_sha256"]:
+        raise ValueError("MGDP perception checkpoint does not match the exported policy")
+    else:
+      # Older exports mislabeled MGDP as one-frame PPO. Their encoder cannot
+      # be recovered from the actor; require the user to name its original file.
+      if not getattr(args, "perception", None):
+        raise ValueError("Legacy MGDP policy requires --perception <original perception.pt>")
+      checkpoint = Path(args.perception)
+      history_length = meta["env_cfg"].observations["actor"].history_length
+    sensor_cfg = next(s for s in meta["env_cfg"].scene.sensors if s.name == "depth_rays")
+    history = MGDPPolicyInput(model, sensor_cfg, checkpoint, history_length)
+    expected = history_length * 47 + history.module.cfg.gru_hidden
+    if len(in_shape) != 2 or in_shape[1] != expected:
+      raise ValueError(f"MGDP policy shape {in_shape} does not match {expected}")
+    if architecture == "lgdog_mgdp_v1" and int(onnx_meta["perception_dim"]) != history.module.cfg.gru_hidden:
+      raise ValueError("MGDP policy perception width mismatch")
   else:
-    history_length = meta["env_cfg"].observations["actor"].history_length or 1
-    frame_dim = 47
-  validate_policy_history(in_shape, onnx_meta, history_length, frame_dim=frame_dim,
-                          control_dt=CTRL_DT)
-  history = PolicyHistory(history_length, frame_dim)
+    if "history_length" in onnx_meta:
+      history_length = int(onnx_meta["history_length"])
+      frame_dim = int(onnx_meta.get("frame_dim", 47))
+    else:
+      history_length = meta["env_cfg"].observations["actor"].history_length or 1
+      frame_dim = 47
+    validate_policy_history(in_shape, onnx_meta, history_length, frame_dim=frame_dim,
+                            control_dt=CTRL_DT)
+    history = PolicyHistory(history_length, frame_dim)
 
   print("=" * 74)
   print(f"  sim2sim —— 普通 MuJoCo(CPU) + onnxruntime，完全绕过训练栈")
@@ -701,7 +730,7 @@ def run(args) -> int:
     # Like mjlab, refresh derived/sensor quantities after the final mj_step.
     mujoco.mj_forward(model, data)
     frame = build_obs(model, data, meta, cmd, episode_step * CTRL_DT, last_action)
-    obs = history.push(frame)
+    obs = history.push(frame, model, data) if mgdp else history.push(frame)
     raw_action = sess.run(None, {iname: obs[None, :]})[0][0].astype(np.float64)
     raw_abs = np.abs(raw_action)
     raw_action_abs_max = max(raw_action_abs_max, float(raw_abs.max()))
@@ -867,6 +896,7 @@ def main():
   )
   ap.add_argument("task", help="任务 ID，如 LgDog1-Flat")
   ap.add_argument("--onnx", default=None, help="policy.onnx 路径（默认自动找最新 run）")
+  ap.add_argument("--perception", default=None, help="MGDP 感知检查点；新导出默认读取 ONNX 旁的配套文件，旧模型需显式指定")
   ap.add_argument("--vx", type=float, default=0.0, help="前向速度指令 [m/s]")
   ap.add_argument("--vy", type=float, default=0.0, help="侧向速度指令 [m/s]")
   ap.add_argument("--wz", type=float, default=0.0, help="偏航角速度指令 [rad/s]")

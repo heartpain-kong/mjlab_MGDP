@@ -21,7 +21,7 @@ register_mjlab_task(
   task_id="LgDog1-Race-MGDP",
   env_cfg=lgdog1_race_mgdp_env_cfg(),
   play_env_cfg=lgdog1_race_mgdp_env_cfg(play=True),
-  rl_cfg=lgdog1_mgdp_runner_cfg("lgdog1_velocity_race_mgdp_v1"),
+  rl_cfg=lgdog1_mgdp_runner_cfg("lgdog1_velocity_race_mgdp_v2"),
   runner_cls=PPOHIMRunner,
 )
 

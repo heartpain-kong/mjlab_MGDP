@@ -219,6 +219,31 @@ class HTTPTests(unittest.TestCase):
     result=json.loads(self.request('GET','/api/metrics?task=standard')[1])
     self.assertEqual(result['terrain_curriculum']['updates'],2)
 
+  def test_passage_metrics_expose_success_counts_speed_and_level(self):
+    from tensorboard.compat.proto.event_pb2 import Event
+    from tensorboard.compat.proto.summary_pb2 import Summary
+    from tensorboard.summary.writer.event_file_writer import EventFileWriter
+    run = Path(self.temp.name)/"logs/rsl_rl"/TASKS["race_mgdp"]["experiment"]/"run"
+    run.mkdir(parents=True)
+    writer = EventFileWriter(str(run))
+    values = {"Curriculum/passage/success_rate/high_wall": .75,
+              "Curriculum/passage/samples/high_wall": 40.,
+              "Curriculum/passage/speed_max": .4,
+              "Curriculum/passage/level_mean": 3.2}
+    writer.add_event(Event(step=10,summary=Summary(value=[
+      Summary.Value(tag=tag,simple_value=value) for tag,value in values.items()])))
+    writer.flush(); writer.close()
+    result = {}; deadline = time.monotonic()+5
+    while time.monotonic() < deadline:
+      status,body = self.request("GET","/api/metrics?task=race_mgdp")
+      result = json.loads(body)
+      if result.get("available"):
+        break
+      time.sleep(.05)
+    self.assertEqual(result["passage"]["high_wall"], {"rate": .75,"samples": 40.})
+    self.assertAlmostEqual(result["metrics"]["passage_speed_max"]["value"], .4, places=5)
+    self.assertAlmostEqual(result["metrics"]["terrain_level"]["value"], 3.2, places=5)
+
   def test_launch_requires_token_and_rejects_cross_origin(self):
     self.assertEqual(self.request("POST", "/api/run", {"mode":"train"})[0], 403)
     token = json.loads(self.request("GET", "/api/state")[1])["token"]

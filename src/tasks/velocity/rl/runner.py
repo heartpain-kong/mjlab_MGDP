@@ -15,6 +15,7 @@ from mjlab.rl.runner import MjlabOnPolicyRunner
 from src.him_contract import HIM_HISTORY_ORDER
 from src.tasks.velocity.mdp.curriculums import RewardBasedVelocityCurriculum
 from src.tasks.velocity.mdp.lp_terrain import LPTerrainCurriculum
+from src.tasks.velocity.mdp.passage import PassageCurriculum
 
 
 class VelocityOnPolicyRunner(MjlabOnPolicyRunner):
@@ -63,8 +64,18 @@ class PPOHIMRunner(MjlabOnPolicyRunner):
     term = manager.get_term_cfg("terrain_sampling").func
     return term if isinstance(term, LPTerrainCurriculum) else None
 
+  def _passage_curriculum(self):
+    manager = getattr(getattr(self.env, "unwrapped", None), "curriculum_manager", None)
+    if manager is None or "passage" not in manager.active_terms:
+      return None
+    term = manager.get_term_cfg("passage").func
+    return term if isinstance(term, PassageCurriculum) else None
+
   def save(self, path: str, infos=None):
     infos = {**(infos or {})}
+    passage = self._passage_curriculum()
+    if passage is not None:
+      infos["mgdp_passage_curriculum"] = passage.state_dict()
     curriculum = self._velocity_curriculum()
     if curriculum is not None:
       infos["him_velocity_curriculum"] = curriculum.state_dict()
@@ -86,7 +97,17 @@ class PPOHIMRunner(MjlabOnPolicyRunner):
         wandb.save(str(jit_path), base_path=str(policy_dir.parent))
 
   def load(self, path, load_cfg=None, strict=True, map_location=None):
+    passage = self._passage_curriculum()
+    if passage is not None:
+      checkpoint = torch.load(path, map_location="cpu", weights_only=False)
+      state = checkpoint.get("infos", {}).get("mgdp_passage_curriculum")
+      if state is None:
+        raise ValueError("定向越障 v2 不能完整续训旧 MGDP：缺少通过率课程状态，请创建新训练")
+      passage.load_state_dict(state)
     infos = super().load(path, load_cfg, strict, map_location)
+    if passage is not None:
+      with torch.inference_mode():
+        self.env.reset()
     curriculum = self._velocity_curriculum()
     state = (infos or {}).get("him_velocity_curriculum") if isinstance(infos, dict) else None
     if curriculum is not None:
@@ -136,6 +157,23 @@ class PPOHIMRunner(MjlabOnPolicyRunner):
         "frame_dim": str(self.alg.actor.frame_dim),
         "history_order": HIM_HISTORY_ORDER,
         "history_reset": "repeat_first_frame",
+        "control_dt": str(self.env.unwrapped.step_dt),
+      })
+    elif "perception" in self.env.unwrapped.cfg.observations:
+      from src.mgdp_deployment import file_digest
+      state = getattr(self.env.unwrapped, "_mgdp_perception_state", None)
+      if state is None:
+        raise RuntimeError("MGDP perception has not been initialized before export")
+      sidecar = Path(path) / (Path(filename).stem + ".perception.pt")
+      state["module"].save(sidecar)
+      metadata = get_base_metadata(self.env.unwrapped, "lgdog_mgdp")
+      metadata.update({
+        "policy_architecture": "lgdog_mgdp_v1",
+        "history_length": str(self.env.unwrapped.cfg.observations["actor"].history_length),
+        "frame_dim": "47", "perception_dim": str(state["module"].cfg.gru_hidden),
+        "history_order": "term_major_oldest_to_newest",
+        "perception_checkpoint": sidecar.name,
+        "perception_sha256": file_digest(sidecar),
         "control_dt": str(self.env.unwrapped.step_dt),
       })
     else:

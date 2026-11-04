@@ -115,6 +115,8 @@ def build_command(root, python, options):
     curriculum = options.get("terrain_curriculum", "manual")
     if curriculum not in {"manual", "uniform", "lp_acrl"}:
       raise ValueError("未知地形课程；可选 manual、uniform、lp_acrl")
+    if task.get("directed_passage") and (curriculum != "manual" or velocity_min or velocity_max):
+      raise ValueError("定向越障使用通过率门控；请保留 manual，速度由任务低速课程管理")
     curriculum_flags = []
     if curriculum != "manual":
       if task.get("scene") == "flat":

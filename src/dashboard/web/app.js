@@ -98,8 +98,8 @@ function collect() {
     lp_progress_alpha:$("lp-progress-alpha")?.value||"0.25",
     lp_probability_alpha:$("lp-probability-alpha")?.value||"0.2",
     lp_max_task_probability:$("lp-max-task-probability")?.value||"0.25",
-    velocity_min_abs:$("velocity-min-abs")?.value || "",
-    velocity_max_abs:$("velocity-max-abs")?.value || "",
+    velocity_min_abs:task()?.directed_passage?"":$("velocity-min-abs")?.value || "",
+    velocity_max_abs:task()?.directed_passage?"":$("velocity-max-abs")?.value || "",
     resume:$("resume").checked, checkpoint:model, onnx:model, viewer:$("viewer").value,
     map:$("map").value, map_file:$("map-file")?.value||"", duration:$("duration").value,
     vx:$("vx").value, vy:$("vy").value, wz:$("wz").value,
@@ -200,7 +200,10 @@ function pollPretrain(jobId){
 function updateCurriculumOptions(){
   const select=$("terrain-curriculum");if(!select)return;
   const unsupported=!task()||task().scene==="flat";
-  select.disabled=unsupported;if(unsupported)select.value="manual";
+  const directed=Boolean(task()?.directed_passage);
+  select.disabled=unsupported||directed;if(unsupported||directed)select.value="manual";
+  $("velocity-min-abs").disabled=directed;
+  $("velocity-max-abs").disabled=directed;
   $("terrain-num-rows").disabled=unsupported;
   $("terrain-difficulty-max").disabled=unsupported;
   const automatic=select.value!=="manual";
@@ -208,7 +211,7 @@ function updateCurriculumOptions(){
   // 隐藏的输入框仍会参与表单校验并被打包。手工模式下必须真正禁用它们：
   // 否则被隐藏的 LP 字段一旦不合法，浏览器无法聚焦提示，表现成「点启动没反应」。
   $("lp-options").querySelectorAll("input,select,button").forEach(control=>{control.disabled=!automatic;});
-  $("terrain-curriculum-hint").textContent=unsupported?"平地任务不使用地形采样课程。":automatic?"自动模式固定使用填写的速度包络，关闭原地形升降与扩速；先固定奖励做对照。":"手工模式按已有进度、存活与跟踪质量升降地形和扩速。";
+  $("terrain-curriculum-hint").textContent=directed?"定向越障：初始 0.25–0.35 m/s，所有障碍通过率和跟踪达标后扩速。":unsupported?"平地任务不使用地形采样课程。":automatic?"自动模式固定使用填写的速度包络，关闭原地形升降与扩速；先固定奖励做对照。":"手工模式按已有进度、存活与跟踪质量升降地形和扩速。";
 }
 async function updateRunNameHint(){
   const hint=$("run-name-hint"), input=$("run-name");
@@ -248,7 +251,22 @@ function setHealthPill(element,status){
   element.classList.toggle("observe",status==="observe");
   element.textContent=healthText(status);
 }
+function renderPassage(data){
+  const card=$("passage-status-card");if(!card)return;
+  card.classList.toggle("hidden",!task()?.directed_passage);
+  const speed=metricValue(data,"passage_speed_max");
+  $("passage-speed").textContent=speed==null?"等待越障训练数据…":`当前前进速度 0.25–${speed.toFixed(3)} m/s；各类达标后扩速`;
+  const labels={start_flat:"平地",stepping_stones:"梅花桩",balance_beam:"单木桥",gap_steps:"沟壑台阶",brick_pit:"砖木坑",slalom_posts:"绕桩",high_wall:"高墙",clearance_frame:"限高笼",tire_array:"轮胎阵",rough:"粗糙地面"};
+  const list=$("passage-results");list.replaceChildren();
+  for(const [key,label] of Object.entries(labels)){
+    const item=data?.passage?.[key];const div=document.createElement("div");
+    const name=document.createElement("small");name.textContent=label;
+    const value=document.createElement("strong");value.textContent=item?.samples>0?`${(100*item.rate).toFixed(1)}% · n=${Math.round(item.samples)}`:"未收集";
+    div.append(name,value);list.append(div);
+  }
+}
 function renderActionMetrics(data){
+  renderPassage(data);
   const rawMax=metricValue(data,"raw_action_abs_max"), saturation=metricValue(data,"action_saturation_fraction"), policyStd=metricValue(data,"policy_mean_std"), reward=metricValue(data,"mean_reward");
   $("metric-raw-max").textContent=rawMax==null?"—":rawMax.toFixed(2);
   $("metric-saturation").textContent=saturation==null?"—":`${(saturation*100).toFixed(1)}%`;

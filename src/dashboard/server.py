@@ -45,7 +45,8 @@ ACTION_METRIC_TAGS = {
   "velocity_error_yaw": "Metrics/twist/error_vel_yaw",
   "velocity_tracking_score": "Episode_Metrics/velocity_tracking_score",
   "velocity_tracking_active": "Episode_Metrics/velocity_tracking_active",
-  "terrain_level": ("Curriculum/terrain_levels/level_mean", "Curriculum/terrain_sampling/level_mean"),
+  "terrain_level": ("Curriculum/passage/level_mean", "Curriculum/terrain_levels/level_mean", "Curriculum/terrain_sampling/level_mean"),
+  "passage_speed_max": "Curriculum/passage/speed_max",
   "terrain_promote_fraction": "Curriculum/terrain_levels/promote_fraction",
   "terrain_demote_fraction": "Curriculum/terrain_levels/demote_fraction",
   "terrain_tracking_ratio": ("Curriculum/terrain_levels/tracking_ratio", "Curriculum/terrain_sampling/tracking_ratio"),
@@ -172,6 +173,17 @@ def create_server(root, python, host="127.0.0.1", port=8765):
         if points:
           point = points[-1]
           metrics[name] = {"value": float(point.value), "step": int(point.step), "tag": tag}
+      passage = {}
+      prefix = "Curriculum/passage/success_rate/"
+      for tag in sorted(available_tags):
+        if not tag.startswith(prefix):
+          continue
+        kind = tag.removeprefix(prefix)
+        rate = accumulator.Scalars(tag)
+        count_tag = "Curriculum/passage/samples/" + kind
+        counts = accumulator.Scalars(count_tag) if count_tag in available_tags else []
+        if rate and counts:
+          passage[kind] = {"rate": float(rate[-1].value), "samples": float(counts[-1].value)}
       raw_max = metrics.get("raw_action_abs_max", {}).get("value")
       saturation = metrics.get("action_saturation_fraction", {}).get("value")
       policy_std = metrics.get("policy_mean_std", {}).get("value")
@@ -193,7 +205,7 @@ def create_server(root, python, host="127.0.0.1", port=8765):
         advisories.append("地形降级明显多于升级")
       status = "warning" if warnings else "observe" if advisories else "healthy"
       data = {"task": alias, "experiment": task["experiment"], "available": bool(metrics),
-              "run": event_file.parent.name, "updated": stat.st_mtime, "metrics": metrics,
+              "run": event_file.parent.name, "updated": stat.st_mtime, "metrics": metrics, "passage": passage,
               "status": status,
               "warning": "；".join(warnings) if warnings else None,
               "advisory": "；".join(advisories) if advisories else None,
