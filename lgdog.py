@@ -93,7 +93,7 @@ def main():
       child.add_argument("--spawn-x", type=float, default=0.0)
       child.add_argument("--spawn-y", type=float, default=0.0)
       child.add_argument("--spawn-yaw", type=float, default=0.0)
-      child.add_argument("--duration", type=float, default=20)
+      child.add_argument("--duration", type=float, default=None, help="可选定时验证；有窗口默认持续回放")
       child.add_argument("--speed-x", type=float, default=1.0)
       child.add_argument("--speed-y", type=float, default=0.5)
       child.add_argument("--speed-yaw", type=float, default=1.0)

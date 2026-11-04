@@ -49,13 +49,13 @@ python -m scripts.play LgDog1-Race-MGDP --checkpoint_file "logs/rsl_rl/lgdog1_ve
 sim2sim 会按 ONNX 的文件名记录查找感知权重，并检查 SHA-256。先用平地、低速确认接口与姿态：
 
 ```bash
-python -m scripts.sim2sim LgDog1-Race-MGDP --onnx "logs/rsl_rl/lgdog1_velocity_race_mgdp_v2/<run>/policy.onnx" --map flat --viewer --vx 0.3 --duration 20 --no-keyboard
+python -m scripts.sim2sim LgDog1-Race-MGDP --onnx "logs/rsl_rl/lgdog1_velocity_race_mgdp_v2/<run>/policy.onnx" --map flat --viewer --vx 0.3 --no-keyboard
 ```
 
 再切换完整比赛障碍 XML：
 
 ```bash
-python -m scripts.sim2sim LgDog1-Race-MGDP --onnx "logs/rsl_rl/lgdog1_velocity_race_mgdp_v2/<run>/policy.onnx" --map race --viewer --vx 0.3 --duration 30 --no-keyboard
+python -m scripts.sim2sim LgDog1-Race-MGDP --onnx "logs/rsl_rl/lgdog1_velocity_race_mgdp_v2/<run>/policy.onnx" --map race --viewer --vx 0.3 --no-keyboard
 ```
 
 - `--vx / --vy / --wz`：前进、横移、偏航速度指令；正 vx 向机器人前方走。
@@ -107,11 +107,20 @@ python -m scripts.sim2sim LgDog1-Race-MGDP --onnx "logs/rsl_rl/lgdog1_velocity_r
 | R | 显示/隐藏任务调试可视化 |
 | A | 切换是否显示全部环境 |
 
-MuJoCo 原生 Esc 用于回到自由相机；本项目 sim2sim 若启用键盘遥控，还会将 Esc 作为退出键。
+MuJoCo 原生 Esc 用于回到自由相机；本项目 sim2sim 将窗口中的 Esc 作为退出键，无需启用键盘遥控。
 
 ### 独立 simulate 与 sim2sim 的区别
 
-独立 MuJoCo simulate 自己驱动物理循环，支持 Space 暂停、`=`/`-` 调速、左右方向键查看历史/单步。本项目 sim2sim 用 Python 循环驱动物理，并使用 `launch_passive()`；原生暂停/调速按钮不会自动控制这个外部循环。当前 sim2sim 未接入暂停与单步：启用项目遥控时，**Space/R 是复位，Esc 是退出**。使用 `--no-keyboard` 会禁用这组项目遥控，但不会因此获得 sim2sim 暂停功能。
+独立 MuJoCo simulate 自己驱动物理循环，支持 Space 暂停、`=`/`-` 调速、左右方向键查看历史/单步。本项目 sim2sim 用 Python 循环驱动物理，并使用 `launch_passive()`；原生暂停/调速按钮不会自动控制这个外部循环。当前 sim2sim 未接入暂停与单步：启用项目遥控时，**Space/R 是复位**。使用 `--no-keyboard` 会禁用全局遥控，但窗口内的 **Esc 仍可退出**。
+
+### 回放时长
+
+工作台已移除运行时间选项。有窗口的 sim2sim 默认持续运行，关闭窗口、窗口内按 Esc
+或终端按 Ctrl+C 结束；摔倒保护仍会停止。回放按实际推理/渲染耗时补偿到 50 Hz，
+计算过慢时会低于实时速度。长期回放只缓存最近 100 仿真秒的逐步数据，全程均值保留。
+交互结束不会被当作完成一次定时姿态测试。
+
+批量验证仍可显式指定 `--duration 20`。无窗口且未给时长时，默认验证 20 仿真秒后退出。
 
 核对来源：[MuJoCo 3.5.0 simulate 源码](https://github.com/google-deepmind/mujoco/blob/3.5.0/simulate/simulate.cc)（帮助表及 passive 分支），以及当前安装的 `mjlab/viewer/native/viewer.py::_safe_key_callback`。
 
@@ -120,7 +129,7 @@ MuJoCo 原生 Esc 用于回到自由相机；本项目 sim2sim 若启用键盘�
 键盘监听使用可选的 `pynput`（缺少时可在同一环境执行 `python -m pip install pynput`）：
 
 ```bash
-python -m scripts.sim2sim LgDog1-Race-MGDP --onnx "logs/rsl_rl/lgdog1_velocity_race_mgdp_v2/<run>/policy.onnx" --map race --viewer --vx 0 --speed-x 0.3 --speed-y 0.1 --speed-yaw 0.4 --duration 300
+python -m scripts.sim2sim LgDog1-Race-MGDP --onnx "logs/rsl_rl/lgdog1_velocity_race_mgdp_v2/<run>/policy.onnx" --map race --viewer --vx 0 --speed-x 0.3 --speed-y 0.1 --speed-yaw 0.4
 ```
 
 W/S 前后、A/D 转向、Q/E 横移，空格或 R 复位，Esc 退出。复位会清空本体历史、两帧深度和 GRU 状态；键盘未能初始化时终端会提示原因。
@@ -130,7 +139,7 @@ W/S 前后、A/D 转向、Q/E 横移，空格或 R 复位，Esc 退出。复位�
 旧 ONNX 没有绑定感知文件，需要显式指定**当时训练所用的原感知权重**：
 
 ```bash
-python -m scripts.sim2sim LgDog1-Race-MGDP --onnx "/path/to/MGDP_V3/policy.onnx" --perception "/path/to/original_mgdp_perception.pt" --map race --viewer --vx 0.3 --duration 20 --no-keyboard
+python -m scripts.sim2sim LgDog1-Race-MGDP --onnx "/path/to/MGDP_V3/policy.onnx" --perception "/path/to/original_mgdp_perception.pt" --map race --viewer --vx 0.3 --no-keyboard
 ```
 
 `E:/mjlab/数据/MGDP_V3` 的归档目前缺少该感知文件，不能用新预训练文件随意替代。旧 V3 也不能完整续训成 v2；新任务说明见 [MGDP_PASSAGE.md](MGDP_PASSAGE.md)。

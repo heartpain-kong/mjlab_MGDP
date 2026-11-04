@@ -57,7 +57,10 @@ mjlab 用的是 `mujoco.viewer.launch_passive`，**渲染跑在独立线程**，
 from __future__ import annotations
 
 import argparse
+from collections import deque
+from itertools import count
 import sys
+from threading import Event
 import time
 from pathlib import Path
 
@@ -643,8 +646,11 @@ def run(args) -> int:
   reset(model, data, meta, args.spawn_x, args.spawn_y, args.spawn_yaw)
   episode_step = 0
 
-  n_ctrl = int(args.duration / CTRL_DT)
+  # Interactive viewing has no timer. Keep a bounded default for batch runs.
+  duration = args.duration if args.duration is not None else (None if args.viewer else 20.)
+  n_ctrl = int(duration / CTRL_DT) if duration is not None else None
   decim = int(round(CTRL_DT / model.opt.timestep))
+  exit_requested = Event()
 
   viewer = None
   inset = None
@@ -652,14 +658,19 @@ def run(args) -> int:
     from mujoco import viewer as mj_viewer  # 别写 import mujoco.viewer，会把模块级 mujoco 遮蔽掉
 
     from src.camera_inset import CameraInset, KEY_F8
+    from glfw import KEY_ESCAPE
     if getattr(args, "camera_inset", True):
       inset = CameraInset(model, args.camera_inset_size, args.camera_inset_fps, args.camera_inset_corner)
     def viewer_key(key):
-      if key == KEY_F8 and inset is not None:
+      if key == KEY_ESCAPE:
+        exit_requested.set()
+      elif key == KEY_F8 and inset is not None:
         inset.toggle()
     viewer = mj_viewer.launch_passive(model, data, key_callback=viewer_key)
     if inset is not None:
       print("  相机小窗    前头顶水平朝前，F8 开关（RGB，非策略深度图）")
+  print("  运行方式    持续回放，关闭窗口 / Esc / Ctrl+C 结束" if n_ctrl is None
+        else f"  运行方式    定时验证 {duration:g} 秒")
 
   # 键盘（pynput 全局钩子，不依赖查看器窗口；没有查看器也能遥控，只是看不见）
   kb = None
@@ -683,15 +694,29 @@ def run(args) -> int:
   if args.heading_hold is None:
     hdg_hold = kb is not None  # 有键盘时默认开（否则直行会画圈）
 
-  log = []
+  # Only retain the most recent 100 simulation seconds during an open-ended
+  # session. Whole-session aggregates stay accurate without growing memory.
+  log = deque(maxlen=5000) if n_ctrl is None else []
+  n = 0
+  totals = np.zeros(8)
+  first_sample = None
+  min_z, max_tilt, velocity_error_sum = float("inf"), 0., 0.
+  fell, interrupted = False, False
+  stop_reason = "达到指定时长"
   raw_action_abs_max = 0.0
   raw_action_abs_sum = 0.0
   raw_action_saturated = 0
   raw_action_samples = 0
-  t0 = time.time()
+  t0 = time.perf_counter()
   n_reset = 0
   try:
-    for step in range(n_ctrl):
+    for step in count():
+      if n_ctrl is not None and n >= n_ctrl:
+        break
+      if exit_requested.is_set() or (viewer is not None and not viewer.is_running()):
+        interrupted, stop_reason = True, "关闭窗口或按 Esc"
+        break
+      step_started = time.perf_counter()
       cur_hdg = heading_of_quat_wxyz(data.qpos[3:7])
       turning = False
 
@@ -700,6 +725,7 @@ def run(args) -> int:
         kx, ky, kyaw, do_reset, do_exit = kb.poll()
         if do_exit:
           print("\n  [Esc] 退出")
+          interrupted, stop_reason = True, "按 Esc"
           break
         if do_reset:
           reset(model, data, meta, args.spawn_x, args.spawn_y, args.spawn_yaw)
@@ -772,14 +798,22 @@ def run(args) -> int:
       z_axis = R[:, 2]
       tilt = np.degrees(np.arccos(np.clip(z_axis[2], -1, 1)))
       vel_b = R.T @ data.qvel[0:3]
-      log.append((pos, tilt, vel_b, float(np.abs(data.qvel[0:3]).max()), cur_hdg))
+      sample = np.array([pos[2], tilt, *vel_b, float(np.abs(data.qvel[0:3]).max()), cur_hdg, pos[0]])
+      log.append(sample)
+      if first_sample is None:
+        first_sample = sample.copy()
+      n += 1
+      totals += sample
+      min_z, max_tilt = min(min_z, pos[2]), max(max_tilt, tilt)
+      velocity_error_sum += abs(vel_b[0] - cmd[0])
 
       if viewer is not None:
         mujoco.mj_forward(model, data)
         viewer.sync()
         if inset is not None:
           inset.update(viewer, data)
-        time.sleep(max(0.0, CTRL_DT * 0.6))
+        # Account for inference/rendering time instead of adding a fixed delay.
+        time.sleep(max(0.0, CTRL_DT - (time.perf_counter() - step_started)))
       elif step % max(1, n_ctrl // 10) == 0:
         print(
           f"  t={step * CTRL_DT:6.2f}s  z={pos[2]:.3f}  tilt={tilt:5.1f}°  "
@@ -789,8 +823,11 @@ def run(args) -> int:
       # 摔了就停
       if tilt > 70.0 or pos[2] < 0.08:
         print(f"\n  ✗ 第 {step} 步摔倒：t={step * CTRL_DT:.2f}s  z={pos[2]:.3f}  tilt={tilt:.1f}°")
+        fell, stop_reason = True, "摔倒"
         break
 
+  except KeyboardInterrupt:
+    interrupted, stop_reason = True, "按 Ctrl+C"
   finally:
     if inset is not None:
       inset.close()
@@ -800,34 +837,42 @@ def run(args) -> int:
       viewer.close()
 
   # ── 汇总 ──
-  log = np.array([(l[0][2], l[1], l[2][0], l[2][1], l[2][2], l[3], l[4], l[0][0]) for l in log])
-  n = len(log)
+  log = np.asarray(log)
   survived = n * CTRL_DT
-  wall = time.time() - t0
+  wall = max(time.perf_counter() - t0, 1e-9)
 
   print("\n" + "=" * 74)
   print("  结果")
   print("=" * 74)
-  print(f"  存活        {survived:.2f}s / {args.duration:.2f}s  ({n}/{n_ctrl} 个控制步)")
-  print(f"  机身高度    z 均值 {log[:, 0].mean():.4f} m  (min {log[:, 0].min():.4f})")
+  print(f"  结束原因    {stop_reason}")
+  if not n:
+    print("  运行步数    0（尚未推进仿真）")
+    return 0 if interrupted else 1
+  mean = totals / n
+  if n_ctrl is None:
+    print(f"  仿真累计    {survived:.2f}s  ({n} 个控制步，无时长限制)")
+  else:
+    print(f"  存活        {survived:.2f}s / {duration:.2f}s  ({n}/{n_ctrl} 个控制步)")
+  print(f"  机身高度    z 均值 {mean[0]:.4f} m  (min {min_z:.4f})")
   print(
-    f"  最终位置    x={log[-1, 7]:+.2f} m  (直线距离 {abs(log[-1, 7] - log[0, 7]):.2f} m)"
+    f"  最终位置    x={log[-1, 7]:+.2f} m  (直线距离 {abs(log[-1, 7] - first_sample[7]):.2f} m)"
     f"  ← 测地形时看这个：被挡住就不会涨"
   )
-  print(f"  倾角        tilt 均值 {log[:, 1].mean():.2f}°  max {log[:, 1].max():.2f}°")
-  print(f"  实测速度    vx 均值 {log[:, 2].mean():+.3f} m/s   指令 {cmd[0]:+.3f}")
-  print(f"              vy 均值 {log[:, 3].mean():+.3f} m/s   指令 {cmd[1]:+.3f}")
-  print(f"              wz 均值 {log[:, 4].mean():+.3f} rad/s 指令 {cmd[2]:+.3f}")
-  print(f"  速度跟踪误差 |vx-指令| 均值 {np.abs(log[:, 2] - cmd[0]).mean():.3f} m/s")
-  hdg0, hdgN = float(log[0, 6]), float(log[-1, 6])
+  print(f"  倾角        tilt 均值 {mean[1]:.2f}°  max {max_tilt:.2f}°")
+  print(f"  实测速度    vx 均值 {mean[2]:+.3f} m/s   指令 {cmd[0]:+.3f}")
+  print(f"              vy 均值 {mean[3]:+.3f} m/s   指令 {cmd[1]:+.3f}")
+  print(f"              vz 均值 {mean[4]:+.3f} m/s")
+  print(f"  速度跟踪误差 |vx-指令| 均值 {velocity_error_sum / n:.3f} m/s")
+  hdg0, hdgN = float(first_sample[6]), float(log[-1, 6])
   net = np.degrees(wrap_pi(hdgN - hdg0))
   # 末段（后 25% 时间）的朝向漂移 —— 转向结束后的"保持质量"看这个。
   # （用全程首尾差会在"转了 218° 又保持住"时误报成漂移，角度回绕会骗人）
   tail = log[int(len(log) * 0.75) :, 6]
+  tail_label = f"最近 {len(tail)*CTRL_DT:.2f} 仿真秒" if n_ctrl is None else "后 25% 时间"
   tail_drift = np.degrees(wrap_pi(tail[-1] - tail[0])) if len(tail) > 1 else 0.0
   print(f"  净转动      {net:+.1f}°（起点 {np.degrees(hdg0):+.1f}° → 终点 {np.degrees(hdgN):+.1f}°）")
   print(
-    f"  末段朝向漂移 {tail_drift:+.2f}°（后 25% 时间，3σ={np.degrees(tail.std()):.2f}°）"
+    f"  末段朝向漂移 {tail_drift:+.2f}°（{tail_label}，3σ={np.degrees(tail.std()):.2f}°）"
     f"{'  [朝向保持 开]' if hdg_hold else '  [朝向保持 关=开环]'}"
   )
   if n_reset:
@@ -840,7 +885,10 @@ def run(args) -> int:
   if raw_action_abs_max > 3.0 or saturation_rate > 0.05:
     print("  ⚠️ 动作健康告警：策略输出在裁剪前偏大或饱和率偏高，可能出现腿部抽动。")
 
-  ok = survived >= args.duration * 0.95 and log[:, 1].mean() < 30
+  if not fell and (n_ctrl is None or interrupted):
+    print("\n  交互结束    正常退出；未进行定时姿态达标判定。")
+    return 0
+  ok = duration is not None and not fell and survived >= duration * 0.95 and mean[1] < 30
   print(f"\n  姿态检查    {'✅ 通过：存活与倾角达标' if ok else '⚠️ 未通过：见上面数据'}")
   if meta["n_terrain_geom"] > 0:
     print("  地形通过    未判定：需核对车道、接触、通过距离和终点；未摔倒不代表越过障碍。")
@@ -916,7 +964,8 @@ def main():
   ap.add_argument("--vx", type=float, default=0.0, help="前向速度指令 [m/s]")
   ap.add_argument("--vy", type=float, default=0.0, help="侧向速度指令 [m/s]")
   ap.add_argument("--wz", type=float, default=0.0, help="偏航角速度指令 [rad/s]")
-  ap.add_argument("--duration", type=float, default=20.0, help="跑多久 [s]")
+  ap.add_argument("--duration", type=float, default=None,
+                  help="可选定时验证秒数；有窗口默认持续回放，无窗口默认20秒")
   ap.add_argument("--camera-inset", action=argparse.BooleanOptionalAction, default=True, help="显示机器人第一视角角落小窗，F8 开关")
   ap.add_argument("--camera-inset-size", type=int, default=256)
   ap.add_argument("--camera-inset-fps", type=float, default=10.)
@@ -952,6 +1001,8 @@ def main():
   args = ap.parse_args()
   if args.action_clip <= 0:
     ap.error("--action-clip 必须大于 0")
+  if args.duration is not None and (not np.isfinite(args.duration) or args.duration < CTRL_DT):
+    ap.error(f"--duration 必须是至少 {CTRL_DT:g} 秒的有限数值")
   return run(args)
 
 

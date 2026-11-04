@@ -101,7 +101,7 @@ function collect() {
     velocity_min_abs:task()?.directed_passage?"":$("velocity-min-abs")?.value || "",
     velocity_max_abs:task()?.directed_passage?"":$("velocity-max-abs")?.value || "",
     resume:$("resume").checked, checkpoint:model, onnx:model, viewer:$("viewer").value,
-    map:$("map").value, map_file:$("map-file")?.value||"", duration:$("duration").value,
+    map:$("map").value, map_file:$("map-file")?.value||"",
     vx:$("vx").value, vy:$("vy").value, wz:$("wz").value,
     spawn_x:$("spawn-x")?.value||"0", spawn_y:$("spawn-y").value, spawn_yaw:$("spawn-yaw")?.value||"0",
     speed_x:$("speed-x")?.value||"1", speed_y:$("speed-y")?.value||"0.5", speed_yaw:$("speed-yaw")?.value||"1",

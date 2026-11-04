@@ -193,8 +193,9 @@ def build_command(root, python, options):
             "--map", map_name, "--vx", str(number(options.get("vx", 0.4), "vx", -3, 3)),
             "--vy", str(number(options.get("vy", 0), "vy", -3, 3)),
             "--wz", str(number(options.get("wz", 0), "wz", -3, 3)),
-            "--duration", str(number(options.get("duration", 20), "时长", 0.02, 3600)),
             "--spawn-y", str(number(options.get("spawn_y", 0), "出生 y", -30, 30))]
+    if options.get("duration") is not None:
+      argv += ["--duration", str(number(options["duration"], "时长", 0.02, 3600))]
     argv += ["--spawn-x", str(number(options.get("spawn_x", 0), "出生 x", -30, 30)),
              "--spawn-yaw", str(number(options.get("spawn_yaw", 0), "出生朝向", -180, 180)),
              "--speed-x", str(number(options.get("speed_x", 1.0), "键盘前进速度", 0.05, 3)),

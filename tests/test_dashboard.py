@@ -121,6 +121,9 @@ class CommandTests(unittest.TestCase):
     command = build_command(self.root, sys.executable, {"mode":"sim", "onnx":str(path)})
     self.assertIn(f"--onnx={path}", command)
     self.assertIn("--no-keyboard", command)
+    self.assertNotIn("--duration", command)
+    timed = build_command(self.root, sys.executable, {"mode":"sim", "onnx":str(path), "duration":2})
+    self.assertEqual(timed[timed.index("--duration")+1], "2.0")
     with self.assertRaisesRegex(ValueError, "vx"):
       build_command(self.root, sys.executable, {"mode":"sim", "onnx":str(path), "vx":"nan"})
 
@@ -177,6 +180,8 @@ class HTTPTests(unittest.TestCase):
     self.assertIn("速度追踪 / 地形课程", body.decode())
     self.assertIn("策略裁剪比例", body.decode())
     self.assertIn("打开 3D 查看器", body.decode())
+    self.assertNotIn('id="duration"', body.decode())
+    self.assertIn("无需设置时长", body.decode())
     self.assertIn("当前地形 / 编辑", body.decode())
     self.assertIn("LP 地形采样（稳定版 v2）", body.decode())
     status, body = self.request("GET", "/api/state")
