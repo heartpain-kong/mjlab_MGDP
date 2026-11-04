@@ -164,7 +164,10 @@ cfg.sub_terrains["pyramid_stairs"].step_height_range = (0.0, 0.15)
 ```
 
 实际项目中直接编辑 `terrain_cfg.py` 的返回函数即可；修改地形后必须新开训练 run，旧 checkpoint 的课程状态不能代表新地形能力。
-工作台“打开 3D 查看器”会执行 `python scripts/visualize_terrain.py --lgdog`，Viser 页面默认在 `http://127.0.0.1:8080`；也可以在终端直接运行这条命令。查看器修改滑块只影响预览，工作台“保存当前地形修改”才会写入 `terrain_cfg.py`。
+工作台“打开 3D 查看器”会按所选任务执行 `python -m scripts.visualize_terrain --task <任务ID>`，
+并使用独立空闲端口；地址以工作台返回值/日志为准。远程使用时需转发该端口，启动后等待地图生成再刷新页面。
+终端直接运行时默认端口8080，可用 `--port` 指定。查看器修改滑块只影响预览；
+工作台“保存当前地形修改”编辑普通Rough的 `terrain_cfg.py`，2027 MGDP 图由 `passage_terrain_cfg.py` 定义。
 
 `--dry-run` 只显示命令。Play/Sim2Sim 默认从该任务独立实验目录中寻找最新已有模型，跳过尚无模型的 run。Flat/Rough 共用实验目录，必须显式选择对应模型：`python lgdog.py play flat --checkpoint /path/to/model.pt`。
 

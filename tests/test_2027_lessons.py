@@ -1,0 +1,191 @@
+"""2027 lesson geometry and route contracts, including shortcut rejection."""
+
+from pathlib import Path
+from types import SimpleNamespace as NS
+from unittest.mock import patch
+import unittest
+import mujoco
+import numpy as np
+import torch
+
+from src.tasks.velocity.config.lgdog1.passage_terrain_cfg import (
+  PassageTerrainCfg, KINDS, lesson_route, lgdog1_passage_terrain_cfg)
+from src.tasks.velocity.config.lgdog1.mgdp_env_cfg import lgdog1_race_mgdp_env_cfg
+from src.tasks.velocity.mdp import passage
+
+
+class Lessons2027Tests(unittest.TestCase):
+  def test_race_pretraining_collects_race_obstacles_and_has_separate_output(self):
+    from scripts import pretrain_mgdp
+    import sys
+    with patch.object(sys,"argv",["pretrain_mgdp.py","--task","LgDog1-Race-MGDP"]):
+      args=pretrain_mgdp.parse_args()
+    self.assertTrue(args.out.endswith("mgdp_race_v3.pt"))
+    args.num_envs=2;args.terrain_rows=2
+    with patch.object(pretrain_mgdp,"ManagerBasedRlEnv") as create:
+      pretrain_mgdp.build_env(args)
+    cfg=create.call_args.kwargs["cfg"]
+    self.assertEqual(set(cfg.scene.terrain.terrain_generator.sub_terrains),set(KINDS))
+    self.assertEqual(cfg.scene.terrain.terrain_generator.difficulty_range,(0.,1.))
+    self.assertFalse(cfg.curriculum)
+
+  def compile(self, kind, difficulty):
+    spec=mujoco.MjSpec();spec.worldbody.add_body(name="terrain")
+    PassageTerrainCfg(kind=kind,size=(8.,8.)).function(difficulty,spec,np.random.default_rng(2027))
+    model=spec.compile();data=mujoco.MjData(model);mujoco.mj_forward(model,data)
+    return model,data
+
+  def matching(self, model, suffix):
+    return [model.geom(i) for i in range(model.ngeom) if suffix in model.geom(i).name]
+
+  def test_stones_have_two_support_rows_then_match_reference_six_stones(self):
+    model,data=self.compile("stepping_stones",0.)
+    for y in (-.162,.162):
+      hit=mujoco.mj_ray(model,data,np.array([3.,4.+y,1.]),np.array([0.,0.,-1.]),None,1,-1,None)
+      self.assertAlmostEqual(1-hit,.02,places=6)
+    model,_=self.compile("stepping_stones",1.)
+    stones=self.matching(model,"_stone_")
+    self.assertEqual(len(stones),6)
+    source=mujoco.MjModel.from_xml_path(str(Path(__file__).resolve().parents[1]/
+      "src/assets/terrains/race_obstacle_2027.xml"))
+    for geom in stones:
+      ref=source.geom("stone_"+geom.name.split("_stone_")[-1])
+      np.testing.assert_allclose(geom.size,ref.size,atol=1e-8)
+      np.testing.assert_allclose(geom.pos[:2]-[2.,4.],ref.pos[:2],atol=1e-8)
+
+  def test_gap_has_solid_ramp_and_reference_platforms_gap_and_treads(self):
+    model,data=self.compile("gap_steps",1.)
+    self.assertEqual(len(self.matching(model,"gap_ramp")),1)
+    platforms=self.matching(model,"gap_platform")
+    for geom in platforms:
+      np.testing.assert_allclose(geom.size,[.4,.4,.18],atol=1e-8)
+    self.assertAlmostEqual(platforms[1].pos[0]-platforms[0].pos[0]-.8,.36)
+    treads=self.matching(model,"gap_tread")
+    self.assertEqual(len(treads),2)
+    np.testing.assert_allclose([g.pos[2]+g.size[2] for g in treads],[.24,.12])
+    # Mid-slope support is continuous, not a disconnected thin floating slab.
+    x=2.+.989092/2
+    hit=mujoco.mj_ray(model,data,np.array([x,4.,1.]),np.array([0.,0.,-1.]),None,1,-1,None)
+    self.assertAlmostEqual(1-hit,.18,places=5)
+
+  def test_slalom_is_six_short_cylinders_in_an_l_and_pit_has_two_arms(self):
+    model,_=self.compile("slalom_posts",1.)
+    poles=self.matching(model,"slalom_pole")
+    self.assertEqual(len(poles),6)
+    for pole in poles:
+      self.assertEqual(pole.type,mujoco.mjtGeom.mjGEOM_CYLINDER)
+      np.testing.assert_allclose(pole.size[:2],[.05,.05])
+    np.testing.assert_allclose(poles[-1].pos[:2]-poles[-3].pos[:2],[0,1.8])
+    model,_=self.compile("brick_pit",1.)
+    self.assertEqual(len(self.matching(model,"pit_base_")),2)
+    self.assertEqual(len(self.matching(model,"pit_rail_")),6)
+    self.assertEqual(len(self.matching(model,"pit_diagonal")),1)
+
+  def test_no_artificial_pits_and_safe_route_endpoints_all_levels(self):
+    for kind in KINDS:
+      for difficulty in (0.,.5,1.):
+        with self.subTest(kind=kind,difficulty=difficulty):
+          model,data=self.compile(kind,difficulty)
+          for x,y in (lesson_route(kind)[0],lesson_route(kind)[-1]):
+            distance=mujoco.mj_ray(model,data,np.array([x+1.,y+4.,1.]),
+              np.array([0.,0.,-1.]),None,1,-1,None)
+            self.assertAlmostEqual(distance,1.,places=5)
+          # The reference uses the arena floor as the lowest support surface.
+          for x in np.linspace(2.,5.6,25):
+            distance=mujoco.mj_ray(model,data,np.array([x,4.,2.]),np.array([0.,0.,-1.]),None,1,-1,None)
+            self.assertLessEqual(distance,2.+1e-6)
+
+  def make_command(self):
+    cfg=lgdog1_race_mgdp_env_cfg(with_perception=False)
+    generator=lgdog1_passage_terrain_cfg();generator.num_cols=10
+    robot=NS(data=NS(root_link_pos_w=torch.zeros(10,3),heading_w=torch.zeros(10)))
+    class Scene(dict): pass
+    scene=Scene(robot=robot)
+    scene.terrain=NS(cfg=NS(terrain_generator=generator),terrain_types=torch.arange(10))
+    scene.env_origins=torch.zeros(10,3)
+    env=NS(num_envs=10,device="cpu",scene=scene,step_dt=.02)
+    command=passage.PassageCommand(cfg.commands["twist"],env)
+    env.command_manager=NS(get_term=lambda _:command)
+    command._resample_command(torch.arange(10))
+    return env,command,robot
+
+  def test_routes_reject_goal_teleport_and_reward_y_motion_without_farming(self):
+    env,command,robot=self.make_command()
+    index=KINDS.index("slalom_posts")
+    final=torch.tensor(lesson_route("slalom_posts")[-1])
+    robot.data.root_link_pos_w[index,:2]=final
+    self.assertFalse(passage.passage_success(env)[index])
+    self.assertTrue(passage.left_lane(env)[index])
+    # Walk every segment geometrically; this tests the command contract,
+    # not whether a learned policy can physically execute it.
+    robot.data.root_link_pos_w.zero_()
+    for wp in lesson_route("slalom_posts")[1:]:
+      robot.data.root_link_pos_w[index,:2]=torch.tensor(wp)
+      command._update_command()
+    self.assertTrue(passage.passage_success(env)[index])
+    before=command.waypoint_index.clone()
+    command._resample_command(torch.tensor([index]))
+    self.assertEqual(command.waypoint_index[index],1)
+    torch.testing.assert_close(command.waypoint_index[:index],before[:index])
+
+  def test_vertical_segment_has_progress_and_heading_and_frame_clearance_matches(self):
+    env,command,robot=self.make_command()
+    i=KINDS.index("brick_pit")
+    command.waypoint_index[i]=3
+    start=torch.tensor(lesson_route("brick_pit")[2])
+    robot.data.root_link_pos_w[i,:2]=start
+    env.cfg=NS(terminations={})
+    progress=passage.ForwardProgress(NS(),env);progress.reset()
+    p0=command.route_state()[3][i].item()
+    robot.data.root_link_pos_w[i,1]+=.2
+    command._update_command()
+    self.assertGreater(command.route_state()[3][i].item(),p0+.19)
+    self.assertGreater(progress(env)[i].item(),0)
+    robot.data.root_link_pos_w[i,1]-=.2
+    self.assertEqual(progress(env)[i].item(),0)
+    robot.data.root_link_pos_w[i,1]+=.2
+    self.assertEqual(progress(env)[i].item(),0)
+    self.assertGreater(command.command[i,1],0)
+    self.assertAlmostEqual(command.heading_target[i].item(),np.pi/2,places=5)
+    model,_=self.compile("clearance_frame",1.)
+    # one cage = plane + 6 legs + 5 roof bars; roof underside29cm
+    self.assertEqual(model.ngeom,12)
+    roofs=[model.geom(i) for i in range(model.ngeom) if abs(model.geom(i).size[2]-.01)<1e-8]
+    self.assertEqual(len(roofs),5)
+    for geom in roofs:
+      self.assertAlmostEqual(geom.pos[2]-geom.size[2],.29)
+
+  def test_command_can_follow_every_route_inside_lane_within_timeout(self):
+    env,command,robot=self.make_command()
+    command.speed.fill_(.25)
+    complete=torch.zeros(10,dtype=torch.bool)
+    for _ in range(2250):
+      command._update_command()
+      heading=robot.data.heading_w.clone()
+      vx,vy=command.command[:,0],command.command[:,1]
+      world=torch.stack((vx*heading.cos()-vy*heading.sin(),
+                         vx*heading.sin()+vy*heading.cos()),dim=-1)
+      robot.data.root_link_pos_w[~complete,:2]+=world[~complete]*env.step_dt
+      robot.data.heading_w[~complete]+=command.command[~complete,2]*env.step_dt
+      complete |= passage.passage_success(env)
+      self.assertFalse(passage.left_lane(env)[~complete].any())
+      if complete.all(): break
+    self.assertTrue(complete.all(),[KINDS[i] for i in torch.where(~complete)[0].tolist()])
+    terrain=env.scene.terrain
+    terrain.terrain_levels=torch.zeros(10,dtype=torch.long)
+    terrain.max_terrain_level=10
+    terrain.terrain_origins=torch.zeros(10,10,3)
+    terrain.env_origins=env.scene.env_origins
+    env.cfg=NS(episode_length_s=45.)
+    curriculum=passage.PassageCurriculum(NS(params={}),env)
+    saved=curriculum.state_dict()
+    curriculum.load_state_dict(saved)
+    # Same grid and statistics, different route: full-resume must be rejected.
+    command.cfg.waypoints={**command.cfg.waypoints,"slalom_posts":((0.,0.),(5.,1.))}
+    changed=passage.PassageCurriculum(NS(params={}),env)
+    with self.assertRaisesRegex(ValueError,"Incompatible"):
+      changed.load_state_dict(saved)
+
+
+if __name__=="__main__":
+  unittest.main()

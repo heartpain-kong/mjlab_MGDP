@@ -1,5 +1,11 @@
 # 2027 比赛场地：训练与 sim2sim 接入
 
+**当前 MGDP 训练主线为 v3**：按用户提供场地图修复双排六桩、实心坡台沟壑、L形矮桩/砖木坑、
+单限高笼和轮胎，并使用分段路线。见 [训练说明](MGDP_PASSAGE.md) 与
+[前后对照及验证](analysis/terrain_2027_v3/report.md)。
+训练实现入口为 `passage_terrain_cfg.py`；下文 HIM 和早期深度训练配置是历史/近似方案，
+不应当作当前 `race_mgdp` 的地图定义。
+
 场地来源：[`27rc-dog-race`](https://github.com/uwvwko-zzz/27rc-dog-race) —— 依据《2027 年足式机器人挑战赛比赛规则》
 建模的 MJCF 场地（障碍赛按 **V2.0**，任务赛按 **V1.0**）。它本身是「规则尺寸的训练/验证用实现」，
 障碍摆位以赛事公布为准。

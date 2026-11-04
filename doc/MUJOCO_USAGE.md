@@ -23,7 +23,7 @@ python -m scripts.play LgDog1-Flat --agent zero --num-envs 1 --viewer native --d
 
 ## 2. 查看新 MGDP 定向训练任务的策略
 
-训练输出位于 `logs/rsl_rl/lgdog1_velocity_race_mgdp_v2/<run>/`。自动选择对应目录的最新检查点：
+训练输出位于 `logs/rsl_rl/lgdog1_velocity_race_mgdp_v3/<run>/`。自动选择对应目录的最新检查点：
 
 ```bash
 python lgdog.py play race_mgdp --viewer native --envs 1
@@ -32,10 +32,10 @@ python lgdog.py play race_mgdp --viewer native --envs 1
 指定检查点（把 `<run>`、`<iteration>` 替换成实际名称）：
 
 ```bash
-python -m scripts.play LgDog1-Race-MGDP --checkpoint_file "logs/rsl_rl/lgdog1_velocity_race_mgdp_v2/<run>/model_<iteration>.pt" --num-envs 1 --viewer native --device cpu
+python -m scripts.play LgDog1-Race-MGDP --checkpoint_file "logs/rsl_rl/lgdog1_velocity_race_mgdp_v3/<run>/model_<iteration>.pt" --num-envs 1 --viewer native --device cpu
 ```
 
-服务器用 `--viewer viser`。`play` 使用任务观测项加载其配置中的感知检查点（默认 `logs/mgdp/perception/mgdp_perception.pt`），必须保持与训练时一致；如果要连同导出的配套感知文件独立回放，使用下一节的 sim2sim。v2 定向任务默认从最低难度开始查看，不等于全难度评估。
+服务器用 `--viewer viser`。`play` 使用任务观测项加载其配置中的感知检查点（比赛v3默认 `logs/mgdp/perception/mgdp_race_v3.pt`，普通MGDP默认 `logs/mgdp/perception/mgdp_perception.pt`），必须保持与训练时一致；如果要连同导出的配套感知文件独立回放，使用下一节的 sim2sim。v3 路线任务默认从最低难度开始查看，不等于全难度评估。
 
 ## 3. 用 ONNX 跑比赛场地
 
@@ -49,13 +49,13 @@ python -m scripts.play LgDog1-Race-MGDP --checkpoint_file "logs/rsl_rl/lgdog1_ve
 sim2sim 会按 ONNX 的文件名记录查找感知权重，并检查 SHA-256。先用平地、低速确认接口与姿态：
 
 ```bash
-python -m scripts.sim2sim LgDog1-Race-MGDP --onnx "logs/rsl_rl/lgdog1_velocity_race_mgdp_v2/<run>/policy.onnx" --map flat --viewer --vx 0.3 --no-keyboard
+python -m scripts.sim2sim LgDog1-Race-MGDP --onnx "logs/rsl_rl/lgdog1_velocity_race_mgdp_v3/<run>/policy.onnx" --map flat --viewer --vx 0.3 --no-keyboard
 ```
 
 再切换完整比赛障碍 XML：
 
 ```bash
-python -m scripts.sim2sim LgDog1-Race-MGDP --onnx "logs/rsl_rl/lgdog1_velocity_race_mgdp_v2/<run>/policy.onnx" --map race --viewer --vx 0.3 --no-keyboard
+python -m scripts.sim2sim LgDog1-Race-MGDP --onnx "logs/rsl_rl/lgdog1_velocity_race_mgdp_v3/<run>/policy.onnx" --map race --viewer --vx 0.3 --no-keyboard
 ```
 
 - `--vx / --vy / --wz`：前进、横移、偏航速度指令；正 vx 向机器人前方走。
@@ -129,7 +129,7 @@ MuJoCo 原生 Esc 用于回到自由相机；本项目 sim2sim 将窗口中的 E
 键盘监听使用可选的 `pynput`（缺少时可在同一环境执行 `python -m pip install pynput`）：
 
 ```bash
-python -m scripts.sim2sim LgDog1-Race-MGDP --onnx "logs/rsl_rl/lgdog1_velocity_race_mgdp_v2/<run>/policy.onnx" --map race --viewer --vx 0 --speed-x 0.3 --speed-y 0.1 --speed-yaw 0.4
+python -m scripts.sim2sim LgDog1-Race-MGDP --onnx "logs/rsl_rl/lgdog1_velocity_race_mgdp_v3/<run>/policy.onnx" --map race --viewer --vx 0 --speed-x 0.3 --speed-y 0.1 --speed-yaw 0.4
 ```
 
 W/S 前后、A/D 转向、Q/E 横移，空格或 R 复位，Esc 退出。复位会清空本体历史、两帧深度和 GRU 状态；键盘未能初始化时终端会提示原因。

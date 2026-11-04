@@ -9,7 +9,10 @@
 
 ## 1. 迁移了什么
 
-2026-11-04：MGDP 的 reward、接触和课程升级为 v2；`race_mgdp` 改为有明确入口/出口的定向越障训练。`foot_clearance=0`、`feet_air_time=0.25`。使用与验证见 [MGDP_PASSAGE.md](MGDP_PASSAGE.md)，下文比赛随机地形描述属于 v1 的历史背景。
+2026-11-04：MGDP 的 reward、接触和能力门控延续 v2，`foot_clearance=0`、`feet_air_time=0.25`。
+当前 `race_mgdp` 已升级为 **2027 场地图 v3**，包含双排梅花桩、坡台沟壑、L 形绕桩/砖木坑路线；
+比赛感知文件改为独立的 `logs/mgdp/perception/mgdp_race_v3.pt`。
+使用与验证见 [MGDP_PASSAGE.md](MGDP_PASSAGE.md)，下文比赛随机地形描述属于 v1 的历史背景。
 
 | MGDP 原始实现 | 本仓库实现 |
 |---|---|

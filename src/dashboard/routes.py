@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import socket
 from typing import Any, Callable
 
 from . import history
@@ -154,21 +155,25 @@ def run(ctx: ApiContext, data: dict) -> tuple[int, dict]:
 
 def pretrain(ctx: ApiContext, data: dict) -> tuple[int, dict]:
   """Launch MGDP perception pretraining from the workbench."""
+  alias, task = resolve_task(data.get("task","mgdp"))
+  if not task.get("requires_pretrain"):
+    raise ValueError("该任务不使用 MGDP 感知预训练")
   script = ctx.root / "scripts" / "pretrain_mgdp.py"
   if not script.is_file():
     raise ValueError("找不到 scripts/pretrain_mgdp.py")
   envs = integer(data.get("envs", 256), "环境数", 1, 4096)
   steps = integer(data.get("steps", 4000), "采集步数", 10, 200000)
   iterations = integer(data.get("iterations", 3000), "训练迭代", 1, 200000)
-  output = ctx.root / "logs" / "mgdp" / "perception" / "mgdp_perception.pt"
+  output = ctx.root / task["pretrain_checkpoint"]
   argv = [
     str(ctx.python), str(script),
+    "--task", task["id"],
     "--num-envs", str(envs),
     "--steps", str(steps),
     "--iterations", str(iterations),
     "--out", str(output),
   ]
-  return 200, {"job": ctx.jobs.launch(argv, "pretrain", "mgdp"), "output": str(output)}
+  return 200, {"job": ctx.jobs.launch(argv, "pretrain", alias), "output": str(output)}
 
 
 def reward_save(ctx: ApiContext, data: dict) -> tuple[int, dict]:
@@ -189,11 +194,16 @@ def terrain_save(ctx: ApiContext, data: dict) -> tuple[int, dict]:
 
 
 def terrain_view(ctx: ApiContext, data: dict) -> tuple[int, dict]:
+  alias, task = resolve_task(data.get("task", DEFAULT_TASK))
   script = ctx.root / "scripts" / "visualize_terrain.py"
   if not script.is_file():
     raise ValueError("找不到 scripts/visualize_terrain.py")
-  job = ctx.jobs.launch([str(ctx.python), str(script), "--lgdog"], "terrain", "terrain")
-  return 200, {"job": job, "url": "http://127.0.0.1:8080"}
+  # A previous task's viewer may still own8080; return this launch's port.
+  with socket.socket() as listener:
+    listener.bind(("127.0.0.1",0))
+    port=listener.getsockname()[1]
+  job = ctx.jobs.launch([str(ctx.python),str(script),"--port",str(port),"--task",task["id"]],"terrain",alias)
+  return 200, {"job":job,"url":f"http://127.0.0.1:{port}"}
 
 
 def stop(ctx: ApiContext, data: dict) -> tuple[int, dict]:

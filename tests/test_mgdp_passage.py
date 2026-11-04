@@ -20,7 +20,7 @@ class MGDPPassageTests(unittest.TestCase):
     from src.dashboard.commands import build_command
     with tempfile.TemporaryDirectory() as tmp:
       root = Path(tmp)
-      checkpoint = root/"logs/mgdp/perception/mgdp_perception.pt"
+      checkpoint = root/"logs/mgdp/perception/mgdp_race_v3.pt"
       checkpoint.parent.mkdir(parents=True); checkpoint.write_bytes(b"placeholder")
       for option in ({"terrain_curriculum":"lp_acrl"}, {"velocity_max_abs":.8}):
         with self.assertRaisesRegex(ValueError,"通过率门控"):
@@ -37,7 +37,7 @@ class MGDPPassageTests(unittest.TestCase):
       self.assertEqual(c.rewards["feet_air_time"].weight, .25)
       self.assertEqual(c.terminations["illegal_contact"].params["sensor_name"], "trunk_ground_contact")
       self.assertIn("sustained_leg_contact", c.terminations)
-      self.assertTrue(load_rl_cfg(task).experiment_name.endswith("_v2"))
+      self.assertTrue(load_rl_cfg(task).experiment_name.endswith("_v3" if task=="LgDog1-Race-MGDP" else "_v2"))
     rough = load_env_cfg("LgDog1-Rough-MGDP")
     self.assertNotIn("velocity_stages", rough.curriculum["command_vel"].params)
     self.assertEqual(load_env_cfg("LgDog1-Rough-Blind-HIM-Standard").commands["twist"].ranges.lin_vel_x,(-.2,.4))

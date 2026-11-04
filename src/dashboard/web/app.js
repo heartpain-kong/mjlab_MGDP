@@ -164,7 +164,7 @@ async function startPretrain(){
   if(!button)return;
   button.disabled=true; button.textContent="预训练启动中…";
   try{
-    const data=await api("/api/pretrain", {});
+    const data=await api("/api/pretrain", {task:$("task").value});
     $("pretrain-state").textContent=`已启动 ${data.job.id}，日志在运行记录里`;
     toast("预训练已启动，完成后会自动刷新状态");
     await refresh();
@@ -436,7 +436,7 @@ async function saveTerrainEditor(){
   catch(error){toast(error.message);}
 }
 async function openTerrainViewer(){
-  try{const data=await api("/api/terrain/view",{});window.open(data.url,"_blank","noopener");toast("3D 地形查看器已启动，浏览器将打开 Viser 页面");await refresh();}
+  try{const data=await api("/api/terrain/view",{task:$("task").value});window.open(data.url,"_blank","noopener");toast("当前任务的 3D 地形查看器已启动");await refresh();}
   catch(error){toast(error.message);}
 }
 function showMode() {

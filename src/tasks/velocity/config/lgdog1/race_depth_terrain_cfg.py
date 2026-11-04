@@ -76,6 +76,7 @@ class BoxClearanceFrameTerrainCfg(SubTerrainCfg):
       self.underside_range[1] - self.underside_range[0]
     )
     half = self.frame_size / 2.0
+    side_half = half + self.leg_half  # 0.8m INNER width, matching the source XML.
     cx, cy = self.size[0] / 2.0, self.size[1] / 2.0
     bar_center = underside + self.bar_half
 
@@ -83,7 +84,7 @@ class BoxClearanceFrameTerrainCfg(SubTerrainCfg):
       ox = cx + (index - (self.frame_count - 1) / 2.0) * self.frame_spacing
       # 6 legs: x = -half, 0, +half; y = +-half.
       for lx in (-half, 0.0, half):
-        for ly in (-half, half):
+        for ly in (-side_half, side_half):
           leg = body.add_geom(
             type=mujoco.mjtGeom.mjGEOM_BOX,
             size=(self.leg_half, self.leg_half, underside / 2.0),
@@ -96,14 +97,14 @@ class BoxClearanceFrameTerrainCfg(SubTerrainCfg):
       for lx in (-half, 0.0, half):
         bar = body.add_geom(
           type=mujoco.mjtGeom.mjGEOM_BOX,
-          size=(self.bar_half, half + self.bar_half, self.bar_half),
+          size=(self.bar_half, side_half + self.leg_half, self.bar_half),
           pos=(ox + lx, cy, bar_center),
           rgba=(0.82, 0.34, 0.22, 1.0),
           contype=1, conaffinity=1,
         )
         geoms.append(TerrainGeometry(geom=bar))
       # 2 longbars across x at y = +-half.
-      for ly in (-half, half):
+      for ly in (-side_half, side_half):
         bar = body.add_geom(
           type=mujoco.mjtGeom.mjGEOM_BOX,
           size=(half + self.bar_half, self.bar_half, self.bar_half),

@@ -93,23 +93,34 @@ class _AppState(TypedDict):
 def main():
   parser = argparse.ArgumentParser(description="Viser terrain visualizer")
   parser.add_argument("--lgdog", action="store_true", help="显示工程内的 LgDog 地形配置")
+  parser.add_argument("--task", default=None, help="显示指定任务实际使用的训练地图")
+  parser.add_argument("--port",type=int,default=8080,help="Viser 端口")
   args = parser.parse_args()
-  server = viser.ViserServer()
+  server = viser.ViserServer(port=args.port)
 
   # Load available terrains from config.
-  if args.lgdog:
+  if args.task:
+    import src.tasks
+    from mjlab.tasks.registry import load_env_cfg
+    terrain_base_cfg = load_env_cfg(args.task).scene.terrain.terrain_generator
+    if terrain_base_cfg is None:
+      parser.error("该任务没有程序化训练地图")
+  elif args.lgdog:
     from src.tasks.velocity.config.lgdog1.terrain_cfg import lgdog1_rough_terrain_cfg
     terrain_base_cfg = lgdog1_rough_terrain_cfg()
   else:
     terrain_base_cfg = ALL_TERRAINS_CFG
   available_presets = terrain_base_cfg.sub_terrains
-  preset_names = (["Current LgDog", "All Terrains"] if args.lgdog else ["All Terrains"])
+  preset_names = (["Current task", "All Terrains"] if args.task else
+                  ["Current LgDog", "All Terrains"] if args.lgdog else ["All Terrains"])
   preset_names += list(available_presets.keys())
+  from src.assets.robots.lgdog1.lgdog1_constants import get_lgdog1_robot_cfg
+  ROBOT_CFG_GETTERS["LgDog1"] = get_lgdog1_robot_cfg
 
   # State management.
   state: _AppState = {
     "preset_name": preset_names[0],
-    "robot_name": "None",
+    "robot_name": "LgDog1" if args.task or args.lgdog else "None",
     "seed": 42,
     "size": terrain_base_cfg.size,
     "params": {},
@@ -218,7 +229,7 @@ def main():
     nonlocal terrain_handle
     status_label.content = "**Status:** Generating terrain..."
 
-    if state["preset_name"] == "Current LgDog":
+    if state["preset_name"] in {"Current LgDog", "Current task"}:
       # Display the exact project proportions and column count.
       sub_terrains = {
         name: dataclasses.replace(cfg) for name, cfg in available_presets.items()
@@ -334,7 +345,7 @@ def main():
       control.remove()
     param_controls.clear()
 
-    if state["preset_name"] in {"All Terrains", "Current LgDog"}:
+    if state["preset_name"] in {"All Terrains", "Current LgDog", "Current task"}:
       with gui_params_folder:
         md = server.gui.add_markdown(
           "_Parameters not available for 'All Terrains' mode._"

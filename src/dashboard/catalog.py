@@ -28,11 +28,11 @@ _TASK_LIST = (
   TaskSpec(
     alias="race_mgdp", id="LgDog1-Race-MGDP",
     label="MGDP · 定向越障训练", algorithm="ppo", scene="race_depth",
-    experiment="lgdog1_velocity_race_mgdp_v2", obs=252, critic=261, profile="mgdp",
+    experiment="lgdog1_velocity_race_mgdp_v3", obs=252, critic=261, profile="mgdp",
     docs="doc/MGDP_PASSAGE.md", requires_pretrain=True, directed_passage=True,
-    pretrain_command="python scripts/pretrain_mgdp.py --num-envs 256 --steps 4000 --iterations 3000",
-    pretrain_checkpoint="logs/mgdp/perception/mgdp_perception.pt",
-    description="低速从入口穿过障碍到出口；越界失败，各类通过率与跟踪达标后扩速。奖励关闭抬腿高度，启用 feet_air_time。",
+    pretrain_command="python scripts/pretrain_mgdp.py --task LgDog1-Race-MGDP --num-envs 256 --steps 4000 --iterations 3000",
+    pretrain_checkpoint="logs/mgdp/perception/mgdp_race_v3.pt",
+    description="2027 场地分项课程：双排梅花桩、坡台沟壑、L形绕桩/砖木坑及限高轮胎；沿路线到出口，各类通过率达标后扩速。",
   ),
   TaskSpec(
     alias="him_flat", id="LgDog1-Flat-Blind-HIM-Standard",

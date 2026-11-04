@@ -1,6 +1,6 @@
 """Directed passage objective and reset-time, outcome-gated curricula."""
 
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 import hashlib
 import torch
 from mjlab.managers.manager_base import ManagerTermBase
@@ -11,6 +11,42 @@ class PassageCommand(UniformVelocityCommand):
   def __init__(self, cfg, env):
     super().__init__(cfg, env)
     self.speed = torch.zeros(self.num_envs, device=self.device)
+    generator = env.scene.terrain.cfg.terrain_generator
+    names = list(generator.sub_terrains)
+    proportions = torch.tensor([c.proportion for c in generator.sub_terrains.values()],device=self.device)
+    columns = torch.searchsorted((proportions/proportions.sum()).cumsum(0),
+      torch.arange(generator.num_cols,device=self.device)/generator.num_cols+.001,right=True)
+    routes = [cfg.waypoints.get(names[int(i)],((0.,0.),(cfg.goal_x,0.))) for i in columns]
+    self.routes = torch.zeros((len(routes),max(map(len,routes)),2),device=self.device)
+    self.last_waypoint = torch.tensor([len(r)-1 for r in routes],device=self.device)
+    for i,route in enumerate(routes):
+      if len(route)<2 or any(len(p)!=2 for p in route):
+        raise ValueError("Passage routes need at least two xy points")
+      self.routes[i,:len(route)] = torch.tensor(route,device=self.device)
+      self.routes[i,len(route):] = self.routes[i,len(route)-1]
+    lengths = torch.linalg.vector_norm(self.routes[:,1:]-self.routes[:,:-1],dim=-1)
+    self.cumulative = torch.cat((torch.zeros((len(routes),1),device=self.device),lengths.cumsum(1)),1)
+    self.waypoint_index = torch.ones(self.num_envs,device=self.device,dtype=torch.long)
+
+  def route_state(self):
+    types = self._env.scene.terrain.terrain_types
+    index = self.waypoint_index
+    start, target = self.routes[types,index-1], self.routes[types,index]
+    delta = target-start
+    length = torch.linalg.vector_norm(delta,dim=-1).clamp(min=1e-6)
+    direction = delta/length[:,None]
+    xy = self.local_xy()
+    along = ((xy-start)*direction).sum(-1).clamp(min=0)
+    projection = torch.minimum(along,length)
+    lateral = torch.linalg.vector_norm(xy-start-projection[:,None]*direction,dim=-1)
+    progress = self.cumulative[types,index-1]+projection
+    return target, direction, lateral, progress
+
+  def route_success(self):
+    types = self._env.scene.terrain.terrain_types
+    final = self.routes[types,self.last_waypoint[types]]
+    return ((self.waypoint_index == self.last_waypoint[types]) &
+            (torch.linalg.vector_norm(self.local_xy()-final,dim=-1) <= self.cfg.waypoint_radius))
 
   def local_xy(self):
     return self.robot.data.root_link_pos_w[:, :2] - self._env.scene.env_origins[:, :2]
@@ -21,21 +57,32 @@ class PassageCommand(UniformVelocityCommand):
     self.is_heading_env[env_ids] = True
     self.is_standing_env[env_ids] = False
     self.heading_target[env_ids] = 0.
+    self.waypoint_index[env_ids] = 1
 
   def _update_command(self):
+    target, _, _, _ = self.route_state()
+    types = self._env.scene.terrain.terrain_types
+    reached = torch.linalg.vector_norm(self.local_xy()-target,dim=-1) <= self.cfg.waypoint_radius
+    self.waypoint_index += (reached & (self.waypoint_index < self.last_waypoint[types])).long()
+    target, direction, _, _ = self.route_state()
+    offset = target-self.local_xy()
+    distance = torch.linalg.vector_norm(offset,dim=-1).clamp(min=1e-6)
+    velocity = offset/distance[:,None] * torch.minimum(self.speed,(1.5*distance).clamp(min=.12))[:,None]
     heading = self.robot.data.heading_w
-    # Goal direction is world +X; convert the gentle centering velocity to body.
-    vy = (-.5*self.local_xy()[:, 1]).clamp(-.1, .1)
-    self.vel_command_b[:, 0] = self.speed*heading.cos() + vy*heading.sin()
-    self.vel_command_b[:, 1] = -self.speed*heading.sin() + vy*heading.cos()
-    self.heading_error = torch.atan2(-heading.sin(), heading.cos())
-    self.vel_command_b[:, 2] = (.8*self.heading_error).clamp(-.4, .4)
+    self.vel_command_b[:,0] = velocity[:,0]*heading.cos()+velocity[:,1]*heading.sin()
+    self.vel_command_b[:,1] = -velocity[:,0]*heading.sin()+velocity[:,1]*heading.cos()
+    self.heading_target = torch.atan2(direction[:,1],direction[:,0])
+    error = self.heading_target-heading
+    self.heading_error = torch.atan2(error.sin(),error.cos())
+    self.vel_command_b[:,2] = (.8*self.heading_error).clamp(-.8,.8)
 
 
 @dataclass(kw_only=True)
 class PassageCommandCfg(UniformVelocityCommandCfg):
   goal_x: float = 5.3
   lane_half_width: float = .28
+  waypoint_radius: float = .15
+  waypoints: dict[str, tuple[tuple[float,float],...]] = field(default_factory=dict)
 
   def build(self, env):
     return PassageCommand(self, env)
@@ -43,12 +90,16 @@ class PassageCommandCfg(UniformVelocityCommandCfg):
 
 def passage_success(env):
   term = env.command_manager.get_term("twist")
+  if hasattr(term,"route_success"):
+    return term.route_success()
   xy = term.local_xy()
   return (xy[:, 0] >= term.cfg.goal_x) & (xy[:, 1].abs() <= term.cfg.lane_half_width)
 
 
 def left_lane(env):
   term = env.command_manager.get_term("twist")
+  if hasattr(term,"route_state"):
+    return term.route_state()[2] > term.cfg.lane_half_width
   xy = term.local_xy()
   return (xy[:, 1].abs() > term.cfg.lane_half_width) | (xy[:, 0] < -.5)
 
@@ -71,7 +122,7 @@ def success_bonus(env):
 
 
 class ForwardProgress(ManagerTermBase):
-  """Reward only newly attained +X positions; backtracking cannot farm reward."""
+  """Reward only new route distance; backtracking cannot farm reward."""
   def __init__(self, cfg, env):
     super().__init__(env)
     self.highwater = torch.zeros(env.num_envs, device=env.device)
@@ -83,7 +134,7 @@ class ForwardProgress(ManagerTermBase):
   def __call__(self, env):
     command = env.command_manager.get_term("twist")
     xy = command.local_xy()
-    x = xy[:, 0].clamp(max=command.cfg.goal_x)
+    x = command.route_state()[3] if hasattr(command,"route_state") else xy[:,0].clamp(max=command.cfg.goal_x)
     progress = (x-self.highwater).clamp(min=0) / env.step_dt
     self.highwater = torch.maximum(self.highwater, x)
     return progress.clamp(max=1.) * (~left_lane(env) & ~failed(env)).float()
@@ -104,8 +155,9 @@ class PassageCurriculum(ManagerTermBase):
     self.column_names = list(self.terrain.cfg.terrain_generator.sub_terrains)
     generator = self.terrain.cfg.terrain_generator
     self.grid = (generator.num_rows, generator.num_cols)
-    contract = (asdict(generator), env.step_dt, self.command.cfg.goal_x,
-                self.command.cfg.lane_half_width)
+    contract = (asdict(generator), env.step_dt, env.cfg.episode_length_s if hasattr(env.cfg,"episode_length_s") else None,
+                asdict(self.command.cfg) if hasattr(self.command.cfg,"__dataclass_fields__") else
+                (self.command.cfg.goal_x,self.command.cfg.lane_half_width))
     self.fingerprint = hashlib.sha256(repr(contract).encode()).hexdigest()
     proportions = torch.tensor([getattr(c, "proportion", 1.)
       for c in generator.sub_terrains.values()], device=self.device)

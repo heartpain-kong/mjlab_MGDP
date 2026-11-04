@@ -1,4 +1,8 @@
-"""Directed obstacle lessons: safe start, mandatory obstacle strip, safe exit."""
+"""2027 obstacle lessons with supported geometry and graded dimensions.
+
+Hard endpoints follow the bundled race_obstacle_2027.xml. These isolated
+skills are training approximations, not competition scoring.
+"""
 
 from dataclasses import dataclass
 import numpy as np
@@ -10,71 +14,123 @@ from .race_depth_terrain_cfg import BoxClearanceFrameTerrainCfg, TireArrayTerrai
 KINDS = ("start_flat", "stepping_stones", "balance_beam", "gap_steps", "brick_pit",
          "slalom_posts", "high_wall", "clearance_frame", "tire_array", "rough")
 START_X = 1.0
-GOAL_X = 5.3  # relative to start; world-local exit x=6.3, past all obstacles
+GOAL_X = 5.3
 LANE_HALF_WIDTH = 0.28
+LAYOUT_VERSION = 3
+
+
+def lesson_route(kind, size=(8., 8.)):
+  """Return waypoints relative to spawn, retaining the two L-shaped lessons."""
+  cy = size[1]/2
+  if kind == "slalom_posts":
+    points = [(1.,cy), (1.9,cy-.6), (2.4,cy-.3), (3.3,cy-.9),
+              (4.2,cy-.3), (4.65,cy-.9), (5.4,cy-.9), (5.4,cy-.1),
+              (4.8,cy+.3), (5.4,cy+1.2), (5.1,cy+1.9)]
+  elif kind == "brick_pit":
+    points = [(1.,cy), (2.,cy-.9), (3.,cy-1.4), (3.,cy+.5),
+              (4.,cy+.5), (5.6,cy+.5)]
+  else:
+    points = [(START_X,cy), (START_X+GOAL_X,cy)]
+  return tuple((x-START_X, y-cy) for x,y in points)
 
 
 @dataclass(kw_only=True)
 class PassageTerrainCfg(SubTerrainCfg):
   kind: str = "start_flat"
+  # Included in checkpoint fingerprints, even when the dataclass shape and
+  # terrain dimensions otherwise look the same as the old implementation.
+  layout_version: int = LAYOUT_VERSION
 
   def function(self, difficulty, spec, rng):
-    body = spec.body("terrain")
-    geoms = []
-    cy = self.size[1] / 2
-    def box(x, y, z, sx, sy, sz):
-      geom = body.add_geom(type=mujoco.mjtGeom.mjGEOM_BOX, pos=(x, y, z),
-        size=(sx, sy, sz), contype=1, conaffinity=1)
-      geoms.append(TerrainGeometry(geom=geom))
-    def floor(x0, x1, top=0):
-      box((x0+x1)/2, cy, top-.1, (x1-x0)/2, self.size[1]/2, .1)
-
+    if self.kind not in KINDS or self.layout_version != LAYOUT_VERSION:
+      raise ValueError("Unknown passage kind/layout version")
+    if self.size[0] < 8 or self.size[1] < 6:
+      raise ValueError("2027 lessons require a cell of at least 8 x 6 m")
+    body, geoms = spec.body("terrain"), []
+    prefix = f"lesson_{self.kind}_{len(body.geoms)}_"
+    cy = self.size[1]/2
     d = float(np.clip(difficulty, 0, 1))
-    if self.kind in ("stepping_stones", "balance_beam", "gap_steps"):
-      floor(0, 2.3)
-      floor(2.3, 5.6, -.45)
-      floor(5.6, self.size[0])
-      if self.kind == "stepping_stones":
-        gap = .08 + .32*d
-        count = int(np.ceil(3.1/(.2+gap)))+1
-        for x in np.linspace(2.4, 5.5, count):
-          box(float(x), cy, .05, .1, .1, .05)
-      elif self.kind == "balance_beam":
-        box(3.95, cy, .05, 1.65, .3-.1*d, .05)
+    green = (.35,.62,.20,1.)
+    def box(name, x, y, sx, sy, top, bottom=0., color=green, yaw=0.):
+      geom = body.add_geom(name=prefix+name, type=mujoco.mjtGeom.mjGEOM_BOX,
+        pos=(x,y,(top+bottom)/2), size=(sx,sy,(top-bottom)/2),
+        quat=(np.cos(yaw/2),0.,0.,np.sin(yaw/2)), rgba=color, contype=1, conaffinity=1)
+      geoms.append(TerrainGeometry(geom=geom))
+
+    # Actual obstacles stand on the arena floor, not an artificial 45cm pit.
+    if self.kind not in ("clearance_frame", "tire_array"):
+      box("lesson_floor", self.size[0]/2,cy,self.size[0]/2,self.size[1]/2,
+          0.,-.1,color=(.55,.55,.55,1.))
+    if self.kind == "stepping_stones":
+      height, width = .02+.08*d, .36-.16*d
+      box("stones_entry",2.4,cy,.4,.4,height)
+      box("stones_exit",5.1,cy,.4,.4,height)
+      for row in range(2):
+        # Hard endpoint: six 20cm stones, 30cm stagger, same-row gap40cm.
+        for i,x in enumerate(3.+row*.3*d+np.arange(3)*.6):
+          box(f"stone_{row}_{i}",float(x),cy+(1 if row==0 else -1)*.2,
+              width/2,width/2,height)
+    elif self.kind == "balance_beam":
+      box("balance_beam",4.,cy,1.5,(.7-.3*d)/2,.02+.08*d)
+    elif self.kind == "gap_steps":
+      height, ramp_length, gap = .06+.30*d, .8+.189092*d, .04+.32*d
+      # Solid wedge, two 80cm platforms and two descending 32cm treads.
+      x0, half_width = 2., .4
+      mesh = spec.add_mesh(name=prefix+"ramp", uservert=[
+        x0,-half_width,0, x0,half_width,0,
+        x0+ramp_length,-half_width,0, x0+ramp_length,half_width,0,
+        x0+ramp_length,-half_width,height, x0+ramp_length,half_width,height])
+      ramp = body.add_geom(name=prefix+"gap_ramp",type=mujoco.mjtGeom.mjGEOM_MESH,
+        meshname=mesh.name,pos=(0,cy,0),rgba=green,contype=1,conaffinity=1)
+      geoms.append(TerrainGeometry(geom=ramp))
+      platform0, platform1 = x0+ramp_length, x0+ramp_length+.8+gap
+      box("gap_platform0",platform0+.4,cy,.4,.4,height)
+      box("gap_platform1",platform1+.4,cy,.4,.4,height)
+      for i in range(2):
+        box(f"gap_tread_{i}",platform1+.8+.16+i*.32,cy,.16,.4,height*(2-i)/3)
+    elif self.kind == "brick_pit":
+      # Same 2x2 L footprint and boundary/diagonal rails as the supplied model.
+      ox, oy = 2.5, cy-1.
+      base, rail = .01+.02*d, .025+.125*d
+      box("pit_base_vertical",ox+.5,oy+1.,.5,1.,base,color=(.36,.24,.12,1.))
+      box("pit_base_horizontal",ox+1.5,oy+1.5,.5,.5,base,color=(.55,.28,.2,1.))
+      for i,(x,y,sx,sy) in enumerate(((.5,0,.5,.01),(1,.5,.01,.5),
+          (1.5,1,.5,.01),(2,1.5,.01,.5),(1,2,1,.01),(0,1,.01,1))):
+        box(f"pit_rail_{i}",ox+x,oy+y,sx,sy,rail)
+      box("pit_diagonal",ox+.5,oy+1.5,2**-.5,.01,rail,yaw=-np.pi/4)
+      for x in np.arange(.1,2.,.2):
+        for y in np.arange(.1,2.,.2):
+          if x > 1 and y < 1:
+            continue
+          h = rng.uniform(.003,.008+.012*d)
+          box(f"pit_fill_{len(geoms)}",ox+x,oy+y,.065,.065,base+h,base,
+              color=(.5,.3,.18,1.),yaw=float(rng.uniform(-np.pi,np.pi)))
+    elif self.kind == "rough":
+      for x in np.arange(2.4,5.5,.25):
+        for y in np.arange(cy-.5,cy+.51,.25):
+          h = rng.uniform(.002,.008+.025*d)
+          box(f"rough_{len(geoms)}",float(x),float(y),.12,.12,h)
+    elif self.kind == "slalom_posts":
+      # Reference: six 10cm-high cylinders in an L, not 30-50cm-high walls.
+      for i,(x,y) in enumerate([(2.4+i*.9,cy-.6) for i in range(4)]+
+                               [(5.1,cy+.3),(5.1,cy+1.2)]):
+        height, radius = .03+.07*d, .025+.025*d
+        geom = body.add_geom(name=prefix+f"slalom_pole_{i}",type=mujoco.mjtGeom.mjGEOM_CYLINDER,
+          pos=(x,y,height/2),size=(radius,height/2,0),rgba=green,contype=1,conaffinity=1)
+        geoms.append(TerrainGeometry(geom=geom))
+    elif self.kind == "high_wall":
+      box("high_wall",4.,cy,.04,.4,.04+.26*d)
+    elif self.kind in ("clearance_frame", "tire_array"):
+      if self.kind == "clearance_frame":
+        source = BoxClearanceFrameTerrainCfg(size=self.size,frame_count=1,
+                                             underside_range=(.44,.29))
       else:
-        # Open treads: progressive height/gap, with a safe final landing.
-        for i, x in enumerate(np.arange(2.4, 5.6, .4)):
-          height = (.04+.08*d) * (1 + i % 2)
-          box(float(x), cy, height/2, .18-.04*d, .5, height/2)
-    else:
-      if self.kind not in ("clearance_frame", "tire_array"):
-        floor(0, self.size[0])
-      if self.kind in ("brick_pit", "rough"):
-        for x in np.arange(2.5, 5.5, .25):
-          for y in np.arange(cy-.5, cy+.51, .25):
-            height = rng.uniform(.005, .02+.04*d)
-            box(float(x), float(y), height/2, .12, .12, height/2)
-      elif self.kind == "slalom_posts":
-        for i, x in enumerate((2.8, 3.8, 4.8)):
-          box(x, cy + (-1)**i*.08, .15+.1*d, .04, .04, .15+.1*d)
-      elif self.kind == "high_wall":
-        height = .04+.26*d
-        box(4, cy, height/2, .04, .6, height/2)
-      elif self.kind in ("clearance_frame", "tire_array"):
-        # Reuse actual cage/ring geometry; the returned central origin is not
-        # used. Our spawn remains on the clear entry pad at x=1.
-        if self.kind == "clearance_frame":
-          source = BoxClearanceFrameTerrainCfg(size=self.size, frame_spacing=1.7,
-                                               underside_range=(.40, .28))
-        else:
-          source = TireArrayTerrainCfg(size=self.size, height=.05+.115*d)
-        geoms = list(source.function(d, spec, rng).geometries)
-      elif self.kind != "start_flat":
-        raise ValueError(f"Unknown passage obstacle {self.kind!r}")
-    return TerrainOutput(origin=np.array([START_X, cy, 0.]), geometries=geoms)
+        source = TireArrayTerrainCfg(size=self.size,height=.025+.14*d)
+      geoms = list(source.function(d,spec,rng).geometries)
+    return TerrainOutput(origin=np.array([START_X,cy,0.]),geometries=geoms)
 
 
 def lgdog1_passage_terrain_cfg():
-  return TerrainGeneratorCfg(size=(8., 8.), num_rows=10, num_cols=20,
-    border_width=10., curriculum=True, difficulty_range=(0., 1.),
-    sub_terrains={kind: PassageTerrainCfg(kind=kind, proportion=.1) for kind in KINDS})
+  return TerrainGeneratorCfg(size=(8.,8.),num_rows=10,num_cols=20,
+    border_width=10.,curriculum=True,difficulty_range=(0.,1.),add_lights=True,
+    sub_terrains={kind:PassageTerrainCfg(kind=kind,proportion=.1) for kind in KINDS})

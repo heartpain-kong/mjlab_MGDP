@@ -1,6 +1,6 @@
 """MGDP stage 1 in mjlab: pretrain the contrastive depth perception model.
 
-The script plays random actions in the LgDog1 rough-terrain environment,
+The script plays random actions in the selected LgDog1 terrain environment,
 collects (depth, height) pairs from the raycast sensors, and trains the
 MGDP perception module with its original losses:
 
@@ -40,6 +40,7 @@ from src.tasks.velocity.config.lgdog1.mgdp_env_cfg import (
     DEPTH_HW,
     DEPTH_MAX,
     DEFAULT_CHECKPOINT,
+    DEFAULT_RACE_CHECKPOINT,
     lgdog1_mgdp_env_cfg,
 )
 from src.tasks.velocity.mdp.mgdp_perception import MGPDPerception, MGPDPerceptionCfg
@@ -47,6 +48,8 @@ from src.tasks.velocity.mdp.mgdp_perception import MGPDPerception, MGPDPerceptio
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--task",choices=("LgDog1-Rough-MGDP","LgDog1-Race-MGDP"),default="LgDog1-Rough-MGDP",
+                   help="感知采集地图；比赛任务应采集2027障碍，包含限高和轮胎")
     p.add_argument("--num-envs", type=int, default=256)
     p.add_argument("--sequence-length", type=int, default=8, help="consecutive steps for GRU training, minimum 2")
     p.add_argument("--sample-envs", type=int, default=32,
@@ -64,9 +67,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--log-every", type=int, default=100)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
-    p.add_argument("--out", default=DEFAULT_CHECKPOINT)
+    p.add_argument("--out", default=None)
     p.add_argument("--init-from", default="", help="released MGDP wm_best.pt (optional)")
     args = p.parse_args()
+    args.out = args.out or (DEFAULT_RACE_CHECKPOINT if args.task=="LgDog1-Race-MGDP" else DEFAULT_CHECKPOINT)
     if args.sequence_length < 2 or args.steps < args.sequence_length + 2:
         p.error("sequence-length must be >=2 and steps must exceed sequence-length+1")
     if not 0 < args.val_fraction < 1:
@@ -78,6 +82,15 @@ def parse_args() -> argparse.Namespace:
 
 def build_env(args) -> ManagerBasedRlEnv:
     cfg = lgdog1_mgdp_env_cfg(with_perception=False)
+    race = getattr(args,"task","LgDog1-Rough-MGDP")=="LgDog1-Race-MGDP"
+    if race:
+        from src.tasks.velocity.config.lgdog1.passage_terrain_cfg import lgdog1_passage_terrain_cfg
+        cfg.scene.terrain.terrain_generator = lgdog1_passage_terrain_cfg()
+        # Face the obstacle from its entry, without requiring a trained walking
+        # controller to reach it during random-action perception collection.
+        cfg.events["reset_base"].params["pose_range"] = {
+            "x":(1.,1.2),"y":(-.1,.1),"z":(.15,.15),"yaw":(-.2,.2)}
+        cfg.curriculum = {}
     cfg.scene.num_envs = args.num_envs
     cfg.seed = args.seed
     terrain = cfg.scene.terrain
@@ -85,7 +98,7 @@ def build_env(args) -> ManagerBasedRlEnv:
         tg = terrain.terrain_generator
         tg.curriculum = False
         tg.num_rows = args.terrain_rows
-        tg.difficulty_range = (0.4, 1.0)
+        tg.difficulty_range = (0.0, 1.0) if race else (0.4, 1.0)
     return ManagerBasedRlEnv(cfg=cfg, device=args.device)
 
 
@@ -204,6 +217,10 @@ def main() -> None:
 
     out = Path(args.out)
     model.save(out, extra={
+        "task": args.task,
+        "seed": args.seed,
+        "terrain_layout_version": getattr(next(iter(env.cfg.scene.terrain.terrain_generator.sub_terrains.values())),
+                                           "layout_version",None),
         "iterations": args.iterations,
         "sequences": int(stacks.shape[0]),
         "sequence_length": args.sequence_length,

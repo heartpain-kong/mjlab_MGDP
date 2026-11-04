@@ -64,6 +64,21 @@ class RouteTableTests(unittest.TestCase):
     self.assertEqual(routes.dispatch_get(self.ctx, "/api/nope", {})[0], 404)
     self.assertEqual(routes.dispatch_post(self.ctx, "/api/nope", {})[0], 404)
 
+  def test_race_pretraining_and_viewer_use_selected_task_and_separate_encoder(self):
+    from unittest.mock import Mock
+    self.ctx.jobs=Mock()
+    self.ctx.jobs.launch.return_value={"id":"test"}
+    routes.dispatch_post(self.ctx,"/api/pretrain",{"task":"race_mgdp"})
+    argv,mode,alias=self.ctx.jobs.launch.call_args.args
+    self.assertEqual((mode,alias),("pretrain","race_mgdp"))
+    self.assertIn("LgDog1-Race-MGDP",argv)
+    self.assertTrue(argv[-1].endswith("mgdp_race_v3.pt"))
+    routes.dispatch_post(self.ctx,"/api/terrain/view",{"task":"race_mgdp"})
+    argv,mode,alias=self.ctx.jobs.launch.call_args.args
+    self.assertEqual(argv[-2:],["--task","LgDog1-Race-MGDP"])
+    with self.assertRaisesRegex(ValueError,"不使用"):
+      routes.dispatch_post(self.ctx,"/api/pretrain",{"task":"standard"})
+
   def test_state_route_exposes_tasks_and_capabilities(self):
     status, payload = routes.dispatch_get(self.ctx, "/api/state", {})
     self.assertEqual(status, 200)

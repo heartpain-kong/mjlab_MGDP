@@ -38,7 +38,7 @@ from src.tasks.velocity.mdp.curriculums import RewardBasedVelocityCurriculum
 from src.tasks.velocity.mdp import passage
 from . import blind_mdp
 from .reward_cfg import make_lgdog_rewards, make_mgdp_passage_rewards
-from .passage_terrain_cfg import lgdog1_passage_terrain_cfg, GOAL_X, LANE_HALF_WIDTH
+from .passage_terrain_cfg import lgdog1_passage_terrain_cfg, lesson_route, GOAL_X, LANE_HALF_WIDTH
 
 DEPTH_SITE = "mgdp_depth"
 DEPTH_HW = (16, 16)
@@ -56,6 +56,7 @@ DEPTH_SITE_QUAT = (0.7071067812, 0.0, -0.7071067812, 0.0)
 DEFAULT_CHECKPOINT = str(
     Path("logs") / "mgdp" / "perception" / "mgdp_perception.pt"
 )
+DEFAULT_RACE_CHECKPOINT = str(Path("logs") / "mgdp" / "perception" / "mgdp_race_v3.pt")
 
 
 def _mgdp_robot_spec():
@@ -175,7 +176,7 @@ def _configure_mgdp_training(cfg, play):
 
 def lgdog1_race_mgdp_env_cfg(
     play: bool = False,
-    checkpoint: str = DEFAULT_CHECKPOINT,
+    checkpoint: str = DEFAULT_RACE_CHECKPOINT,
     with_perception: bool = True,
 ):
     """MGDP task on the 2027 race terrain, including overhead beam + tyre ring."""
@@ -186,7 +187,7 @@ def lgdog1_race_mgdp_env_cfg(
     cfg.scene.terrain.terrain_type = "generator"
     cfg.scene.terrain.terrain_generator = lgdog1_passage_terrain_cfg()
     cfg.scene.terrain.max_init_terrain_level = 0
-    cfg.episode_length_s = 30.
+    cfg.episode_length_s = 45.
     # Safe pad at the terrain origin, always facing the obstacle strip.
     cfg.events["reset_base"].params["pose_range"] = {
       "x": (-.03, .03), "y": (-.03, .03), "z": (0., 0.), "yaw": (-.03, .03)}
@@ -194,9 +195,10 @@ def lgdog1_race_mgdp_env_cfg(
     cfg.events.pop("push_robot", None)
     cfg.events.pop("randomize_terrain", None)
     cfg.commands["twist"] = passage.PassageCommandCfg(entity_name="robot",
-      resampling_time_range=(31., 31.), heading_command=True,
+      resampling_time_range=(46., 46.), heading_command=True,
       ranges=passage.PassageCommandCfg.Ranges(lin_vel_x=(.25,.35), lin_vel_y=(-.1,.1),
-        ang_vel_z=(-.4,.4), heading=(0.,0.)), goal_x=GOAL_X, lane_half_width=LANE_HALF_WIDTH)
+        ang_vel_z=(-.8,.8), heading=(-3.141593,3.141593)), goal_x=GOAL_X, lane_half_width=LANE_HALF_WIDTH,
+      waypoints={name:lesson_route(name) for name in cfg.scene.terrain.terrain_generator.sub_terrains})
     cfg.terminations["passage_success"] = TerminationTermCfg(func=passage.passage_success)
     cfg.terminations["left_lane"] = TerminationTermCfg(func=passage.left_lane)
     cfg.rewards = make_mgdp_passage_rewards(base_body=BASE_BODY, foot_sites=FOOT_SITES)
