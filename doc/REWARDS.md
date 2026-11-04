@@ -73,7 +73,11 @@ python scripts/list_rewards.py LgDog1-Flat
 | `stand_still` | -1.0 | 零指令站立时的姿态代价 |
 | `is_terminated` | -200.0 | 非超时终止代价 |
 
-`foot_clearance.target_height`：Flat为0.10m，Rough/Blind/Gentle为0.15m，TerrainV4/温和HIM为0.10m。标准HIM改为**连续摆动净空短缺**：起落脚目标接近0，中段峰值0.06m、容差0.01m，自动同步foot_gait相位；默认仍0，初次开启可对照-0.2。已撤回base_height和落地峰值结算。详见 [抬脚、高度与LP调参](CLEARANCE_HEIGHT_LP_TUNING.md)。
+2026-11-04：`rough` profile 正式关闭 `foot_clearance`（权重 **0**），覆盖 Rough / Blind / Gentle。
+这次只调整该项；其线速度、角速度、air-time 权重仍为 2.0 / 1.0 / 0.0。
+MGDP 独立 profile 仍为 `foot_clearance=0`、`feet_air_time=0.25`。
+
+`foot_clearance.target_height`：Flat为0.10m，Rough/Blind/Gentle为0.15m（权重0时不生效），TerrainV4/温和HIM为0.10m。标准HIM改为**连续摆动净空短缺**：起落脚目标接近0，中段峰值0.06m、容差0.01m，自动同步foot_gait相位；默认仍0，初次开启可对照-0.2。已撤回base_height和落地峰值结算。详见 [抬脚、高度与LP调参](CLEARANCE_HEIGHT_LP_TUNING.md)。
 
 每个控制步的贡献是 `raw_reward × weight × step_dt`，本工程默认 `step_dt=0.02 s`。例如终止项返回 1 时贡献为 `-200 × 0.02 = -4`。连续接触力、二值碰撞与其他框架的奖励返回值可能不同，不能仅按 dt 换算权重。
 

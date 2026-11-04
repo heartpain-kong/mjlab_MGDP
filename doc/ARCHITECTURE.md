@@ -274,7 +274,7 @@ LgDog1 四个任务每轮都有 **18 个奖励项**，但函数实现分散在�
 | `pose` | 1.5 | 1.5 | 1.5 | 1.5 |
 | `foot_gait` | 0.5 | 0.5 | 0.5 | 0.5 |
 | `body_orientation_l2` | −1 | −1 | −1 | −1 |
-| `foot_clearance` | −1 | −1 | −1 | −1 |
+| `foot_clearance` | −1 | 0 | 0 | −1 |
 | `foot_slip` | −0.25 | −0.25 | −0.25 | −0.25 |
 | `action_rate_l2` | −0.05 | −0.05 | −0.05 | −0.05 |
 | `body_ang_vel` | −0.05 | −0.05 | −0.05 | −0.05 |
@@ -288,13 +288,13 @@ LgDog1 四个任务每轮都有 **18 个奖励项**，但函数实现分散在�
 | **`feet_stumble`** | **0** | **−0.5** | **−0.5** | **−0.5** |
 | **`leg_contact_force`** | **0** | **−1** | **−1** | **−1** |
 
-→ **四个任务只差最后两行**（地形专属项）+ `foot_clearance` 的 `target_height`
-（Flat 0.10 / Rough 0.15 / Gentle 0.15 / HIM 0.10 —— 见下方不一致说明）。
-重构保持这些任务当前的配置数值。历史训练的实际配置仍应以各 run 的 `params/env.yaml` 为准；对比还需考虑指令范围、函数定义与地形差异。
+四个任务的差异包含地形专属项，以及 `foot_clearance` 的权重和目标高度。
+2026-11-04 起 Rough / Blind / Gentle 正式关闭此代价；其保留的目标高度不生效。
+历史训练的实际配置仍应以各 run 的 `params/env.yaml` 为准；对比还需考虑指令范围、函数定义与地形差异。
 
 ### ★ 地形奖励（`feet_stumble` / `leg_contact_force`）
 
-LgDog 的启停由 `reward_cfg.py` 的公共权重及 profile 决定。Flat 关闭地形碰撞两项，Rough/Blind/Gentle/TerrainV4/HIM 开启；`feet_air_time` 当前在所有 LgDog 任务中关闭。其他机器人的通用配置仍保留其原有设置，不能据此推断为关闭。
+LgDog 的启停由 `reward_cfg.py` 的公共权重及 profile 决定。Flat 关闭地形碰撞两项，Rough/Blind/Gentle/TerrainV4/HIM 开启；`feet_air_time` 在标准 HIM 和 MGDP 中为 0.25，上表四类任务仍为 0。其他机器人的通用配置仍保留其原有设置，不能据此推断为关闭。
 
 **LgDog1 的当前配置**（见 `config/lgdog1/reward_cfg.py`）：
 
