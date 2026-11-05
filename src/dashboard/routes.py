@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import socket
 from typing import Any, Callable
+from src.config.mgdp_pretrain import pretrain_resources
 
 from . import history
 from .catalog import (
@@ -161,7 +162,10 @@ def pretrain(ctx: ApiContext, data: dict) -> tuple[int, dict]:
   script = ctx.root / "scripts" / "pretrain_mgdp.py"
   if not script.is_file():
     raise ValueError("找不到 scripts/pretrain_mgdp.py")
-  envs = integer(data.get("envs", 256), "环境数", 1, 4096)
+  defaults = pretrain_resources(task["id"])
+  envs = integer(data.get("envs", defaults.num_envs), "环境数", 1, 4096)
+  rows = integer(data.get("terrain_rows", defaults.terrain_rows), "地形行数", 1, 100)
+  batch = integer(data.get("batch_size", defaults.batch_size), "训练批大小", 1, 4096)
   steps = integer(data.get("steps", 4000), "采集步数", 10, 200000)
   iterations = integer(data.get("iterations", 3000), "训练迭代", 1, 200000)
   output = ctx.root / task["pretrain_checkpoint"]
@@ -171,8 +175,14 @@ def pretrain(ctx: ApiContext, data: dict) -> tuple[int, dict]:
     "--num-envs", str(envs),
     "--steps", str(steps),
     "--iterations", str(iterations),
-    "--out", str(output),
+    "--terrain-rows", str(rows),
+    "--batch-size", str(batch),
   ]
+  cols = data.get("terrain_cols", defaults.terrain_cols)
+  if cols is not None:
+    cols = integer(cols, "地形列数", defaults.terrain_cols or 1, 100)
+    argv.extend(["--terrain-cols", str(cols)])
+  argv.extend(["--out", str(output)])
   return 200, {"job": ctx.jobs.launch(argv, "pretrain", alias), "output": str(output)}
 
 

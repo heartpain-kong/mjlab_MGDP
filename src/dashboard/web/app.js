@@ -164,6 +164,8 @@ function renderTaskPrerequisite(t){
     if(active) hint.textContent=`${active.task} · ${active.id}，日志在运行记录里`;
     else if(latest && ["failed","stopped"].includes(latest.status))
       hint.textContent=`上次预训练${latest.status==="failed"?"失败":"已停止"}，可重新启动；${cap.pretrain_ready?"现有感知模型仍可用":"查看运行日志"}`;
+    else if(latest && ["completed","finished"].includes(latest.status) && !cap.pretrain_ready)
+      hint.textContent="上次预训练进程已退出，但没有生成感知权重；请查看运行日志后重试。";
     else hint.textContent=cap.pretrain_ready?"可重新预训练，完成后替换当前感知模型。":"预训练完成后即可启动策略训练。";
   }
   if(cap.pretrain_ready){

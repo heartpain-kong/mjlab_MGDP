@@ -73,6 +73,56 @@ class MGDPPipelineTests(unittest.TestCase):
     self.assertFalse(torch.equal(before, model.memory.weight_hh_l0))
     self.assertGreater(metrics["temporal"], 0)
 
+  def test_collector_samples_across_terrain_columns_instead_of_an_env_prefix(self):
+    from scripts.pretrain_mgdp import collect
+    env = NS(num_envs=5, device="cpu", episode_length_buf=torch.zeros(5,dtype=torch.long),
+      scene={"depth_rays":NS(data=NS(distances=torch.arange(5.)[:,None].expand(5,256)))},
+      reset=lambda:None)
+    env.step=lambda actions:env.episode_length_buf.add_(1)
+    args=NS(sample_envs=3,num_envs=5,steps=3,action_hold=25,sequence_length=2)
+    with patch("scripts.pretrain_mgdp.height_scan",return_value=torch.arange(5.)[:,None].expand(5,187)):
+      stacks,heights=collect(args,env)
+    torch.testing.assert_close(heights[:,0,0],torch.tensor([0.,.4,.8]))
+    torch.testing.assert_close(stacks[:,0,0,0,0],torch.tensor([.02,.4,.8]))
+
+  def test_validation_batches_preserve_whole_sequences_and_weight_tail_samples(self):
+    from scripts.pretrain_mgdp import evaluate
+    class Model(torch.nn.Module):
+      def __init__(self):
+        super().__init__();self.weight=torch.nn.Parameter(torch.zeros(1));self.seen=[]
+      def losses(self,s,h):
+        self.seen.append(tuple(s.shape))
+        if h.shape != (len(s),4,1,17,11):raise AssertionError(h.shape)
+        return self.weight.sum(),{"total":float(s[:,0,0,0,0].mean())}
+    model=Model().train()
+    stacks=torch.arange(5.)[:,None,None,None,None].expand(5,4,2,16,16)
+    metrics=evaluate(model,stacks,torch.zeros(5,4,187),NS(height_hw=(17,11)),batch_size=2)
+    self.assertEqual([shape[:2] for shape in model.seen],[(2,4),(2,4),(1,4)])
+    self.assertAlmostEqual(metrics["total"],2.)
+    self.assertTrue(model.training)
+
+  def test_simulation_is_closed_and_collected_before_network_training(self):
+    from scripts.pretrain_mgdp import collect_and_release
+    import gc, weakref
+    closed=[]
+    class Env:
+      def __init__(self):
+        generator=NS(num_rows=4,num_cols=10,sub_terrains={"flat":NS(layout_version=7)})
+        self.cfg=NS(events={},scene=NS(terrain=NS(terrain_generator=generator)))
+        self.cycle=self
+      def close(self):closed.append(True)
+    references=[]
+    def build(args):
+      env=Env();references.append(weakref.ref(env));return env
+    with patch("scripts.pretrain_mgdp.build_env",side_effect=build), \
+         patch("scripts.pretrain_mgdp.collect",return_value=(torch.zeros(2,4,2,16,16),torch.zeros(2,4,187))):
+      stacks,heights,metadata=collect_and_release(NS(device="cpu",steps=16))
+    self.assertEqual(closed,[True])
+    gc.collect()
+    self.assertIsNone(references[0]())
+    self.assertEqual(metadata["terrain_grid"],(4,10))
+    self.assertEqual(stacks.device.type,"cpu")
+
   def test_cpu_depth_features_and_term_major_history_match_training(self):
     model = mujoco.MjModel.from_xml_string('''<mujoco><worldbody>
       <geom type="box" size="0.1 10 10" pos="2.1 0 0"/>

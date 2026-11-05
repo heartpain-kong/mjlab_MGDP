@@ -1,6 +1,7 @@
 """Task catalog: the single source of truth for launcher metadata."""
 
 from src.him_contract import HIM_INPUT_DIM
+from src.config.mgdp_pretrain import RACE_PRETRAIN
 
 from .tasks import TaskSpec, capabilities
 
@@ -30,7 +31,10 @@ _TASK_LIST = (
     label="MGDP · 定向越障训练", algorithm="ppo", scene="race_depth",
     experiment="lgdog1_velocity_race_mgdp_v3", obs=252, critic=261, profile="mgdp",
     docs="doc/MGDP_PASSAGE.md", requires_pretrain=True, directed_passage=True,
-    pretrain_command="python scripts/pretrain_mgdp.py --task LgDog1-Race-MGDP --num-envs 256 --steps 4000 --iterations 3000",
+    pretrain_command=("python -m scripts.pretrain_mgdp --task LgDog1-Race-MGDP "
+      f"--num-envs {RACE_PRETRAIN.num_envs} --terrain-rows {RACE_PRETRAIN.terrain_rows} "
+      f"--terrain-cols {RACE_PRETRAIN.terrain_cols} --batch-size {RACE_PRETRAIN.batch_size} "
+      "--steps 4000 --iterations 3000"),
     pretrain_checkpoint="logs/mgdp/perception/mgdp_race_v3.pt",
     description="2027 场地课程：密集越障、绕桩接砖木坑、随机起伏及原生粗糙高度场；单木桥净距400mm，最终出口计通过。训练启用HIMLoco全强度域随机化，含外力和推搡。",
   ),

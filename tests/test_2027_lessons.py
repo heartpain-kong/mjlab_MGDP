@@ -21,12 +21,16 @@ class Lessons2027Tests(unittest.TestCase):
     with patch.object(sys,"argv",["pretrain_mgdp.py","--task","LgDog1-Race-MGDP"]):
       args=pretrain_mgdp.parse_args()
     self.assertTrue(args.out.endswith("mgdp_race_v3.pt"))
+    self.assertEqual((args.num_envs,args.terrain_rows,args.terrain_cols,args.batch_size),(64,4,10,64))
     args.num_envs=2;args.terrain_rows=2
     with patch.object(pretrain_mgdp,"ManagerBasedRlEnv") as create:
       pretrain_mgdp.build_env(args)
     cfg=create.call_args.kwargs["cfg"]
     self.assertEqual(set(cfg.scene.terrain.terrain_generator.sub_terrains),set(KINDS))
     self.assertEqual(cfg.scene.terrain.terrain_generator.difficulty_range,(0.,1.))
+    self.assertEqual(cfg.scene.terrain.terrain_generator.num_cols,10)
+    self.assertTrue(cfg.scene.terrain.terrain_generator.curriculum)
+    self.assertIsNone(cfg.scene.terrain.max_init_terrain_level)
     self.assertFalse(cfg.curriculum)
     self.assertEqual(cfg.events["reset_base"].params["pose_range"]["x"],(0.,.2))
 

@@ -72,6 +72,8 @@ class RouteTableTests(unittest.TestCase):
     argv,mode,alias=self.ctx.jobs.launch.call_args.args
     self.assertEqual((mode,alias),("pretrain","race_mgdp"))
     self.assertIn("LgDog1-Race-MGDP",argv)
+    for option,value in (("--num-envs","64"),("--terrain-rows","4"),("--terrain-cols","10"),("--batch-size","64")):
+      self.assertEqual(argv[argv.index(option)+1],value)
     self.assertTrue(argv[-1].endswith("mgdp_race_v3.pt"))
     routes.dispatch_post(self.ctx,"/api/terrain/view",{"task":"race_mgdp"})
     argv,mode,alias=self.ctx.jobs.launch.call_args.args
@@ -219,6 +221,8 @@ assert.equal(nodes.pretrain.disabled,true);
   await ctx.poll();
   assert.match(ctx.message,/预训练完成/);
   assert.equal(nodes.pretrain.disabled,false);
+  vm.runInContext(`state.jobs[0].status='finished';state.tasks[0].capabilities.pretrain_ready=false;updateTask();`,ctx);
+  assert.match(nodes['pretrain-state'].textContent,/没有生成感知权重/);
   // A task switch must not expose pretraining on tasks without an encoder.
   nodes.task.value='standard';vm.runInContext('updateTask();',ctx);
   assert.equal(nodes['task-prereq-actions'].classList.contains('hidden'),true);

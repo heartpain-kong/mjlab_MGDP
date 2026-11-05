@@ -59,7 +59,7 @@ MuJoCo 外力会保留，因此实现会在脉冲后显式清零，避免持续�
 在项目根目录、已激活训练环境后，例如：
 
 ```powershell
-python -m scripts.pretrain_mgdp --task LgDog1-Race-MGDP --num-envs 256 --steps 4000 --iterations 3000
+python -m scripts.pretrain_mgdp --task LgDog1-Race-MGDP --num-envs 64 --terrain-rows 4 --terrain-cols 10 --batch-size 64 --steps 4000 --iterations 3000
 ```
 
 随后照常在工作台选择 `race_mgdp` 启动策略训练。全强度扰动会提高训练难度，
