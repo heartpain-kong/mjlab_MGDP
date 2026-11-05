@@ -158,6 +158,13 @@ class PassageCurriculum(ManagerTermBase):
     contract = (asdict(generator), env.step_dt, env.cfg.episode_length_s if hasattr(env.cfg,"episode_length_s") else None,
                 asdict(self.command.cfg) if hasattr(self.command.cfg,"__dataclass_fields__") else
                 (self.command.cfg.goal_x,self.command.cfg.lane_half_width))
+    events = getattr(env.cfg, "events", {})
+    if "himloco_pd_motor" in events:
+      # Old mastery counts must not carry over to a different physics profile.
+      randomization = tuple((name, events[name].params) for name in (
+        "base_mass_inertia", "base_com", "foot_friction", "encoder_bias",
+        "reset_robot_joints", "himloco_pd_motor", "himloco_push"))
+      contract += (randomization, asdict(env.cfg.actions["joint_pos"]))
     self.fingerprint = hashlib.sha256(repr(contract).encode()).hexdigest()
     proportions = torch.tensor([getattr(c, "proportion", 1.)
       for c in generator.sub_terrains.values()], device=self.device)

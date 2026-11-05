@@ -123,6 +123,21 @@ class MGDPPassageTests(unittest.TestCase):
     data.force_history[1,1,0,0] = 100
     self.assertTrue(term(env,"legs")[1])
 
+  def test_curriculum_fingerprint_includes_himloco_physics_and_delay(self):
+    env, _, _ = self.fake_env()
+    original = passage.PassageCurriculum(NS(params={}), env).fingerprint
+    cfg = load_env_cfg("LgDog1-Race-MGDP")
+    env.cfg.events = cfg.events
+    env.cfg.actions = cfg.actions
+    current = passage.PassageCurriculum(NS(params={}), env).fingerprint
+    self.assertNotEqual(original, current)
+    self.assertEqual(current, passage.PassageCurriculum(NS(params={}), env).fingerprint)
+    env.cfg.events["himloco_pd_motor"].params["kp_range"] = (.8, 1.2)
+    modified = passage.PassageCurriculum(NS(params={}), env).fingerprint
+    self.assertNotEqual(current, modified)
+    env.cfg.actions["joint_pos"].max_delay_steps = 1
+    self.assertNotEqual(modified, passage.PassageCurriculum(NS(params={}), env).fingerprint)
+
 
 if __name__ == "__main__":
   unittest.main()
