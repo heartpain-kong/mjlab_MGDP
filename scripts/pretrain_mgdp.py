@@ -27,6 +27,7 @@ Examples
 from __future__ import annotations
 
 import argparse
+import math
 import random
 import time
 from pathlib import Path
@@ -85,6 +86,8 @@ def build_env(args) -> ManagerBasedRlEnv:
     race = getattr(args,"task","LgDog1-Rough-MGDP")=="LgDog1-Race-MGDP"
     if race:
         from src.tasks.velocity.config.lgdog1.passage_terrain_cfg import lgdog1_passage_terrain_cfg
+        from src.tasks.velocity.config.lgdog1.domain_rand_cfg import add_race_mass_inertia_randomization
+        add_race_mass_inertia_randomization(cfg)
         cfg.scene.terrain.terrain_generator = lgdog1_passage_terrain_cfg()
         # Face the obstacle from its entry, without requiring a trained walking
         # controller to reach it during random-action perception collection.
@@ -216,6 +219,7 @@ def main() -> None:
             )
 
     out = Path(args.out)
+    mass_event = env.cfg.events.get("base_mass_inertia")
     model.save(out, extra={
         "task": args.task,
         "seed": args.seed,
@@ -228,6 +232,8 @@ def main() -> None:
         "gru_trained": True,
         "val": evaluate(model, val_stacks, val_heights, cfg),
         "source": "mjlab-random-rollout",
+        "mass_inertia_scale_range": tuple(math.exp(2*a) for a in mass_event.params["alpha_range"])
+                                     if mass_event else None,
     })
     print(f"[save] {out}")
 

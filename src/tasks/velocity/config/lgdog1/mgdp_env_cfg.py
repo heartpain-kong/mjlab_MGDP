@@ -39,6 +39,7 @@ from src.tasks.velocity.mdp import passage
 from . import blind_mdp
 from .reward_cfg import make_lgdog_rewards, make_mgdp_passage_rewards
 from .passage_terrain_cfg import lgdog1_passage_terrain_cfg, lesson_route, GOAL_X, LANE_HALF_WIDTH
+from .domain_rand_cfg import add_race_mass_inertia_randomization
 
 DEPTH_SITE = "mgdp_depth"
 DEPTH_HW = (16, 16)
@@ -183,6 +184,8 @@ def lgdog1_race_mgdp_env_cfg(
     cfg = lgdog1_mgdp_env_cfg(
         play=play, checkpoint=checkpoint, with_perception=with_perception
     )
+    if not play:
+      add_race_mass_inertia_randomization(cfg)
     assert cfg.scene.terrain is not None
     cfg.scene.terrain.terrain_type = "generator"
     cfg.scene.terrain.terrain_generator = lgdog1_passage_terrain_cfg()
