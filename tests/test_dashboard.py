@@ -61,6 +61,20 @@ class CommandTests(unittest.TestCase):
         "mode": "train", "velocity_min_abs": "0.9", "velocity_max_abs": "0.8",
       })
 
+  def test_race_training_uses_compact_map_and_allows_explicit_larger_runs(self):
+    checkpoint=self.root/"logs/mgdp/perception/mgdp_race_v3.pt"
+    checkpoint.parent.mkdir(parents=True);checkpoint.write_text("fixture")
+    base={"mode":"train","task":"race_mgdp"}
+    command=build_command(self.root,sys.executable,base)
+    for flag in ("--env.scene.num-envs=256","--terrain-num-rows=4","--terrain-num-cols=10"):
+      self.assertIn(flag,command)
+    larger=build_command(self.root,sys.executable,{**base,"envs":2048,"terrain_num_rows":12,"terrain_num_cols":20})
+    for flag in ("--env.scene.num-envs=2048","--terrain-num-rows=12","--terrain-num-cols=20"):
+      self.assertIn(flag,larger)
+    for columns in (0,9):
+      with self.assertRaisesRegex(ValueError,"地形训练列数"):
+        build_command(self.root,sys.executable,{**base,"terrain_num_cols":columns})
+
   def test_automatic_terrain_flags_are_validated_and_flat_is_rejected(self):
     for mode in ('uniform','lp_acrl'):
       argv=build_command(self.root,sys.executable,{'mode':'train','terrain_curriculum':mode,

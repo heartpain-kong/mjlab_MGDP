@@ -236,6 +236,41 @@ assert.equal(nodes.pretrain.disabled,true);
     self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
 
   @unittest.skipUnless(shutil.which("node"), "node is not installed")
+  def test_race_presets_reduce_map_duplicates_and_preserve_manual_edits_on_refresh(self):
+    import json
+    script = r"""
+const fs=require('fs'),vm=require('vm'),assert=require('node:assert/strict');
+const nodes={};
+for(const id of ['task','train-envs','iterations','terrain-num-rows','terrain-num-cols'])nodes[id]={value:''};
+nodes.task.value='race_mgdp';
+const buttons={smoke:{},full:{}};
+const ctx={window:{LgDogFormat:{}},document:{getElementById:id=>nodes[id],
+  querySelector:selector=>buttons[selector.includes('smoke')?'smoke':'full']}};
+vm.createContext(ctx);
+vm.runInContext(fs.readFileSync(process.argv[1],'utf8').replace(/\nstart\(\);\s*$/,''),ctx);
+ctx.presets=JSON.parse(process.argv[2]);
+vm.runInContext(`state={tasks:[{alias:'race_mgdp',capabilities:{train_presets:presets}},
+  {alias:'standard',capabilities:{}}]};updateTrainingPresets(task());`,ctx);
+assert.equal(nodes['train-envs'].value,256);
+assert.equal(nodes['terrain-num-rows'].value,4);
+assert.equal(nodes['terrain-num-cols'].value,10);
+assert.match(buttons.full.textContent,/4×10/);
+nodes['train-envs'].value=512;
+vm.runInContext('updateTrainingPresets(task());',ctx);
+assert.equal(nodes['train-envs'].value,512);
+vm.runInContext(`applyTrainingPreset('smoke');`,ctx);
+assert.equal(nodes['train-envs'].value,64);
+assert.equal(nodes['terrain-num-rows'].value,2);
+assert.equal(nodes['terrain-num-cols'].value,10);
+nodes.task.value='standard';vm.runInContext('updateTrainingPresets(task());',ctx);
+assert.equal(nodes['train-envs'].value,1024);
+assert.equal(nodes['terrain-num-cols'].value,'');
+"""
+    result=subprocess.run(["node","-e",script,str(WEB/"app.js"),json.dumps(TASKS["race_mgdp"].train_presets)],
+      capture_output=True,text=True,encoding="utf-8",timeout=15)
+    self.assertEqual(result.returncode,0,result.stderr or result.stdout)
+
+  @unittest.skipUnless(shutil.which("node"), "node is not installed")
   def test_format_module_is_pure_and_usable_from_node(self):
     path = WEB / "js" / "format.js"
     script = (

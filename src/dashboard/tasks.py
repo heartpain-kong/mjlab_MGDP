@@ -36,6 +36,7 @@ class TaskSpec(Mapping):
     directed_passage: bool = False
     shared: bool = False
     resume_sources: tuple[str, ...] = field(default_factory=tuple)
+    train_presets: dict[str, dict[str, int]] = field(default_factory=dict)
 
     # Mapping protocol -----------------------------------------------------
     def as_dict(self) -> dict:
@@ -73,4 +74,5 @@ def capabilities(spec: TaskSpec) -> dict:
         "pretrain_checkpoint": spec.pretrain_checkpoint,
         "supports_curriculum": spec.supports_curriculum,
         "docs": spec.docs,
+        "train_presets": spec.train_presets,
     }

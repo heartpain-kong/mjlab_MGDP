@@ -6,6 +6,7 @@ const {modeNames, statuses, rewardLabels, metricValue, healthText} = window.LgDo
 const pendingStops = new Set();
 let pendingDelete = null, deletingJobs = false;
 let pretrainStarting = false;
+let presetTaskAlias = null;
 
 // 面板每次重启都会换一个 token（server.py 用 secrets 生成）。页面只在加载时取一次，
 // 所以重启过服务后所有 POST 都会被 403 拒绝、启动按钮变灰。这里静默重取 token 再重试一次。
@@ -90,6 +91,7 @@ function collect() {
   return {mode, task:$("task").value, envs:$(mode==="play"?"play-envs":"train-envs").value,
     iterations:$("iterations").value, seed:$("seed").value, run_name:$("run-name").value,
     terrain_num_rows:$("terrain-num-rows")?.disabled?"":$("terrain-num-rows")?.value || "",
+    terrain_num_cols:$("terrain-num-cols")?.disabled?"":$("terrain-num-cols")?.value || "",
     terrain_difficulty_max:$("terrain-difficulty-max")?.disabled?"":$("terrain-difficulty-max")?.value || "",
     terrain_curriculum:$("terrain-curriculum")?.value||"manual",
     lp_temperature:$("lp-temperature")?.value||"2",
@@ -125,6 +127,7 @@ function updateTask() {
     updateRunNameHint();
     return;
   }
+  updateTrainingPresets(t);
   $("summary-task").textContent=t.label;
   $("summary-obs").textContent=`${t.obs} 维`;
   $("task-description").textContent=t.description;
@@ -135,6 +138,29 @@ function updateTask() {
   $("experiment-path").textContent=`logs/rsl_rl/${t.experiment}`;
   $("model-hint").textContent=t.shared?"Flat/Rough 共用目录，请手动选择与任务匹配的模型。":"续训只能使用当前算法和场景的 checkpoint。";
   updateRunNameHint();
+}
+function applyTrainingPreset(kind){
+  const preset=task()?.capabilities?.train_presets?.[kind] || {
+    envs:kind==="smoke"?64:1024,iterations:kind==="smoke"?2:16000,terrain_num_rows:10,terrain_num_cols:""};
+  $("train-envs").value=preset.envs;
+  $("iterations").value=preset.iterations;
+  $("terrain-num-rows").value=preset.terrain_num_rows;
+  $("terrain-num-cols").value=preset.terrain_num_cols;
+}
+function updateTrainingPresets(t){
+  const presets=t.capabilities?.train_presets||{};
+  for(const kind of ["smoke","full"]){
+    const button=document.querySelector(`[data-preset="${kind}"]`);
+    if(!button)continue;
+    const preset=presets[kind];
+    button.textContent=preset?`${kind==="smoke"?"快速检查":"正式训练"} · ${preset.envs} 环境 / ${preset.iterations} 轮（${preset.terrain_num_rows}×${preset.terrain_num_cols}）`:
+      kind==="smoke"?"快速检查 · 64 环境 / 2 轮":"正式训练 · 1024 / 16000";
+  }
+  if(presetTaskAlias!==t.alias){
+    const previous=state?.tasks?.find(item=>item.alias===presetTaskAlias);
+    if(presets.full || previous?.capabilities?.train_presets?.full)applyTrainingPreset("full");
+    presetTaskAlias=t.alias;
+  }
 }
 function renderTaskCapabilities(t){
   const box=$("task-capabilities"); if(!box)return;
@@ -223,6 +249,7 @@ function updateCurriculumOptions(){
   $("velocity-min-abs").disabled=directed;
   $("velocity-max-abs").disabled=directed;
   $("terrain-num-rows").disabled=unsupported;
+  $("terrain-num-cols").disabled=unsupported;
   $("terrain-difficulty-max").disabled=unsupported;
   const automatic=select.value!=="manual";
   $("lp-options").classList.toggle("hidden",!automatic);
@@ -555,7 +582,8 @@ function renderJobs() {
     const row=document.createElement("button"); row.type="button";row.className="job"+(job.id===selectedJob?" selected":"");
     const top=document.createElement("div");top.className="job-top";
     const title=document.createElement("span");title.textContent=modeNames[job.mode]||job.mode;
-    const status=document.createElement("span");status.className=`status ${job.status}`;status.textContent=statuses[job.status]||job.status;
+    const status=document.createElement("span");status.className=`status ${job.status}`;status.textContent=(statuses[job.status]||job.status)+
+      (job.status==="failed" && Number.isInteger(job.returncode)?` · 退出码 ${job.returncode}`:"");
     top.append(title,status);
     const detail=document.createElement("small");detail.textContent=`${job.task} · PID ${job.pid}\n${new Date(job.created).toLocaleString()}`;
     row.append(top,detail);row.addEventListener("click",()=>{selectedJob=job.id;renderJobs();loadLog();});list.append(row);
@@ -723,7 +751,7 @@ async function start() {
     $("resume").addEventListener("change",()=>{showMode();preview();});
     $("terrain-curriculum").addEventListener("change",()=>{updateCurriculumOptions();queuePreview();});
     $("run-form").addEventListener("input",event=>{if(event.target.id==="seed")updateRunNameHint();queuePreview();});$("run-form").addEventListener("change",queuePreview);
-    document.querySelectorAll("[data-preset]").forEach(button=>button.addEventListener("click",()=>{const smoke=button.dataset.preset==="smoke";$("train-envs").value=smoke?64:1024;$("iterations").value=smoke?2:16000;preview();}));
+    document.querySelectorAll("[data-preset]").forEach(button=>button.addEventListener("click",()=>{applyTrainingPreset(button.dataset.preset);preview();}));
     $("run-form").addEventListener("submit",async event=>{event.preventDefault();$("launch").disabled=true;try{const data=await api("/api/run",collect());selectedJob=data.job.id;toast("已启动，查看下方真实日志");await refresh();}catch(error){toast(error.message);}finally{preview();}});
     $("save-rewards").addEventListener("click",async()=>{try{$("save-rewards").disabled=true;const data=await api("/api/rewards/save",{task:$('task').value,changes:collectRewards()});rewardData=data;renderRewards();toast("奖励修改已保存，重启训练后生效；原文件已备份");}catch(error){toast(error.message);}finally{$("save-rewards").disabled=false;}});
     $("reload-rewards").addEventListener("click",loadRewards);

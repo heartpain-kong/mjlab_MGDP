@@ -1,12 +1,17 @@
 """Script to train RL agent with RSL-RL."""
 
 import logging
+import faulthandler
 import os
 import sys
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Literal, cast
+
+if __name__ == "__main__":
+  faulthandler.enable(all_threads=True)
+  print("[init] importing training libraries...", flush=True)
 
 import tyro
 
@@ -25,6 +30,7 @@ from src.tasks.velocity.mdp.curriculums import (
   velocity_ranges_from_bounds,
 )
 from src.dashboard.run_naming import resolve_run_name
+from src.scene_diagnostics import report_scene_initialization
 from src.tasks.velocity.config.lgdog1.terrain_curriculum import configure_terrain_curriculum
 
 
@@ -38,6 +44,7 @@ class TrainConfig:
   video_interval: int = 2000
   enable_nan_guard: bool = False
   terrain_num_rows: int | None = None
+  terrain_num_cols: int | None = None
   terrain_difficulty_max: float | None = None
   terrain_curriculum: Literal["manual", "uniform", "lp_acrl"] = "manual"
   lp_temperature: float = 2.0
@@ -81,7 +88,8 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
   cfg.env.seed = seed
 
   terrain = cfg.env.scene.terrain
-  if cfg.terrain_num_rows is not None or cfg.terrain_difficulty_max is not None:
+  if any(value is not None for value in (
+    cfg.terrain_num_rows, cfg.terrain_num_cols, cfg.terrain_difficulty_max)):
     if terrain is None or terrain.terrain_generator is None:
       raise ValueError("地形扩展参数只适用于 generator 地形任务")
     generator = terrain.terrain_generator
@@ -90,6 +98,12 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
         raise ValueError("--terrain-num-rows 必须大于等于 2")
       generator.num_rows = int(cfg.terrain_num_rows)
       print(f"[INFO] Terrain curriculum rows: {generator.num_rows}")
+    if cfg.terrain_num_cols is not None:
+      minimum = len(generator.sub_terrains) if "passage" in cfg.env.curriculum else 1
+      if cfg.terrain_num_cols < minimum:
+        raise ValueError(f"--terrain-num-cols 必须大于等于 {minimum}，保留所有障碍类型")
+      generator.num_cols = int(cfg.terrain_num_cols)
+      print(f"[INFO] Terrain curriculum columns: {generator.num_cols}")
     if cfg.terrain_difficulty_max is not None:
       if not 0.5 <= cfg.terrain_difficulty_max <= 1.5:
         raise ValueError("--terrain-difficulty-max 必须在 0.5 到 1.5 之间")
@@ -173,9 +187,15 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
   if rank == 0:
     print(f"[INFO] Logging experiment in directory: {log_dir}")
 
-  env = ManagerBasedRlEnv(
-    cfg=cfg.env, device=device, render_mode="rgb_array" if cfg.video else None
-  )
+  grid = cfg.env.scene.terrain.terrain_generator if cfg.env.scene.terrain else None
+  if grid is not None:
+    print(f"[init] building terrain {grid.num_rows}x{grid.num_cols}, "
+          f"envs={cfg.env.scene.num_envs}...", flush=True)
+  with report_scene_initialization(cfg.env):
+    env = ManagerBasedRlEnv(
+      cfg=cfg.env, device=device, render_mode="rgb_array" if cfg.video else None
+    )
+  print("[init] physics environment ready; creating PPO runner...", flush=True)
 
   log_root_path = log_dir.parent  # Go up from specific run dir to experiment dir.
 

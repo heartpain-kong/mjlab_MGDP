@@ -2,6 +2,7 @@
 
 from src.him_contract import HIM_INPUT_DIM
 from src.config.mgdp_pretrain import RACE_PRETRAIN
+from src.config.race_training import RACE_TRAIN_PRESETS
 
 from .tasks import TaskSpec, capabilities
 
@@ -31,6 +32,7 @@ _TASK_LIST = (
     label="MGDP · 定向越障训练", algorithm="ppo", scene="race_depth",
     experiment="lgdog1_velocity_race_mgdp_v3", obs=252, critic=261, profile="mgdp",
     docs="doc/MGDP_PASSAGE.md", requires_pretrain=True, directed_passage=True,
+    train_presets=RACE_TRAIN_PRESETS,
     pretrain_command=("python -m scripts.pretrain_mgdp --task LgDog1-Race-MGDP "
       f"--num-envs {RACE_PRETRAIN.num_envs} --terrain-rows {RACE_PRETRAIN.terrain_rows} "
       f"--terrain-cols {RACE_PRETRAIN.terrain_cols} --batch-size {RACE_PRETRAIN.batch_size} "

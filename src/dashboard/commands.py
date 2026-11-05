@@ -107,12 +107,20 @@ def build_command(root, python, options):
       raise ValueError(task.pretrain_hint())
   scripts = root / "scripts"
   if mode == "train":
-    envs = integer(options.get("envs", 1024), "环境数", 1, 8192)
+    defaults = task.get("train_presets", {}).get("full", {})
+    requested_envs = options.get("envs")
+    envs = integer(defaults.get("envs",1024) if requested_envs is None else requested_envs,
+                   "环境数", 1, 8192)
     iterations = integer(options.get("iterations", 16000), "训练轮数", 1, 1000000)
     seed = integer(options.get("seed", 42), "seed", 0, 2147483647)
-    terrain_rows = str(options.get("terrain_num_rows") or "").strip()
+    terrain_rows = str(options.get("terrain_num_rows") or defaults.get("terrain_num_rows", "")).strip()
     if terrain_rows:
       terrain_rows = integer(terrain_rows, "地形训练行数", 2, 100)
+    raw_cols = options.get("terrain_num_cols")
+    terrain_cols = str(defaults.get("terrain_num_cols", "")
+                       if raw_cols is None or str(raw_cols).strip()=="" else raw_cols).strip()
+    if terrain_cols:
+      terrain_cols = integer(terrain_cols, "地形训练列数", defaults.get("terrain_num_cols",1), 100)
     terrain_difficulty = str(options.get("terrain_difficulty_max") or "").strip()
     if terrain_difficulty:
       terrain_difficulty = number(terrain_difficulty, "最大地形难度倍率", 0.5, 1.5)
@@ -154,6 +162,8 @@ def build_command(root, python, options):
     argv += curriculum_flags
     if terrain_rows != "":
       argv.append(f"--terrain-num-rows={terrain_rows}")
+    if terrain_cols != "":
+      argv.append(f"--terrain-num-cols={terrain_cols}")
     if terrain_difficulty != "":
       argv.append(f"--terrain-difficulty-max={terrain_difficulty}")
     if velocity_min != "":

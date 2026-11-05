@@ -52,7 +52,7 @@ def main():
     child.add_argument("task", nargs="?", default=DEFAULT_TASK, help="mgdp/standard/him_flat/him/terrain/gentle/blind/flat/rough")
     child.add_argument("--dry-run", action="store_true", help="仅显示命令，不执行")
     if mode in {"train", "play"}:
-      child.add_argument("--envs", type=int, default=1024 if mode == "train" else 4)
+      child.add_argument("--envs", type=int, default=None if mode == "train" else 4)
       child.add_argument("--checkpoint", default="")
     if mode == "train":
       child.add_argument("--terrain-curriculum", choices=("manual", "uniform", "lp_acrl"), default="manual")
@@ -69,6 +69,8 @@ def main():
       child.add_argument("--run-name", default="")
       child.add_argument("--terrain-num-rows", type=int, default=None,
                          help="地形课程行数；标准 HIM 默认 10")
+      child.add_argument("--terrain-num-cols", type=int, default=None,
+                         help="地形列数；比赛至少10列，保留全部障碍类型")
       child.add_argument("--terrain-difficulty-max", type=float, default=None,
                          help="最大地形难度倍率，默认 1.0")
       child.add_argument("--velocity-min-abs", type=float, default=None,
