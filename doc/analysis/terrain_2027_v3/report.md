@@ -2,8 +2,9 @@
 
 日期：2026-11-04。目标任务 `race_mgdp` / `LgDog1-Race-MGDP`。
 
-2026-11-05：当前布局修订号6，梅花桩84桩、沟壑铺宽7.2m、桥间净距400mm，
-见 [密集技能图更新](dense_skills_update.md)。保留 [绕桩接砖木坑连续课](joined_update.md)，
+2026-11-05：当前布局修订号7，去掉单独砖木坑/绕桩及旧粗糙条带，新增两类高度场，
+见 [高度场更新](heightfield_update.md)。保留梅花桩84桩、沟壑7.2m、桥间净距400mm的 [密集技能图](dense_skills_update.md)，
+以及 [绕桩接砖木坑连续课](joined_update.md)。
 高墙、匍匐框架和轮胎阵保留 [密集版排布](dense_update.md)。
 本文下方是v3初版的来源和验证记录；`lessons.png` 已更新为当前布局预览。
 

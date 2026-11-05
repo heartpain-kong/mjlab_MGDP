@@ -7,16 +7,18 @@ skills and joined courses are training approximations, not competition scoring.
 from dataclasses import dataclass
 import numpy as np
 import mujoco
-from mjlab.terrains import TerrainGeneratorCfg
+from mjlab.terrains import TerrainGeneratorCfg, HfPerlinNoiseTerrainCfg, HfRandomUniformTerrainCfg
+from mjlab.terrains.heightfield_terrains import color_by_height
 from mjlab.terrains.terrain_generator import SubTerrainCfg, TerrainGeometry, TerrainOutput
 from .race_depth_terrain_cfg import BoxClearanceFrameTerrainCfg, TireArrayTerrainCfg
 
-KINDS = ("start_flat", "stepping_stones", "balance_beam", "gap_steps", "brick_pit",
-         "slalom_posts", "high_wall", "clearance_frame", "tire_array", "rough", "slalom_brick")
+KINDS = ("start_flat", "stepping_stones", "balance_beam", "gap_steps", "high_wall",
+         "clearance_frame", "tire_array", "random_hills", "mjlab_rough", "slalom_brick")
+_COMPONENT_KINDS = ("brick_pit", "slalom_posts")  # Internal parts of the joined course only.
 START_X = 1.0
 GOAL_X = 5.3
 LANE_HALF_WIDTH = 0.28
-LAYOUT_VERSION = 6  # v3 task, dense stones/gaps and 400mm beam edge gaps.
+LAYOUT_VERSION = 7  # Remove separate pit/slalom/old rough; add two heightfield lessons.
 BEAM_EDGE_GAP = 0.4
 
 
@@ -55,11 +57,45 @@ class PassageTerrainCfg(SubTerrainCfg):
   # terrain dimensions otherwise look the same as the old implementation.
   layout_version: int = LAYOUT_VERSION
 
+  def _heightfield(self, difficulty, spec, rng):
+    """Use native mjlab generators, adding passage entry/exit landing pads."""
+    d = float(np.clip(difficulty, 0., 1.))
+    if self.kind == "random_hills":
+      source = HfPerlinNoiseTerrainCfg(size=self.size, height_range=(.025,.20),
+        octaves=3, persistence=.4, scale=4., horizontal_scale=.1, resolution=.1, border_width=.2)
+    else:
+      source = HfRandomUniformTerrainCfg(size=self.size, noise_range=(.02,.10),
+        noise_step=.02, horizontal_scale=.1, vertical_scale=.005, border_width=.25)
+    output = source.function(d,spec,rng)
+    item = output.geometries[0]
+    field = item.hfield
+    assert field is not None and item.geom is not None
+    heights = np.array(field.userdata).reshape(field.nrow,field.ncol)
+    # MuJoCo heightfield columns run along physical X, rows along Y.
+    x = np.linspace(0.,self.size[0],field.ncol)
+    y = np.linspace(0.,self.size[1],field.nrow)
+    def smooth_ramp(values):
+      u = np.clip(values,0.,1.)
+      return u*u*(3.-2.*u)
+    forward = smooth_ramp(np.minimum((x-1.7)/.5,(5.5-x)/.5))
+    lateral = smooth_ramp(np.minimum((y-.35)/.35,(self.size[1]-.35-y)/.35))
+    heights *= lateral[:,None]*forward[None,:]
+    heights /= max(float(heights.max()),1e-12)
+    field.userdata = heights.ravel().tolist()
+    if self.kind == "mjlab_rough":
+      # Native random-uniform ignores difficulty: grade its physical amplitude.
+      field.size[2] *= .2+.8*d
+    item.geom.name = f"lesson_{self.kind}_{len(spec.body('terrain').geoms)}_field"
+    item.geom.material = color_by_height(spec,heights,field.name+"_passage",heights)
+    return TerrainOutput(origin=np.array([START_X,self.size[1]/2,0.]),geometries=output.geometries)
+
   def function(self, difficulty, spec, rng):
-    if self.kind not in KINDS or self.layout_version != LAYOUT_VERSION:
+    if self.kind not in (*KINDS,*_COMPONENT_KINDS) or self.layout_version != LAYOUT_VERSION:
       raise ValueError("Unknown passage kind/layout version")
     if self.size[0] < 8 or self.size[1] < 6:
       raise ValueError("2027 lessons require a cell of at least 8 x 6 m")
+    if self.kind in ("random_hills","mjlab_rough"):
+      return self._heightfield(difficulty,spec,rng)
     if self.kind == "slalom_brick":
       if self.size[1] < 8:
         raise ValueError("Joined slalom/brick lesson requires at least 8 x 8 m")
@@ -144,11 +180,6 @@ class PassageTerrainCfg(SubTerrainCfg):
           h = rng.uniform(.003,.008+.012*d)
           box(f"pit_fill_{len(geoms)}",ox+x,oy+y,.065,.065,base+h,base,
               color=(.5,.3,.18,1.),yaw=float(rng.uniform(-np.pi,np.pi)))
-    elif self.kind == "rough":
-      for x in np.arange(2.4,5.5,.25):
-        for y in np.arange(cy-.5,cy+.51,.25):
-          h = rng.uniform(.002,.008+.025*d)
-          box(f"rough_{len(geoms)}",float(x),float(y),.12,.12,h)
     elif self.kind == "slalom_posts":
       # Reference: six 10cm-high cylinders in an L, not 30-50cm-high walls.
       for i,(x,y) in enumerate([(2.4+i*.9,cy-.6) for i in range(4)]+

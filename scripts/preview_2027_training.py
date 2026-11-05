@@ -39,14 +39,14 @@ def render(model,data,top=False,kind=None):
     camera.distance=8.5 if top else 9.
     camera.azimuth=90 if top else 135
     camera.elevation=-90 if top else -55
-  if kind in ("stepping_stones","gap_steps","balance_beam"):
+  if kind in ("stepping_stones","gap_steps","balance_beam","random_hills","mjlab_rough"):
     camera.lookat[:]=(4.,4.,0.)
     camera.distance=9.5
     camera.azimuth=90 if top else 135
     camera.elevation=-90 if top else -55
   with mujoco.Renderer(model,height=280,width=420,max_geom=max(10000,model.ngeom+20)) as renderer:
     renderer.update_scene(data,camera=camera)
-    if top:
+    if top or kind in ("random_hills","mjlab_rough"):
       renderer.scene.flags[mujoco.mjtRndFlag.mjRND_SHADOW]=0
     return renderer.render().copy()
 
@@ -58,7 +58,7 @@ def main():
   import matplotlib
   matplotlib.use("Agg")
   import matplotlib.pyplot as plt
-  kinds=[k for k in KINDS if k not in ("start_flat","rough")]
+  kinds=[k for k in KINDS if k != "start_flat"]
   fig,axes=plt.subplots(len(kinds),3,figsize=(12,2.8*len(kinds)),layout="constrained")
   metrics={"layout_version":LAYOUT_VERSION}
   for row,kind in enumerate(kinds):
@@ -71,7 +71,7 @@ def main():
       np.diff(np.array(lesson_route(kind)),axis=0),axis=1).sum())}
   fig.savefig(args.output/"lessons.png",dpi=150);plt.close(fig)
   fig,axes=plt.subplots(1,3,figsize=(15,5),layout="constrained")
-  for ax,kind in zip(axes,("slalom_posts","brick_pit","slalom_brick")):
+  for ax,kind in zip(axes,("slalom_brick","random_hills","mjlab_rough")):
     model,data=build_lesson(kind,1.,route=True)
     ax.imshow(render(model,data,top=True,kind=kind));ax.axis("off")
     ax.set_title(kind+" | orange: ordered route (illustration)")
@@ -121,6 +121,20 @@ def main():
     ax.grid(alpha=.15)
   fig.suptitle("Bridge edges stay 400mm apart at EVERY difficulty (actual geometry)",fontsize=13)
   fig.savefig(args.output/"beam_gap.png",dpi=150,bbox_inches="tight",pad_inches=.12);plt.close(fig)
+  fig,axes=plt.subplots(2,3,figsize=(14,7),layout="constrained")
+  for row,kind in enumerate(("random_hills","mjlab_rough")):
+    model,data=build_lesson(kind,1.)
+    for col,top in enumerate((False,True)):
+      axes[row,col].imshow(render(model,data,top=top,kind=kind));axes[row,col].axis("off")
+      axes[row,col].set_title(kind+(" | top" if top else " | actual height"))
+    xs=np.linspace(0.,8.,321)
+    heights=[1.-mujoco.mj_ray(model,data,np.array([x,4.,1.]),np.array([0.,0.,-1.]),None,1,-1,None) for x in xs]
+    axes[row,2].plot(xs,heights,color="#177a6b");axes[row,2].fill_between(xs,heights,alpha=.15,color="#177a6b")
+    axes[row,2].axvspan(0.,1.6,alpha=.15,color="#aaa");axes[row,2].axvspan(5.6,8.,alpha=.15,color="#aaa")
+    axes[row,2].set(xlim=(0,8),ylim=(0,.22),xlabel="forward X (m)",ylabel="height (m)",title="centre-line collision surface")
+    axes[row,2].grid(alpha=.2)
+  fig.suptitle(f"Layout {LAYOUT_VERSION}: smooth random hills + native mjlab random rough heightfield")
+  fig.savefig(args.output/"heightfields.png",dpi=160,bbox_inches="tight");plt.close(fig)
   (args.output/"metrics.json").write_text(json.dumps(metrics,indent=2),encoding="utf-8")
   print(args.output.resolve())
 

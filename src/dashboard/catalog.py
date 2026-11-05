@@ -32,7 +32,7 @@ _TASK_LIST = (
     docs="doc/MGDP_PASSAGE.md", requires_pretrain=True, directed_passage=True,
     pretrain_command="python scripts/pretrain_mgdp.py --task LgDog1-Race-MGDP --num-envs 256 --steps 4000 --iterations 3000",
     pretrain_checkpoint="logs/mgdp/perception/mgdp_race_v3.pt",
-    description="2027 场地课程：84桩梅花桩、7.2m宽沟壑、桥间净距400mm的单木桥及绕桩接砖木坑连续路线；沿路线到最终出口后计通过。",
+    description="2027 场地课程：密集越障、绕桩接砖木坑连续路线、随机高低起伏及mjlab原生随机粗糙高度场；单木桥净距400mm，走到最终出口计通过。",
   ),
   TaskSpec(
     alias="him_flat", id="LgDog1-Flat-Blind-HIM-Standard",

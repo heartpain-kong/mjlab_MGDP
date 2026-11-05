@@ -1,0 +1,1409 @@
+{
+  "layout_version": 7,
+  "seed": 42,
+  "rows": 10,
+  "cols": 20,
+  "geoms": 34746,
+  "records": [
+    {
+      "row": 0,
+      "col": 0,
+      "kind": "start_flat",
+      "difficulty": 0.07739560485559634,
+      "geoms": 1
+    },
+    {
+      "row": 1,
+      "col": 0,
+      "kind": "start_flat",
+      "difficulty": 0.14388784397520524,
+      "geoms": 1
+    },
+    {
+      "row": 2,
+      "col": 0,
+      "kind": "start_flat",
+      "difficulty": 0.2858597919911382,
+      "geoms": 1
+    },
+    {
+      "row": 3,
+      "col": 0,
+      "kind": "start_flat",
+      "difficulty": 0.36973680290593636,
+      "geoms": 1
+    },
+    {
+      "row": 4,
+      "col": 0,
+      "kind": "start_flat",
+      "difficulty": 0.409417734788765,
+      "geoms": 1
+    },
+    {
+      "row": 5,
+      "col": 0,
+      "kind": "start_flat",
+      "difficulty": 0.5975622351636756,
+      "geoms": 1
+    },
+    {
+      "row": 6,
+      "col": 0,
+      "kind": "start_flat",
+      "difficulty": 0.6761139701990353,
+      "geoms": 1
+    },
+    {
+      "row": 7,
+      "col": 0,
+      "kind": "start_flat",
+      "difficulty": 0.7786064305276954,
+      "geoms": 1
+    },
+    {
+      "row": 8,
+      "col": 0,
+      "kind": "start_flat",
+      "difficulty": 0.8128113632675547,
+      "geoms": 1
+    },
+    {
+      "row": 9,
+      "col": 0,
+      "kind": "start_flat",
+      "difficulty": 0.9450385937895567,
+      "geoms": 1
+    },
+    {
+      "row": 0,
+      "col": 1,
+      "kind": "start_flat",
+      "difficulty": 0.037079802423258125,
+      "geoms": 1
+    },
+    {
+      "row": 1,
+      "col": 1,
+      "kind": "start_flat",
+      "difficulty": 0.1926764988848602,
+      "geoms": 1
+    },
+    {
+      "row": 2,
+      "col": 1,
+      "kind": "start_flat",
+      "difficulty": 0.26438651200806645,
+      "geoms": 1
+    },
+    {
+      "row": 3,
+      "col": 1,
+      "kind": "start_flat",
+      "difficulty": 0.382276161327083,
+      "geoms": 1
+    },
+    {
+      "row": 4,
+      "col": 1,
+      "kind": "start_flat",
+      "difficulty": 0.4443414198827331,
+      "geoms": 1
+    },
+    {
+      "row": 5,
+      "col": 1,
+      "kind": "start_flat",
+      "difficulty": 0.5227238721784777,
+      "geoms": 1
+    },
+    {
+      "row": 6,
+      "col": 1,
+      "kind": "start_flat",
+      "difficulty": 0.6554584787015835,
+      "geoms": 1
+    },
+    {
+      "row": 7,
+      "col": 1,
+      "kind": "start_flat",
+      "difficulty": 0.7063817256104176,
+      "geoms": 1
+    },
+    {
+      "row": 8,
+      "col": 1,
+      "kind": "start_flat",
+      "difficulty": 0.8827631171992583,
+      "geoms": 1
+    },
+    {
+      "row": 9,
+      "col": 1,
+      "kind": "start_flat",
+      "difficulty": 0.9631664399122064,
+      "geoms": 1
+    },
+    {
+      "row": 0,
+      "col": 2,
+      "kind": "stepping_stones",
+      "difficulty": 0.07580877400853739,
+      "geoms": 99
+    },
+    {
+      "row": 1,
+      "col": 2,
+      "kind": "stepping_stones",
+      "difficulty": 0.13545259681298685,
+      "geoms": 99
+    },
+    {
+      "row": 2,
+      "col": 2,
+      "kind": "stepping_stones",
+      "difficulty": 0.2970698024394903,
+      "geoms": 99
+    },
+    {
+      "row": 3,
+      "col": 2,
+      "kind": "stepping_stones",
+      "difficulty": 0.3893121121322197,
+      "geoms": 99
+    },
+    {
+      "row": 4,
+      "col": 2,
+      "kind": "stepping_stones",
+      "difficulty": 0.47783834970737615,
+      "geoms": 99
+    },
+    {
+      "row": 5,
+      "col": 2,
+      "kind": "stepping_stones",
+      "difficulty": 0.5194638707851967,
+      "geoms": 99
+    },
+    {
+      "row": 6,
+      "col": 2,
+      "kind": "stepping_stones",
+      "difficulty": 0.6466721003727034,
+      "geoms": 99
+    },
+    {
+      "row": 7,
+      "col": 2,
+      "kind": "stepping_stones",
+      "difficulty": 0.7043803765787229,
+      "geoms": 99
+    },
+    {
+      "row": 8,
+      "col": 2,
+      "kind": "stepping_stones",
+      "difficulty": 0.8154289492067548,
+      "geoms": 99
+    },
+    {
+      "row": 9,
+      "col": 2,
+      "kind": "stepping_stones",
+      "difficulty": 0.9683048953242455,
+      "geoms": 99
+    },
+    {
+      "row": 0,
+      "col": 3,
+      "kind": "stepping_stones",
+      "difficulty": 0.07447621559078171,
+      "geoms": 99
+    },
+    {
+      "row": 1,
+      "col": 3,
+      "kind": "stepping_stones",
+      "difficulty": 0.196750973243421,
+      "geoms": 99
+    },
+    {
+      "row": 2,
+      "col": 3,
+      "kind": "stepping_stones",
+      "difficulty": 0.23258253581381522,
+      "geoms": 99
+    },
+    {
+      "row": 3,
+      "col": 3,
+      "kind": "stepping_stones",
+      "difficulty": 0.3370459706034869,
+      "geoms": 99
+    },
+    {
+      "row": 4,
+      "col": 3,
+      "kind": "stepping_stones",
+      "difficulty": 0.4469555811275808,
+      "geoms": 99
+    },
+    {
+      "row": 5,
+      "col": 3,
+      "kind": "stepping_stones",
+      "difficulty": 0.5189471359084286,
+      "geoms": 99
+    },
+    {
+      "row": 6,
+      "col": 3,
+      "kind": "stepping_stones",
+      "difficulty": 0.6129921505335472,
+      "geoms": 99
+    },
+    {
+      "row": 7,
+      "col": 3,
+      "kind": "stepping_stones",
+      "difficulty": 0.7475704926225933,
+      "geoms": 99
+    },
+    {
+      "row": 8,
+      "col": 3,
+      "kind": "stepping_stones",
+      "difficulty": 0.8226909349050884,
+      "geoms": 99
+    },
+    {
+      "row": 9,
+      "col": 3,
+      "kind": "stepping_stones",
+      "difficulty": 0.966981399468251,
+      "geoms": 99
+    },
+    {
+      "row": 0,
+      "col": 4,
+      "kind": "balance_beam",
+      "difficulty": 0.04371519188723307,
+      "geoms": 8
+    },
+    {
+      "row": 1,
+      "col": 4,
+      "kind": "balance_beam",
+      "difficulty": 0.18326781960578375,
+      "geoms": 8
+    },
+    {
+      "row": 2,
+      "col": 4,
+      "kind": "balance_beam",
+      "difficulty": 0.27002651020022495,
+      "geoms": 8
+    },
+    {
+      "row": 3,
+      "col": 4,
+      "kind": "balance_beam",
+      "difficulty": 0.33123666413820413,
+      "geoms": 8
+    },
+    {
+      "row": 4,
+      "col": 4,
+      "kind": "balance_beam",
+      "difficulty": 0.4832259801395201,
+      "geoms": 8
+    },
+    {
+      "row": 5,
+      "col": 4,
+      "kind": "balance_beam",
+      "difficulty": 0.5804764357496801,
+      "geoms": 8
+    },
+    {
+      "row": 6,
+      "col": 4,
+      "kind": "balance_beam",
+      "difficulty": 0.6387478379030174,
+      "geoms": 8
+    },
+    {
+      "row": 7,
+      "col": 4,
+      "kind": "balance_beam",
+      "difficulty": 0.7288328103930244,
+      "geoms": 8
+    },
+    {
+      "row": 8,
+      "col": 4,
+      "kind": "balance_beam",
+      "difficulty": 0.8682495503974975,
+      "geoms": 10
+    },
+    {
+      "row": 9,
+      "col": 4,
+      "kind": "balance_beam",
+      "difficulty": 0.913975248360931,
+      "geoms": 10
+    },
+    {
+      "row": 0,
+      "col": 5,
+      "kind": "balance_beam",
+      "difficulty": 0.01999082024751083,
+      "geoms": 8
+    },
+    {
+      "row": 1,
+      "col": 5,
+      "kind": "balance_beam",
+      "difficulty": 0.10073622697510057,
+      "geoms": 8
+    },
+    {
+      "row": 2,
+      "col": 5,
+      "kind": "balance_beam",
+      "difficulty": 0.27869243775021385,
+      "geoms": 8
+    },
+    {
+      "row": 3,
+      "col": 5,
+      "kind": "balance_beam",
+      "difficulty": 0.36648508565920324,
+      "geoms": 8
+    },
+    {
+      "row": 4,
+      "col": 5,
+      "kind": "balance_beam",
+      "difficulty": 0.4705165378626335,
+      "geoms": 8
+    },
+    {
+      "row": 5,
+      "col": 5,
+      "kind": "balance_beam",
+      "difficulty": 0.5780729031021968,
+      "geoms": 8
+    },
+    {
+      "row": 6,
+      "col": 5,
+      "kind": "balance_beam",
+      "difficulty": 0.6458915775538341,
+      "geoms": 8
+    },
+    {
+      "row": 7,
+      "col": 5,
+      "kind": "balance_beam",
+      "difficulty": 0.7568741195952894,
+      "geoms": 8
+    },
+    {
+      "row": 8,
+      "col": 5,
+      "kind": "balance_beam",
+      "difficulty": 0.8139796998127657,
+      "geoms": 8
+    },
+    {
+      "row": 9,
+      "col": 5,
+      "kind": "balance_beam",
+      "difficulty": 0.9114530073535974,
+      "geoms": 10
+    },
+    {
+      "row": 0,
+      "col": 6,
+      "kind": "gap_steps",
+      "difficulty": 0.06684029617904716,
+      "geoms": 46
+    },
+    {
+      "row": 1,
+      "col": 6,
+      "kind": "gap_steps",
+      "difficulty": 0.14710962061431326,
+      "geoms": 46
+    },
+    {
+      "row": 2,
+      "col": 6,
+      "kind": "gap_steps",
+      "difficulty": 0.2565236106481189,
+      "geoms": 46
+    },
+    {
+      "row": 3,
+      "col": 6,
+      "kind": "gap_steps",
+      "difficulty": 0.37649988574160254,
+      "geoms": 46
+    },
+    {
+      "row": 4,
+      "col": 6,
+      "kind": "gap_steps",
+      "difficulty": 0.4634718320000591,
+      "geoms": 46
+    },
+    {
+      "row": 5,
+      "col": 6,
+      "kind": "gap_steps",
+      "difficulty": 0.5553579400657995,
+      "geoms": 46
+    },
+    {
+      "row": 6,
+      "col": 6,
+      "kind": "gap_steps",
+      "difficulty": 0.6559207160745413,
+      "geoms": 46
+    },
+    {
+      "row": 7,
+      "col": 6,
+      "kind": "gap_steps",
+      "difficulty": 0.7303950098062613,
+      "geoms": 46
+    },
+    {
+      "row": 8,
+      "col": 6,
+      "kind": "gap_steps",
+      "difficulty": 0.8030817834567939,
+      "geoms": 46
+    },
+    {
+      "row": 9,
+      "col": 6,
+      "kind": "gap_steps",
+      "difficulty": 0.9436717389232362,
+      "geoms": 46
+    },
+    {
+      "row": 0,
+      "col": 7,
+      "kind": "gap_steps",
+      "difficulty": 0.02145846728195292,
+      "geoms": 46
+    },
+    {
+      "row": 1,
+      "col": 7,
+      "kind": "gap_steps",
+      "difficulty": 0.14085286437246364,
+      "geoms": 46
+    },
+    {
+      "row": 2,
+      "col": 7,
+      "kind": "gap_steps",
+      "difficulty": 0.2853403073268166,
+      "geoms": 46
+    },
+    {
+      "row": 3,
+      "col": 7,
+      "kind": "gap_steps",
+      "difficulty": 0.3233939485865341,
+      "geoms": 46
+    },
+    {
+      "row": 4,
+      "col": 7,
+      "kind": "gap_steps",
+      "difficulty": 0.4058302741689066,
+      "geoms": 46
+    },
+    {
+      "row": 5,
+      "col": 7,
+      "kind": "gap_steps",
+      "difficulty": 0.5281383892021997,
+      "geoms": 46
+    },
+    {
+      "row": 6,
+      "col": 7,
+      "kind": "gap_steps",
+      "difficulty": 0.6293593757766683,
+      "geoms": 46
+    },
+    {
+      "row": 7,
+      "col": 7,
+      "kind": "gap_steps",
+      "difficulty": 0.7661916514726895,
+      "geoms": 46
+    },
+    {
+      "row": 8,
+      "col": 7,
+      "kind": "gap_steps",
+      "difficulty": 0.8557032152341278,
+      "geoms": 46
+    },
+    {
+      "row": 9,
+      "col": 7,
+      "kind": "gap_steps",
+      "difficulty": 0.9783898209106413,
+      "geoms": 46
+    },
+    {
+      "row": 0,
+      "col": 8,
+      "kind": "high_wall",
+      "difficulty": 0.06643135403273875,
+      "geoms": 28
+    },
+    {
+      "row": 1,
+      "col": 8,
+      "kind": "high_wall",
+      "difficulty": 0.14063868614400704,
+      "geoms": 28
+    },
+    {
+      "row": 2,
+      "col": 8,
+      "kind": "high_wall",
+      "difficulty": 0.2814020384666035,
+      "geoms": 28
+    },
+    {
+      "row": 3,
+      "col": 8,
+      "kind": "high_wall",
+      "difficulty": 0.3166972919907704,
+      "geoms": 28
+    },
+    {
+      "row": 4,
+      "col": 8,
+      "kind": "high_wall",
+      "difficulty": 0.402271207313386,
+      "geoms": 28
+    },
+    {
+      "row": 5,
+      "col": 8,
+      "kind": "high_wall",
+      "difficulty": 0.5090047860775642,
+      "geoms": 28
+    },
+    {
+      "row": 6,
+      "col": 8,
+      "kind": "high_wall",
+      "difficulty": 0.6722359350596451,
+      "geoms": 28
+    },
+    {
+      "row": 7,
+      "col": 8,
+      "kind": "high_wall",
+      "difficulty": 0.7461877230251387,
+      "geoms": 28
+    },
+    {
+      "row": 8,
+      "col": 8,
+      "kind": "high_wall",
+      "difficulty": 0.8161271779033601,
+      "geoms": 28
+    },
+    {
+      "row": 9,
+      "col": 8,
+      "kind": "high_wall",
+      "difficulty": 0.9501044775103363,
+      "geoms": 28
+    },
+    {
+      "row": 0,
+      "col": 9,
+      "kind": "high_wall",
+      "difficulty": 0.015231210271316842,
+      "geoms": 28
+    },
+    {
+      "row": 1,
+      "col": 9,
+      "kind": "high_wall",
+      "difficulty": 0.16963203750777361,
+      "geoms": 28
+    },
+    {
+      "row": 2,
+      "col": 9,
+      "kind": "high_wall",
+      "difficulty": 0.24461562755740304,
+      "geoms": 28
+    },
+    {
+      "row": 3,
+      "col": 9,
+      "kind": "high_wall",
+      "difficulty": 0.3381021226096482,
+      "geoms": 28
+    },
+    {
+      "row": 4,
+      "col": 9,
+      "kind": "high_wall",
+      "difficulty": 0.43015120891478764,
+      "geoms": 28
+    },
+    {
+      "row": 5,
+      "col": 9,
+      "kind": "high_wall",
+      "difficulty": 0.5630282593118888,
+      "geoms": 28
+    },
+    {
+      "row": 6,
+      "col": 9,
+      "kind": "high_wall",
+      "difficulty": 0.636181261055339,
+      "geoms": 28
+    },
+    {
+      "row": 7,
+      "col": 9,
+      "kind": "high_wall",
+      "difficulty": 0.7087649919316101,
+      "geoms": 28
+    },
+    {
+      "row": 8,
+      "col": 9,
+      "kind": "high_wall",
+      "difficulty": 0.8118005902120515,
+      "geoms": 28
+    },
+    {
+      "row": 9,
+      "col": 9,
+      "kind": "high_wall",
+      "difficulty": 0.9961897664549515,
+      "geoms": 28
+    },
+    {
+      "row": 0,
+      "col": 10,
+      "kind": "clearance_frame",
+      "difficulty": 0.0908580690707607,
+      "geoms": 309
+    },
+    {
+      "row": 1,
+      "col": 10,
+      "kind": "clearance_frame",
+      "difficulty": 0.16997071338107497,
+      "geoms": 309
+    },
+    {
+      "row": 2,
+      "col": 10,
+      "kind": "clearance_frame",
+      "difficulty": 0.22658699614595196,
+      "geoms": 309
+    },
+    {
+      "row": 3,
+      "col": 10,
+      "kind": "clearance_frame",
+      "difficulty": 0.3969176377347724,
+      "geoms": 309
+    },
+    {
+      "row": 4,
+      "col": 10,
+      "kind": "clearance_frame",
+      "difficulty": 0.47787509039657944,
+      "geoms": 309
+    },
+    {
+      "row": 5,
+      "col": 10,
+      "kind": "clearance_frame",
+      "difficulty": 0.5716890189158995,
+      "geoms": 309
+    },
+    {
+      "row": 6,
+      "col": 10,
+      "kind": "clearance_frame",
+      "difficulty": 0.6449361502143789,
+      "geoms": 309
+    },
+    {
+      "row": 7,
+      "col": 10,
+      "kind": "clearance_frame",
+      "difficulty": 0.7272241561845159,
+      "geoms": 309
+    },
+    {
+      "row": 8,
+      "col": 10,
+      "kind": "clearance_frame",
+      "difficulty": 0.8096390962153499,
+      "geoms": 309
+    },
+    {
+      "row": 9,
+      "col": 10,
+      "kind": "clearance_frame",
+      "difficulty": 0.9902602396543841,
+      "geoms": 309
+    },
+    {
+      "row": 0,
+      "col": 11,
+      "kind": "clearance_frame",
+      "difficulty": 0.04557762898336111,
+      "geoms": 309
+    },
+    {
+      "row": 1,
+      "col": 11,
+      "kind": "clearance_frame",
+      "difficulty": 0.12023633647952303,
+      "geoms": 309
+    },
+    {
+      "row": 2,
+      "col": 11,
+      "kind": "clearance_frame",
+      "difficulty": 0.23059566241506527,
+      "geoms": 309
+    },
+    {
+      "row": 3,
+      "col": 11,
+      "kind": "clearance_frame",
+      "difficulty": 0.3579219568941896,
+      "geoms": 309
+    },
+    {
+      "row": 4,
+      "col": 11,
+      "kind": "clearance_frame",
+      "difficulty": 0.41767727829392315,
+      "geoms": 309
+    },
+    {
+      "row": 5,
+      "col": 11,
+      "kind": "clearance_frame",
+      "difficulty": 0.5856614284092376,
+      "geoms": 309
+    },
+    {
+      "row": 6,
+      "col": 11,
+      "kind": "clearance_frame",
+      "difficulty": 0.675851952983521,
+      "geoms": 309
+    },
+    {
+      "row": 7,
+      "col": 11,
+      "kind": "clearance_frame",
+      "difficulty": 0.7719462955950938,
+      "geoms": 309
+    },
+    {
+      "row": 8,
+      "col": 11,
+      "kind": "clearance_frame",
+      "difficulty": 0.8432093039775104,
+      "geoms": 309
+    },
+    {
+      "row": 9,
+      "col": 11,
+      "kind": "clearance_frame",
+      "difficulty": 0.9627308840702444,
+      "geoms": 309
+    },
+    {
+      "row": 0,
+      "col": 12,
+      "kind": "tire_array",
+      "difficulty": 0.058409796891273555,
+      "geoms": 1153
+    },
+    {
+      "row": 1,
+      "col": 12,
+      "kind": "tire_array",
+      "difficulty": 0.164984660155482,
+      "geoms": 1153
+    },
+    {
+      "row": 2,
+      "col": 12,
+      "kind": "tire_array",
+      "difficulty": 0.20844443211398894,
+      "geoms": 1153
+    },
+    {
+      "row": 3,
+      "col": 12,
+      "kind": "tire_array",
+      "difficulty": 0.341580740217061,
+      "geoms": 1153
+    },
+    {
+      "row": 4,
+      "col": 12,
+      "kind": "tire_array",
+      "difficulty": 0.40416141738618927,
+      "geoms": 1153
+    },
+    {
+      "row": 5,
+      "col": 12,
+      "kind": "tire_array",
+      "difficulty": 0.5493990819244519,
+      "geoms": 1153
+    },
+    {
+      "row": 6,
+      "col": 12,
+      "kind": "tire_array",
+      "difficulty": 0.6329861212332786,
+      "geoms": 1153
+    },
+    {
+      "row": 7,
+      "col": 12,
+      "kind": "tire_array",
+      "difficulty": 0.7144524188866047,
+      "geoms": 1153
+    },
+    {
+      "row": 8,
+      "col": 12,
+      "kind": "tire_array",
+      "difficulty": 0.8103402967722552,
+      "geoms": 1153
+    },
+    {
+      "row": 9,
+      "col": 12,
+      "kind": "tire_array",
+      "difficulty": 0.9587644572177713,
+      "geoms": 1153
+    },
+    {
+      "row": 0,
+      "col": 13,
+      "kind": "tire_array",
+      "difficulty": 0.01705929685368861,
+      "geoms": 1153
+    },
+    {
+      "row": 1,
+      "col": 13,
+      "kind": "tire_array",
+      "difficulty": 0.19251201183767971,
+      "geoms": 1153
+    },
+    {
+      "row": 2,
+      "col": 13,
+      "kind": "tire_array",
+      "difficulty": 0.25810611397003946,
+      "geoms": 1153
+    },
+    {
+      "row": 3,
+      "col": 13,
+      "kind": "tire_array",
+      "difficulty": 0.33468698045348366,
+      "geoms": 1153
+    },
+    {
+      "row": 4,
+      "col": 13,
+      "kind": "tire_array",
+      "difficulty": 0.45909154914814165,
+      "geoms": 1153
+    },
+    {
+      "row": 5,
+      "col": 13,
+      "kind": "tire_array",
+      "difficulty": 0.5022803871029697,
+      "geoms": 1153
+    },
+    {
+      "row": 6,
+      "col": 13,
+      "kind": "tire_array",
+      "difficulty": 0.6958559213241445,
+      "geoms": 1153
+    },
+    {
+      "row": 7,
+      "col": 13,
+      "kind": "tire_array",
+      "difficulty": 0.7482303436942901,
+      "geoms": 1153
+    },
+    {
+      "row": 8,
+      "col": 13,
+      "kind": "tire_array",
+      "difficulty": 0.8782735227250287,
+      "geoms": 1153
+    },
+    {
+      "row": 9,
+      "col": 13,
+      "kind": "tire_array",
+      "difficulty": 0.9082729999922439,
+      "geoms": 1153
+    },
+    {
+      "row": 0,
+      "col": 14,
+      "kind": "random_hills",
+      "difficulty": 0.048665833083816036,
+      "geoms": 1
+    },
+    {
+      "row": 1,
+      "col": 14,
+      "kind": "random_hills",
+      "difficulty": 0.12325699405288737,
+      "geoms": 1
+    },
+    {
+      "row": 2,
+      "col": 14,
+      "kind": "random_hills",
+      "difficulty": 0.25724579331221153,
+      "geoms": 1
+    },
+    {
+      "row": 3,
+      "col": 14,
+      "kind": "random_hills",
+      "difficulty": 0.3274825050755067,
+      "geoms": 1
+    },
+    {
+      "row": 4,
+      "col": 14,
+      "kind": "random_hills",
+      "difficulty": 0.4677620763599794,
+      "geoms": 1
+    },
+    {
+      "row": 5,
+      "col": 14,
+      "kind": "random_hills",
+      "difficulty": 0.5659951301129279,
+      "geoms": 1
+    },
+    {
+      "row": 6,
+      "col": 14,
+      "kind": "random_hills",
+      "difficulty": 0.6219189216478632,
+      "geoms": 1
+    },
+    {
+      "row": 7,
+      "col": 14,
+      "kind": "random_hills",
+      "difficulty": 0.7369984367847198,
+      "geoms": 1
+    },
+    {
+      "row": 8,
+      "col": 14,
+      "kind": "random_hills",
+      "difficulty": 0.8760546022729867,
+      "geoms": 1
+    },
+    {
+      "row": 9,
+      "col": 14,
+      "kind": "random_hills",
+      "difficulty": 0.9875539044527237,
+      "geoms": 1
+    },
+    {
+      "row": 0,
+      "col": 15,
+      "kind": "random_hills",
+      "difficulty": 0.07984483448280576,
+      "geoms": 1
+    },
+    {
+      "row": 1,
+      "col": 15,
+      "kind": "random_hills",
+      "difficulty": 0.10162304563424715,
+      "geoms": 1
+    },
+    {
+      "row": 2,
+      "col": 15,
+      "kind": "random_hills",
+      "difficulty": 0.23147174474653634,
+      "geoms": 1
+    },
+    {
+      "row": 3,
+      "col": 15,
+      "kind": "random_hills",
+      "difficulty": 0.30448803224762766,
+      "geoms": 1
+    },
+    {
+      "row": 4,
+      "col": 15,
+      "kind": "random_hills",
+      "difficulty": 0.4751008752882558,
+      "geoms": 1
+    },
+    {
+      "row": 5,
+      "col": 15,
+      "kind": "random_hills",
+      "difficulty": 0.5652787224491316,
+      "geoms": 1
+    },
+    {
+      "row": 6,
+      "col": 15,
+      "kind": "random_hills",
+      "difficulty": 0.658814634811407,
+      "geoms": 1
+    },
+    {
+      "row": 7,
+      "col": 15,
+      "kind": "random_hills",
+      "difficulty": 0.7169940591361067,
+      "geoms": 1
+    },
+    {
+      "row": 8,
+      "col": 15,
+      "kind": "random_hills",
+      "difficulty": 0.8641660405363257,
+      "geoms": 1
+    },
+    {
+      "row": 9,
+      "col": 15,
+      "kind": "random_hills",
+      "difficulty": 0.9007085354169948,
+      "geoms": 1
+    },
+    {
+      "row": 0,
+      "col": 16,
+      "kind": "mjlab_rough",
+      "difficulty": 0.08902579336462912,
+      "geoms": 1
+    },
+    {
+      "row": 1,
+      "col": 16,
+      "kind": "mjlab_rough",
+      "difficulty": 0.15792598871664243,
+      "geoms": 1
+    },
+    {
+      "row": 2,
+      "col": 16,
+      "kind": "mjlab_rough",
+      "difficulty": 0.28448498238375197,
+      "geoms": 1
+    },
+    {
+      "row": 3,
+      "col": 16,
+      "kind": "mjlab_rough",
+      "difficulty": 0.3040425383209664,
+      "geoms": 1
+    },
+    {
+      "row": 4,
+      "col": 16,
+      "kind": "mjlab_rough",
+      "difficulty": 0.46678407272164063,
+      "geoms": 1
+    },
+    {
+      "row": 5,
+      "col": 16,
+      "kind": "mjlab_rough",
+      "difficulty": 0.5865372175712119,
+      "geoms": 1
+    },
+    {
+      "row": 6,
+      "col": 16,
+      "kind": "mjlab_rough",
+      "difficulty": 0.6757326471210672,
+      "geoms": 1
+    },
+    {
+      "row": 7,
+      "col": 16,
+      "kind": "mjlab_rough",
+      "difficulty": 0.7421373005308787,
+      "geoms": 1
+    },
+    {
+      "row": 8,
+      "col": 16,
+      "kind": "mjlab_rough",
+      "difficulty": 0.8359791409829953,
+      "geoms": 1
+    },
+    {
+      "row": 9,
+      "col": 16,
+      "kind": "mjlab_rough",
+      "difficulty": 0.9812452202997116,
+      "geoms": 1
+    },
+    {
+      "row": 0,
+      "col": 17,
+      "kind": "mjlab_rough",
+      "difficulty": 0.07679787242241057,
+      "geoms": 1
+    },
+    {
+      "row": 1,
+      "col": 17,
+      "kind": "mjlab_rough",
+      "difficulty": 0.18494333258146023,
+      "geoms": 1
+    },
+    {
+      "row": 2,
+      "col": 17,
+      "kind": "mjlab_rough",
+      "difficulty": 0.2005000545522236,
+      "geoms": 1
+    },
+    {
+      "row": 3,
+      "col": 17,
+      "kind": "mjlab_rough",
+      "difficulty": 0.3767176469874173,
+      "geoms": 1
+    },
+    {
+      "row": 4,
+      "col": 17,
+      "kind": "mjlab_rough",
+      "difficulty": 0.4168127106750908,
+      "geoms": 1
+    },
+    {
+      "row": 5,
+      "col": 17,
+      "kind": "mjlab_rough",
+      "difficulty": 0.5287589882377339,
+      "geoms": 1
+    },
+    {
+      "row": 6,
+      "col": 17,
+      "kind": "mjlab_rough",
+      "difficulty": 0.60560030033155,
+      "geoms": 1
+    },
+    {
+      "row": 7,
+      "col": 17,
+      "kind": "mjlab_rough",
+      "difficulty": 0.7550323145459436,
+      "geoms": 1
+    },
+    {
+      "row": 8,
+      "col": 17,
+      "kind": "mjlab_rough",
+      "difficulty": 0.8582766319982822,
+      "geoms": 1
+    },
+    {
+      "row": 9,
+      "col": 17,
+      "kind": "mjlab_rough",
+      "difficulty": 0.9558415568290878,
+      "geoms": 1
+    },
+    {
+      "row": 0,
+      "col": 18,
+      "kind": "slalom_brick",
+      "difficulty": 0.008921869682491989,
+      "geoms": 91
+    },
+    {
+      "row": 1,
+      "col": 18,
+      "kind": "slalom_brick",
+      "difficulty": 0.1200428305176171,
+      "geoms": 91
+    },
+    {
+      "row": 2,
+      "col": 18,
+      "kind": "slalom_brick",
+      "difficulty": 0.23629729315458775,
+      "geoms": 91
+    },
+    {
+      "row": 3,
+      "col": 18,
+      "kind": "slalom_brick",
+      "difficulty": 0.3567745342715047,
+      "geoms": 91
+    },
+    {
+      "row": 4,
+      "col": 18,
+      "kind": "slalom_brick",
+      "difficulty": 0.42300180158974265,
+      "geoms": 91
+    },
+    {
+      "row": 5,
+      "col": 18,
+      "kind": "slalom_brick",
+      "difficulty": 0.5069126656521531,
+      "geoms": 91
+    },
+    {
+      "row": 6,
+      "col": 18,
+      "kind": "slalom_brick",
+      "difficulty": 0.6881000311551286,
+      "geoms": 91
+    },
+    {
+      "row": 7,
+      "col": 18,
+      "kind": "slalom_brick",
+      "difficulty": 0.7811387726060676,
+      "geoms": 91
+    },
+    {
+      "row": 8,
+      "col": 18,
+      "kind": "slalom_brick",
+      "difficulty": 0.8461393116813383,
+      "geoms": 91
+    },
+    {
+      "row": 9,
+      "col": 18,
+      "kind": "slalom_brick",
+      "difficulty": 0.9828754630185129,
+      "geoms": 91
+    },
+    {
+      "row": 0,
+      "col": 19,
+      "kind": "slalom_brick",
+      "difficulty": 0.06528263825224481,
+      "geoms": 91
+    },
+    {
+      "row": 1,
+      "col": 19,
+      "kind": "slalom_brick",
+      "difficulty": 0.11164039528929585,
+      "geoms": 91
+    },
+    {
+      "row": 2,
+      "col": 19,
+      "kind": "slalom_brick",
+      "difficulty": 0.20701919765873789,
+      "geoms": 91
+    },
+    {
+      "row": 3,
+      "col": 19,
+      "kind": "slalom_brick",
+      "difficulty": 0.350966528968596,
+      "geoms": 91
+    },
+    {
+      "row": 4,
+      "col": 19,
+      "kind": "slalom_brick",
+      "difficulty": 0.4416429715779972,
+      "geoms": 91
+    },
+    {
+      "row": 5,
+      "col": 19,
+      "kind": "slalom_brick",
+      "difficulty": 0.5783592709839602,
+      "geoms": 91
+    },
+    {
+      "row": 6,
+      "col": 19,
+      "kind": "slalom_brick",
+      "difficulty": 0.6301417068040545,
+      "geoms": 91
+    },
+    {
+      "row": 7,
+      "col": 19,
+      "kind": "slalom_brick",
+      "difficulty": 0.7505540759152473,
+      "geoms": 91
+    },
+    {
+      "row": 8,
+      "col": 19,
+      "kind": "slalom_brick",
+      "difficulty": 0.8176279179639977,
+      "geoms": 91
+    },
+    {
+      "row": 9,
+      "col": 19,
+      "kind": "slalom_brick",
+      "difficulty": 0.9339559732060853,
+      "geoms": 91
+    }
+  ]
+}

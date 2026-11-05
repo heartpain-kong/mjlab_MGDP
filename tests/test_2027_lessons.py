@@ -30,14 +30,52 @@ class Lessons2027Tests(unittest.TestCase):
     self.assertFalse(cfg.curriculum)
     self.assertEqual(cfg.events["reset_base"].params["pose_range"]["x"],(0.,.2))
 
-  def compile(self, kind, difficulty):
+  def compile(self, kind, difficulty, seed=2027):
     spec=mujoco.MjSpec();spec.worldbody.add_body(name="terrain")
-    PassageTerrainCfg(kind=kind,size=(8.,8.)).function(difficulty,spec,np.random.default_rng(2027))
+    PassageTerrainCfg(kind=kind,size=(8.,8.)).function(difficulty,spec,np.random.default_rng(seed))
     model=spec.compile();data=mujoco.MjData(model);mujoco.mj_forward(model,data)
     return model,data
 
   def matching(self, model, suffix):
     return [model.geom(i) for i in range(model.ngeom) if suffix in model.geom(i).name]
+
+  def test_removed_standalone_lessons_replaced_by_two_heightfields(self):
+    generator=lgdog1_passage_terrain_cfg()
+    self.assertEqual(len(KINDS),10)
+    self.assertEqual((generator.num_rows,generator.num_cols),(10,20))
+    self.assertTrue({"brick_pit","slalom_posts","rough"}.isdisjoint(generator.sub_terrains))
+    self.assertTrue({"random_hills","mjlab_rough","slalom_brick"}.issubset(generator.sub_terrains))
+    self.assertEqual(set(lgdog1_race_mgdp_env_cfg(with_perception=False).commands["twist"].waypoints),set(KINDS))
+    with self.assertRaises(ValueError):
+      self.compile("rough",1.)
+
+  def test_new_lessons_are_real_seeded_heightfields_with_safe_landing_pads(self):
+    for kind in ("random_hills","mjlab_rough"):
+      amplitudes=[]
+      for difficulty in (0.,.5,1.):
+        with self.subTest(kind=kind,difficulty=difficulty):
+          model,data=self.compile(kind,difficulty)
+          self.assertEqual(model.nhfield,1)
+          self.assertEqual(model.ngeom,1)
+          self.assertEqual(model.geom_type[0],mujoco.mjtGeom.mjGEOM_HFIELD)
+          self.assertTrue(np.isfinite(model.hfield_data).all())
+          amplitudes.append(model.hfield_size[0,2])
+          for x in (.45,1.,1.55,5.63,6.3,6.97):
+            for y in (3.8,4.,4.2):
+              hit=mujoco.mj_ray(model,data,np.array([x,y,1.]),np.array([0.,0.,-1.]),None,1,-1,None)
+              self.assertAlmostEqual(hit,1.,places=6)
+          surface=[]
+          for x in np.linspace(2.3,4.9,15):
+            for y in (1.,2.,3.,4.,5.,6.,7.):
+              hit=mujoco.mj_ray(model,data,np.array([x,y,1.]),np.array([0.,0.,-1.]),None,1,-1,None)
+              surface.append(1.-hit)
+          self.assertGreater(np.std(surface),.001)
+          self.assertGreaterEqual(min(surface),-1e-6)
+          self.assertLessEqual(max(surface),.2+1e-6)
+      self.assertTrue(amplitudes[0]<amplitudes[1]<amplitudes[2])
+      a,_=self.compile(kind,1.);b,_=self.compile(kind,1.);c,_=self.compile(kind,1.,seed=2028)
+      np.testing.assert_allclose(a.hfield_data,b.hfield_data)
+      self.assertFalse(np.allclose(a.hfield_data,c.hfield_data))
 
   def test_extended_stones_repeat_reference_units_without_changing_gaps(self):
     model,data=self.compile("stepping_stones",0.)
@@ -200,15 +238,15 @@ class Lessons2027Tests(unittest.TestCase):
 
   def test_routes_reject_goal_teleport_and_reward_y_motion_without_farming(self):
     env,command,robot=self.make_command()
-    index=KINDS.index("slalom_posts")
-    final=torch.tensor(lesson_route("slalom_posts")[-1])
+    index=KINDS.index("slalom_brick")
+    final=torch.tensor(lesson_route("slalom_brick")[-1])
     robot.data.root_link_pos_w[index,:2]=final
     self.assertFalse(passage.passage_success(env)[index])
     self.assertTrue(passage.left_lane(env)[index])
     # Walk every segment geometrically; this tests the command contract,
     # not whether a learned policy can physically execute it.
     robot.data.root_link_pos_w.zero_()
-    for wp in lesson_route("slalom_posts")[1:]:
+    for wp in lesson_route("slalom_brick")[1:]:
       robot.data.root_link_pos_w[index,:2]=torch.tensor(wp)
       command._update_command()
     self.assertTrue(passage.passage_success(env)[index])
@@ -219,9 +257,9 @@ class Lessons2027Tests(unittest.TestCase):
 
   def test_vertical_segment_has_progress_and_heading_and_frame_clearance_matches(self):
     env,command,robot=self.make_command()
-    i=KINDS.index("brick_pit")
-    command.waypoint_index[i]=3
-    start=torch.tensor(lesson_route("brick_pit")[2])
+    i=KINDS.index("slalom_brick")
+    command.waypoint_index[i]=7
+    start=torch.tensor(lesson_route("slalom_brick")[6])
     robot.data.root_link_pos_w[i,:2]=start
     env.cfg=NS(terminations={})
     progress=passage.ForwardProgress(NS(),env);progress.reset()
@@ -307,7 +345,7 @@ class Lessons2027Tests(unittest.TestCase):
     saved=curriculum.state_dict()
     curriculum.load_state_dict(saved)
     # Same grid and statistics, different route: full-resume must be rejected.
-    command.cfg.waypoints={**command.cfg.waypoints,"slalom_posts":((0.,0.),(5.,1.))}
+    command.cfg.waypoints={**command.cfg.waypoints,"slalom_brick":((0.,0.),(5.,1.))}
     changed=passage.PassageCurriculum(NS(params={}),env)
     with self.assertRaisesRegex(ValueError,"Incompatible"):
       changed.load_state_dict(saved)
