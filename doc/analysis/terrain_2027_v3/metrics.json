@@ -1,13 +1,13 @@
 {
-  "layout_version": 5,
+  "layout_version": 6,
   "stepping_stones/0": {
-    "geoms": 15
+    "geoms": 99
   },
   "stepping_stones/0.5": {
-    "geoms": 15
+    "geoms": 99
   },
   "stepping_stones/1": {
-    "geoms": 15
+    "geoms": 99
   },
   "stepping_stones": {
     "route": [
@@ -23,13 +23,13 @@
     "length_m": 6.5
   },
   "balance_beam/0": {
-    "geoms": 2
+    "geoms": 8
   },
   "balance_beam/0.5": {
-    "geoms": 2
+    "geoms": 8
   },
   "balance_beam/1": {
-    "geoms": 2
+    "geoms": 10
   },
   "balance_beam": {
     "route": [
@@ -45,13 +45,13 @@
     "length_m": 5.3
   },
   "gap_steps/0": {
-    "geoms": 6
+    "geoms": 46
   },
   "gap_steps/0.5": {
-    "geoms": 6
+    "geoms": 46
   },
   "gap_steps/1": {
-    "geoms": 6
+    "geoms": 46
   },
   "gap_steps": {
     "route": [

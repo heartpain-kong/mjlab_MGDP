@@ -46,31 +46,69 @@ class Lessons2027Tests(unittest.TestCase):
       self.assertAlmostEqual(1-hit,.02,places=6)
     model,_=self.compile("stepping_stones",1.)
     stones=self.matching(model,"_stone_")
-    self.assertEqual(len(stones),12)
+    self.assertEqual(len(stones),7*12)
     source=mujoco.MjModel.from_xml_path(str(Path(__file__).resolve().parents[1]/
       "src/assets/terrains/race_obstacle_2027.xml"))
     for geom in stones:
-      row,col=map(int,geom.name.split("_stone_")[-1].split("_"))
+      lane,row,col=map(int,geom.name.split("_stone_")[-1].split("_"))
       ref=source.geom(f"stone_{row}_{col%3}")
       np.testing.assert_allclose(geom.size,ref.size,atol=1e-8)
-      np.testing.assert_allclose(geom.pos[:2]-[1.4+1.8*(col//3),4.],ref.pos[:2],atol=1e-8)
+      np.testing.assert_allclose(geom.pos[:2]-[1.4+1.8*(col//3),4.+lane],ref.pos[:2],atol=1e-8)
+    self.assertEqual(len(self.matching(model,"stones_entry")),7)
+    self.assertEqual(len(self.matching(model,"stones_exit")),7)
     self.assertAlmostEqual(self.matching(model,"stones_exit")[0].pos[0],6.3)
     self.assertEqual(lesson_route("stepping_stones")[-1],(6.5,0.))
 
   def test_gap_has_solid_ramp_and_reference_platforms_gap_and_treads(self):
     model,data=self.compile("gap_steps",1.)
-    self.assertEqual(len(self.matching(model,"gap_ramp")),1)
+    self.assertEqual(len(self.matching(model,"gap_ramp")),9)
     platforms=self.matching(model,"gap_platform")
     for geom in platforms:
       np.testing.assert_allclose(geom.size,[.4,.4,.18],atol=1e-8)
-    self.assertAlmostEqual(platforms[1].pos[0]-platforms[0].pos[0]-.8,.36)
+    self.assertEqual(len(platforms),18)
+    for lane in range(-4,5):
+      pair=self.matching(model,f"gap_platform0_{lane}")+self.matching(model,f"gap_platform1_{lane}")
+      self.assertAlmostEqual(pair[1].pos[0]-pair[0].pos[0]-.8,.36)
     treads=self.matching(model,"gap_tread")
-    self.assertEqual(len(treads),2)
-    np.testing.assert_allclose([g.pos[2]+g.size[2] for g in treads],[.24,.12])
+    self.assertEqual(len(treads),18)
+    np.testing.assert_allclose([g.pos[2]+g.size[2] for g in treads],[.24,.12]*9)
     # Mid-slope support is continuous, not a disconnected thin floating slab.
     x=2.+.989092/2
     hit=mujoco.mj_ray(model,data,np.array([x,4.,1.]),np.array([0.,0.,-1.]),None,1,-1,None)
     self.assertAlmostEqual(1-hit,.18,places=5)
+
+  def test_dense_stones_gaps_and_beams_fit_without_duplicate_floors_or_overlaps(self):
+    for kind in ("stepping_stones","gap_steps","balance_beam"):
+      for difficulty in (0.,.5,1.):
+        with self.subTest(kind=kind,difficulty=difficulty):
+          model,data=self.compile(kind,difficulty)
+          self.assertEqual(len(self.matching(model,"lesson_floor")),1)
+          if kind=="stepping_stones":
+            pads=sorted(self.matching(model,"stones_entry"),key=lambda g:g.pos[1])
+            self.assertEqual(len(pads),7)
+            np.testing.assert_allclose(np.diff([g.pos[1] for g in pads]),1.)
+            self.assertAlmostEqual(pads[0].pos[1]-pads[0].size[1],.6)
+            self.assertAlmostEqual(pads[-1].pos[1]+pads[-1].size[1],7.4)
+          elif kind=="gap_steps":
+            platforms=sorted(self.matching(model,"gap_platform0_"),key=lambda g:g.pos[1])
+            self.assertEqual(len(platforms),9)
+            for a,b in zip(platforms,platforms[1:]):
+              self.assertAlmostEqual(a.pos[1]+a.size[1],b.pos[1]-b.size[1])
+            self.assertAlmostEqual(platforms[0].pos[1]-platforms[0].size[1],.4)
+            self.assertAlmostEqual(platforms[-1].pos[1]+platforms[-1].size[1],7.6)
+          else:
+            beams=sorted(self.matching(model,"beam_lane_"),key=lambda g:g.pos[1])
+            self.assertEqual(len(beams),9 if difficulty==1. else 7)
+            self.assertTrue(any(abs(g.pos[1]-4.)<1e-8 for g in beams))
+            for a,b in zip(beams,beams[1:]):
+              self.assertAlmostEqual(b.pos[1]-b.size[1]-(a.pos[1]+a.size[1]),.4)
+              midpoint=(a.pos[1]+a.size[1]+b.pos[1]-b.size[1])/2
+              # Actual collision query: the 400mm gap has no bridge support.
+              hit=mujoco.mj_ray(model,data,np.array([4.,midpoint,1.]),
+                np.array([0.,0.,-1.]),None,1,-1,None)
+              self.assertAlmostEqual(hit,1.,places=6)
+            self.assertGreaterEqual(beams[0].pos[1]-beams[0].size[1],.35-1e-6)
+            self.assertLessEqual(beams[-1].pos[1]+beams[-1].size[1],7.65+1e-6)
 
   def test_slalom_is_six_short_cylinders_in_an_l_and_pit_has_two_arms(self):
     model,_=self.compile("slalom_posts",1.)

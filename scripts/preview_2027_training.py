@@ -39,6 +39,11 @@ def render(model,data,top=False,kind=None):
     camera.distance=8.5 if top else 9.
     camera.azimuth=90 if top else 135
     camera.elevation=-90 if top else -55
+  if kind in ("stepping_stones","gap_steps","balance_beam"):
+    camera.lookat[:]=(4.,4.,0.)
+    camera.distance=9.5
+    camera.azimuth=90 if top else 135
+    camera.elevation=-90 if top else -55
   with mujoco.Renderer(model,height=280,width=420,max_geom=max(10000,model.ngeom+20)) as renderer:
     renderer.update_scene(data,camera=camera)
     if top:
@@ -83,10 +88,39 @@ def main():
     for col,top in enumerate((False,True)):
       model,data=build_lesson(kind,1.,route=top)
       axes[row,col].imshow(render(model,data,top=top,kind=kind));axes[row,col].axis("off")
-      label="Slalom -> brick pit: ONE continuous lesson" if row==0 else "Extended stones: 2 rows x 6 = 12 stones"
+      label="Slalom -> brick pit: ONE continuous lesson" if row==0 else "Dense stones: 7 paired courses x 12 = 84 stones"
       axes[row,col].set_title(label+(" | ordered route" if top else " | target geometry"),fontsize=11)
-  fig.suptitle("2027 training layout 5 | orange = commanded route, not measured policy trajectory",fontsize=13)
+  fig.suptitle(f"2027 training layout {LAYOUT_VERSION} | orange = commanded route, not measured policy trajectory",fontsize=13)
   fig.savefig(args.output/"joined_and_stones.png",dpi=160);plt.close(fig)
+  fig,axes=plt.subplots(3,2,figsize=(13,12.5),layout="constrained")
+  labels={"stepping_stones":"Stones: 7 paired courses / 84 stones",
+          "gap_steps":"Gap course: 9 adjacent units / 7.2m wide",
+          "balance_beam":"Beams: 400mm EDGE gap / 9 lanes at target difficulty"}
+  for row,kind in enumerate(labels):
+    for col,top in enumerate((False,True)):
+      model,data=build_lesson(kind,1.,route=top)
+      axes[row,col].imshow(render(model,data,top=top,kind=kind));axes[row,col].axis("off")
+      axes[row,col].set_title(labels[kind]+(" | top" if top else " | perspective"),fontsize=11)
+  fig.suptitle(f"2027 dense training layout {LAYOUT_VERSION} | orange = central commanded route",fontsize=14)
+  fig.savefig(args.output/"dense_skills.png",dpi=150);plt.close(fig)
+  from matplotlib.patches import Rectangle
+  fig,axes=plt.subplots(1,3,figsize=(12,4.2),layout="constrained")
+  for ax,difficulty in zip(axes,(0.,.5,1.)):
+    model,_=build_lesson("balance_beam",difficulty)
+    beams=[model.geom(i) for i in range(model.ngeom) if "beam_lane_" in model.geom(i).name]
+    width=beams[0].size[1]*2;pitch=width+.4
+    for geom in beams:
+      if abs(geom.pos[1]-4.)>pitch+1e-6: continue
+      ax.add_patch(Rectangle(geom.pos[:2]-geom.size[:2],*(2*geom.size[:2]),
+        facecolor="#72ae44",edgecolor="#375b23"))
+    low=4.+width/2;high=4.+pitch-width/2
+    ax.annotate("",xy=(3.7,high),xytext=(3.7,low),arrowprops={"arrowstyle":"<->","color":"#b44711"})
+    ax.text(3.85,(low+high)/2,"400 mm",color="#b44711",va="center",fontsize=11)
+    ax.set(xlim=(2.3,5.7),ylim=(2.3,5.7),aspect="equal",xlabel="forward X (m)",ylabel="lateral Y (m)",
+      title=f"difficulty {difficulty:g}: width {width*1000:.0f}mm")
+    ax.grid(alpha=.15)
+  fig.suptitle("Bridge edges stay 400mm apart at EVERY difficulty (actual geometry)",fontsize=13)
+  fig.savefig(args.output/"beam_gap.png",dpi=150,bbox_inches="tight",pad_inches=.12);plt.close(fig)
   (args.output/"metrics.json").write_text(json.dumps(metrics,indent=2),encoding="utf-8")
   print(args.output.resolve())
 

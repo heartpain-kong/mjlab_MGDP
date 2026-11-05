@@ -16,7 +16,15 @@ KINDS = ("start_flat", "stepping_stones", "balance_beam", "gap_steps", "brick_pi
 START_X = 1.0
 GOAL_X = 5.3
 LANE_HALF_WIDTH = 0.28
-LAYOUT_VERSION = 5  # v3 task, joined course and extended stones.
+LAYOUT_VERSION = 6  # v3 task, dense stones/gaps and 400mm beam edge gaps.
+BEAM_EDGE_GAP = 0.4
+
+
+def _lateral_lanes(size_y, width, gap):
+  """Centred repeats with at least 35cm clearance to either cell boundary."""
+  pitch = width + gap
+  count = int(np.floor((size_y/2-.35-width/2+1e-8)/pitch))
+  return [(i,size_y/2+i*pitch) for i in range(-count,count+1)]
 
 
 def lesson_route(kind, size=(8., 8.)):
@@ -89,15 +97,18 @@ class PassageTerrainCfg(SubTerrainCfg):
           0.,-.1,color=(.55,.55,.55,1.))
     if self.kind == "stepping_stones":
       height, width = .02+.08*d, .36-.16*d
-      box("stones_entry",1.8,cy,.4,.4,height)
-      box("stones_exit",6.3,cy,.4,.4,height)
-      for row in range(2):
-        # Repeat the reference three-stone unit twice along each row.
-        for i,x in enumerate(2.4+row*.3*d+np.arange(6)*.6):
-          box(f"stone_{row}_{i}",float(x),cy+(1 if row==0 else -1)*.2,
-              width/2,width/2,height)
+      for lane,y in _lateral_lanes(self.size[1],.8,.2):
+        box(f"stones_entry_{lane}",1.8,y,.4,.4,height)
+        box(f"stones_exit_{lane}",6.3,y,.4,.4,height)
+        for row in range(2):
+          # Repeat the reference unit along X, then repeat paired lanes along Y.
+          for i,x in enumerate(2.4+row*.3*d+np.arange(6)*.6):
+            box(f"stone_{lane}_{row}_{i}",float(x),y+(1 if row==0 else -1)*.2,
+                width/2,width/2,height)
     elif self.kind == "balance_beam":
-      box("balance_beam",4.,cy,1.5,(.7-.3*d)/2,.02+.08*d)
+      width = .7-.3*d
+      for lane,y in _lateral_lanes(self.size[1],width,BEAM_EDGE_GAP):
+        box(f"beam_lane_{lane}",4.,y,1.5,width/2,.02+.08*d)
     elif self.kind == "gap_steps":
       height, ramp_length, gap = .06+.30*d, .8+.189092*d, .04+.32*d
       # Solid wedge, two 80cm platforms and two descending 32cm treads.
@@ -106,14 +117,16 @@ class PassageTerrainCfg(SubTerrainCfg):
         x0,-half_width,0, x0,half_width,0,
         x0+ramp_length,-half_width,0, x0+ramp_length,half_width,0,
         x0+ramp_length,-half_width,height, x0+ramp_length,half_width,height])
-      ramp = body.add_geom(name=prefix+"gap_ramp",type=mujoco.mjtGeom.mjGEOM_MESH,
-        meshname=mesh.name,pos=(0,cy,0),rgba=green,contype=1,conaffinity=1)
-      geoms.append(TerrainGeometry(geom=ramp))
       platform0, platform1 = x0+ramp_length, x0+ramp_length+.8+gap
-      box("gap_platform0",platform0+.4,cy,.4,.4,height)
-      box("gap_platform1",platform1+.4,cy,.4,.4,height)
-      for i in range(2):
-        box(f"gap_tread_{i}",platform1+.8+.16+i*.32,cy,.16,.4,height*(2-i)/3)
+      for lane,y in _lateral_lanes(self.size[1],.8,0.):
+        # Touching side faces form a continuous-width obstacle; share one mesh.
+        ramp = body.add_geom(name=prefix+f"gap_ramp_{lane}",type=mujoco.mjtGeom.mjGEOM_MESH,
+          meshname=mesh.name,pos=(0,y,0),rgba=green,contype=1,conaffinity=1)
+        geoms.append(TerrainGeometry(geom=ramp))
+        box(f"gap_platform0_{lane}",platform0+.4,y,.4,.4,height)
+        box(f"gap_platform1_{lane}",platform1+.4,y,.4,.4,height)
+        for i in range(2):
+          box(f"gap_tread_{lane}_{i}",platform1+.8+.16+i*.32,y,.16,.4,height*(2-i)/3)
     elif self.kind == "brick_pit":
       # Same 2x2 L footprint and boundary/diagonal rails as the supplied model.
       ox, oy = 2.5, cy-1.
