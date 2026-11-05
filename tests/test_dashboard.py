@@ -75,6 +75,12 @@ class CommandTests(unittest.TestCase):
       with self.assertRaisesRegex(ValueError,"地形训练列数"):
         build_command(self.root,sys.executable,{**base,"terrain_num_cols":columns})
 
+  def test_mgdp_resume_can_restore_run_encoder_without_public_pretrain_file(self):
+    checkpoint=self.checkpoint(experiment="lgdog1_velocity_race_mgdp_v3")
+    argv=build_command(self.root,sys.executable,{"mode":"train","task":"race_mgdp",
+      "resume":True,"checkpoint":str(checkpoint)})
+    self.assertIn("--agent.resume=True",argv)
+
   def test_automatic_terrain_flags_are_validated_and_flat_is_rejected(self):
     for mode in ('uniform','lp_acrl'):
       argv=build_command(self.root,sys.executable,{'mode':'train','terrain_curriculum':mode,

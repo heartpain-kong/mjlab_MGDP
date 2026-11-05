@@ -94,6 +94,9 @@ python scripts/play.py LgDog1-Rough-MGDP \
 Rough 默认 256 环境；比赛默认 64 环境、4×10 采集地图、batch 64；均采集 4000 步、训练 3000 次迭代。
 已有权重时仍显示 **「重新预训练感知模型」**，完成后替换当前任务默认感知权重；正在运行或停止时禁用重复启动。
 完成状态按本次运行结果判断，不会因为旧权重存在就提前显示成功；失败或停止后可以重试。
+旧策略回放必须配套原感知模型。新checkpoint会绑定同run的感知快照，Play/续训自动恢复；
+旧checkpoint优先用该run的 `policy.perception.pt`，不会自动混用重新预训练的公共文件。
+缺失原文件及显式指定方法见 [Play感知配对说明](MGDP_CHECKPOINT_PAIRING.md)。
 
 ### 2027 比赛地形（`LgDog1-Race-MGDP`）
 

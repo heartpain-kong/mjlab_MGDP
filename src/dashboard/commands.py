@@ -99,7 +99,7 @@ def build_command(root, python, options):
   mode = options.get("mode", "train")
   task_value = options.get("task", DEFAULT_TASK)
   _, task = resolve_task(task_value)
-  if mode == "train" and task.get("requires_pretrain"):
+  if mode == "train" and task.get("requires_pretrain") and not options.get("resume"):
     # Capability-driven prerequisite: fail before launching a doomed run and
     # tell the user the exact command instead of crashing inside env setup.
     checkpoint = root / str(task.get("pretrain_checkpoint") or "")

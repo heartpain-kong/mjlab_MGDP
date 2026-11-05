@@ -57,6 +57,7 @@ class TrainConfig:
   velocity_min_abs: float | None = None
   velocity_max_abs: float | None = None
   resume_checkpoint: str | None = None
+  perception_checkpoint: str | None = None
   torchrunx_log_dir: str | None = None
   gpu_ids: list[int] | Literal["all"] | None = field(default_factory=lambda: [0])
 
@@ -187,6 +188,22 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
   if rank == 0:
     print(f"[INFO] Logging experiment in directory: {log_dir}")
 
+  log_root_path = log_dir.parent
+  resume_path: Path | None = None
+  if cfg.agent.resume:
+    if cfg.resume_checkpoint:
+      resume_path = Path(cfg.resume_checkpoint).expanduser().resolve()
+      if not resume_path.is_file():
+        raise FileNotFoundError(f"Resume checkpoint not found: {resume_path}")
+    else:
+      resume_path = get_checkpoint_path(log_root_path, cfg.agent.load_run, cfg.agent.load_checkpoint)
+    from src.mgdp_checkpoint import bind_checkpoint_encoder
+    bind_checkpoint_encoder(cfg.env, resume_path, cfg.perception_checkpoint)
+  elif cfg.perception_checkpoint is not None:
+    if "perception" not in cfg.env.observations:
+      raise ValueError("当前任务不使用MGDP感知模型")
+    cfg.env.observations["perception"].terms["depth_feature"].params["checkpoint"] = cfg.perception_checkpoint
+
   grid = cfg.env.scene.terrain.terrain_generator if cfg.env.scene.terrain else None
   if grid is not None:
     print(f"[init] building terrain {grid.num_rows}x{grid.num_cols}, "
@@ -196,21 +213,6 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
       cfg=cfg.env, device=device, render_mode="rgb_array" if cfg.video else None
     )
   print("[init] physics environment ready; creating PPO runner...", flush=True)
-
-  log_root_path = log_dir.parent  # Go up from specific run dir to experiment dir.
-
-  resume_path: Path | None = None
-  if cfg.agent.resume:
-      # Load from the current experiment, or from an explicitly compatible
-      # stage such as Flat-HIM -> Rough-HIM.
-      if cfg.resume_checkpoint:
-        resume_path = Path(cfg.resume_checkpoint).expanduser().resolve()
-        if not resume_path.is_file():
-          raise FileNotFoundError(f"Resume checkpoint not found: {resume_path}")
-      else:
-        resume_path = get_checkpoint_path(
-          log_root_path, cfg.agent.load_run, cfg.agent.load_checkpoint
-        )
 
   # Only record videos on rank 0 to avoid multiple workers writing to the same files.
   if cfg.video and rank == 0:

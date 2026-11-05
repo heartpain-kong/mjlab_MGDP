@@ -27,6 +27,8 @@ class PlayConfig:
   agent: Literal["zero", "random", "trained"] = "trained"
   checkpoint_file: str | None = None
   """显式指定 checkpoint。不给则自动取【最新 run 的最新 model_*.pt】（方便训练中随时看）。"""
+  perception_checkpoint: str | None = None
+  """旧MGDP checkpoint缺少配套快照时，显式指定原训练感知文件。"""
   load_run: str = ".*"
   """只在不给 checkpoint_file 时生效：run 目录名的正则（按名字排序取最后一个）。"""
   load_checkpoint: str = "model_.*.pt"
@@ -159,6 +161,10 @@ def run_play(task_id: str, cfg: PlayConfig):
       )
       print(msg)
     log_dir = resume_path.parent
+
+  if TRAINED_MODE:
+    from src.mgdp_checkpoint import bind_checkpoint_encoder
+    bind_checkpoint_encoder(env_cfg, resume_path, getattr(cfg, "perception_checkpoint", None))
 
   if TRAINED_MODE and hasattr(agent_cfg.actor, "history_length"):
     # Read only the recorded protocol before allocating physics/rollout buffers.

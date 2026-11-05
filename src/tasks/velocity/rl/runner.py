@@ -73,6 +73,10 @@ class PPOHIMRunner(MjlabOnPolicyRunner):
 
   def save(self, path: str, infos=None):
     infos = {**(infos or {})}
+    from src.mgdp_checkpoint import save_encoder_contract
+    perception = save_encoder_contract(self.env.unwrapped, Path(path).parent)
+    if perception is not None:
+      infos["mgdp_perception"] = perception
     passage = self._passage_curriculum()
     if passage is not None:
       infos["mgdp_passage_curriculum"] = passage.state_dict()
@@ -98,8 +102,13 @@ class PPOHIMRunner(MjlabOnPolicyRunner):
 
   def load(self, path, load_cfg=None, strict=True, map_location=None):
     passage = self._passage_curriculum()
-    if passage is not None:
+    has_perception = "perception" in getattr(getattr(self.env.unwrapped, "cfg", None), "observations", {})
+    if passage is not None or has_perception:
       checkpoint = torch.load(path, map_location="cpu", weights_only=False)
+      if has_perception:
+        from src.mgdp_checkpoint import validate_runtime_encoder
+        validate_runtime_encoder(self.env.unwrapped, checkpoint)
+    if passage is not None:
       state = checkpoint.get("infos", {}).get("mgdp_passage_curriculum")
       if state is None:
         raise ValueError("定向越障 v2 不能完整续训旧 MGDP：缺少通过率课程状态，请创建新训练")
