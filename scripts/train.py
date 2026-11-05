@@ -30,7 +30,8 @@ from src.tasks.velocity.mdp.curriculums import (
   velocity_ranges_from_bounds,
 )
 from src.dashboard.run_naming import resolve_run_name
-from src.scene_diagnostics import report_scene_initialization
+from src.scene_diagnostics import report_scene_initialization, report_device_memory
+from src.sim_memory import compact_model_allocations
 from src.tasks.velocity.config.lgdog1.terrain_curriculum import configure_terrain_curriculum
 
 
@@ -43,6 +44,7 @@ class TrainConfig:
   video_length: int = 200
   video_interval: int = 2000
   enable_nan_guard: bool = False
+  optimize_vram: bool = True
   terrain_num_rows: int | None = None
   terrain_num_cols: int | None = None
   terrain_difficulty_max: float | None = None
@@ -208,11 +210,12 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
   if grid is not None:
     print(f"[init] building terrain {grid.num_rows}x{grid.num_cols}, "
           f"envs={cfg.env.scene.num_envs}...", flush=True)
-  with report_scene_initialization(cfg.env):
+  with report_scene_initialization(cfg.env), compact_model_allocations(cfg.optimize_vram):
     env = ManagerBasedRlEnv(
       cfg=cfg.env, device=device, render_mode="rgb_array" if cfg.video else None
     )
   print("[init] physics environment ready; creating PPO runner...", flush=True)
+  report_device_memory(device, "physics-ready")
 
   # Only record videos on rank 0 to avoid multiple workers writing to the same files.
   if cfg.video and rank == 0:
@@ -241,6 +244,7 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
 
   runner_kwargs = {}
   runner = runner_cls(env, agent_cfg, str(log_dir), device, **runner_kwargs)
+  report_device_memory(device, "runner-ready")
 
   runner.add_git_repo_to_log(__file__)
   if resume_path is not None:
@@ -252,11 +256,13 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
     dump_yaml(log_dir / "params" / "env.yaml", env_cfg)
     dump_yaml(log_dir / "params" / "agent.yaml", agent_cfg)
 
-  runner.learn(
-    num_learning_iterations=cfg.agent.max_iterations, init_at_random_ep_len=True
-  )
-
-  env.close()
+  try:
+    runner.learn(
+      num_learning_iterations=cfg.agent.max_iterations, init_at_random_ep_len=True
+    )
+  finally:
+    report_device_memory(device, "after-ppo")
+    env.close()
 
 
 def launch_training(task_id: str, args: TrainConfig | None = None):

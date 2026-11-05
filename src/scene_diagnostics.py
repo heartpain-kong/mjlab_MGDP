@@ -14,6 +14,26 @@ def scene_memory_estimates(ngeom, num_envs):
   }
 
 
+def report_device_memory(device, stage):
+  """Device usage is global; Torch allocator peaks exclude Warp allocations."""
+  if not str(device).startswith("cuda"):
+    return None
+  import torch
+  try:
+    torch.cuda.synchronize(device)
+    free, total = torch.cuda.mem_get_info(device)
+    gib = 1024**3
+    print(f"[memory] {stage}: device/global={(total-free)/gib:.2f}/{total/gib:.2f} GiB, "
+          f"Torch reserved={torch.cuda.memory_reserved(device)/gib:.2f} GiB, "
+          f"Torch peak reserved={torch.cuda.max_memory_reserved(device)/gib:.2f} GiB "
+          "(Torch peaks exclude Warp)", flush=True)
+    return {"device_used": total-free, "device_total": total,
+            "torch_peak_reserved": torch.cuda.max_memory_reserved(device)}
+  except (RuntimeError, AssertionError) as error:
+    print(f"[memory] {stage}: GPU counters unavailable: {error}", flush=True)
+    return None
+
+
 @contextmanager
 def report_scene_initialization(env_cfg):
   """Temporarily compose with the existing hook; never serialize the closure."""

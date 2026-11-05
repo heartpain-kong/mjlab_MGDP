@@ -9,6 +9,7 @@ import os
 
 from .catalog import DEFAULT_TASK, SIM2SIM_MAPS, TASKS, resolve_task
 from .run_naming import next_run_name
+from src.config.race_training import MIN_RACE_TERRAIN_COLS
 
 
 def discover_models(root, task_value=DEFAULT_TASK):
@@ -113,6 +114,9 @@ def build_command(root, python, options):
                    "环境数", 1, 8192)
     iterations = integer(options.get("iterations", 16000), "训练轮数", 1, 1000000)
     seed = integer(options.get("seed", 42), "seed", 0, 2147483647)
+    mini_batches = options.get("ppo_mini_batches")
+    if mini_batches is not None and str(mini_batches).strip():
+      mini_batches = integer(mini_batches, "PPO小批次数", 1, 64)
     terrain_rows = str(options.get("terrain_num_rows") or defaults.get("terrain_num_rows", "")).strip()
     if terrain_rows:
       terrain_rows = integer(terrain_rows, "地形训练行数", 2, 100)
@@ -120,7 +124,8 @@ def build_command(root, python, options):
     terrain_cols = str(defaults.get("terrain_num_cols", "")
                        if raw_cols is None or str(raw_cols).strip()=="" else raw_cols).strip()
     if terrain_cols:
-      terrain_cols = integer(terrain_cols, "地形训练列数", defaults.get("terrain_num_cols",1), 100)
+      terrain_cols = integer(terrain_cols, "地形训练列数",
+                             MIN_RACE_TERRAIN_COLS if task.get("directed_passage") else 1, 100)
     terrain_difficulty = str(options.get("terrain_difficulty_max") or "").strip()
     if terrain_difficulty:
       terrain_difficulty = number(terrain_difficulty, "最大地形难度倍率", 0.5, 1.5)
@@ -160,6 +165,10 @@ def build_command(root, python, options):
             f"--env.scene.num-envs={envs}", f"--agent.max-iterations={iterations}",
             "--agent.logger=tensorboard", f"--agent.seed={seed}", "--enable-nan-guard", "True"]
     argv += curriculum_flags
+    if options.get("optimize_vram") is False:
+      argv.append("--optimize-vram=False")
+    if mini_batches is not None and str(mini_batches).strip():
+      argv.append(f"--agent.algorithm.num-mini-batches={mini_batches}")
     if terrain_rows != "":
       argv.append(f"--terrain-num-rows={terrain_rows}")
     if terrain_cols != "":
@@ -193,7 +202,8 @@ def build_command(root, python, options):
     if viewer not in {"viser", "native"}:
       raise ValueError("play viewer 只能是 viser 或 native")
     return [str(python), str(scripts / "play.py"), task["id"], f"--checkpoint_file={checkpoint}",
-            f"--num_envs={integer(options.get('envs', 4), '环境数', 1, 128)}", "--viewer", viewer] + camera_inset_flags(options, tyro=True)
+            f"--num_envs={integer(options.get('envs', 4), '环境数', 1, 128)}", "--viewer", viewer] + (
+              ["--optimize-vram=False"] if options.get("optimize_vram") is False else []) + camera_inset_flags(options, tyro=True)
   if mode == "sim":
     path = model_path(root, task_value, options.get("onnx"), "onnx")
     map_name = options.get("map", "flat")

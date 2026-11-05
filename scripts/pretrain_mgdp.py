@@ -46,6 +46,7 @@ import torch
 from mjlab.envs import ManagerBasedRlEnv
 from mjlab.envs.mdp import height_scan
 from src.config.mgdp_pretrain import pretrain_resources
+from src.sim_memory import compact_model_allocations
 
 from src.tasks.velocity.config.lgdog1.mgdp_env_cfg import (
     DEPTH_HW,
@@ -81,6 +82,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--log-every", type=int, default=100)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    p.add_argument("--optimize-vram", action=argparse.BooleanOptionalAction, default=True)
     p.add_argument("--out", default=None)
     p.add_argument("--init-from", default="", help="released MGDP wm_best.pt (optional)")
     args = p.parse_args()
@@ -134,7 +136,8 @@ def build_env(args) -> ManagerBasedRlEnv:
         tg.difficulty_range = (0.0, 1.0) if race else (0.4, 1.0)
         print(f"[init] terrain={tg.num_rows}x{tg.num_cols}, envs={args.num_envs}; "
               "building scene, compiling MuJoCo and initializing physics...", flush=True)
-    return ManagerBasedRlEnv(cfg=cfg, device=args.device)
+    with compact_model_allocations(getattr(args, "optimize_vram", True)):
+        return ManagerBasedRlEnv(cfg=cfg, device=args.device)
 
 
 @torch.no_grad()

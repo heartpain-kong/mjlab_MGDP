@@ -68,6 +68,7 @@ def mgdp_depth_feature(
     sensor_name: str = "depth_rays",
     cfg=None,
     checkpoint: str = "",
+    inference_batch_size: int = 256,
 ) -> torch.Tensor:
     """Return the temporal MGDP feature ``[B, 64]`` for the actor group."""
     cfg = _as_cfg(cfg)
@@ -92,7 +93,7 @@ def mgdp_depth_feature(
         hidden[:, reset] = 0.0
 
     with torch.no_grad():
-        feature, hidden = module.feature(stack, hidden)
+        feature, hidden = module.feature_batched(stack, hidden, inference_batch_size)
 
     state["prev"] = depth.detach()
     state["hidden"] = hidden.detach()

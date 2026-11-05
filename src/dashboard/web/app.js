@@ -90,6 +90,7 @@ function collect() {
   const model = $("custom-model").value.trim() || $("model").value;
   return {mode, task:$("task").value, envs:$(mode==="play"?"play-envs":"train-envs").value,
     iterations:$("iterations").value, seed:$("seed").value, run_name:$("run-name").value,
+    ppo_mini_batches:$("ppo-mini-batches")?.value||"",
     terrain_num_rows:$("terrain-num-rows")?.disabled?"":$("terrain-num-rows")?.value || "",
     terrain_num_cols:$("terrain-num-cols")?.disabled?"":$("terrain-num-cols")?.value || "",
     terrain_difficulty_max:$("terrain-difficulty-max")?.disabled?"":$("terrain-difficulty-max")?.value || "",
@@ -146,9 +147,11 @@ function applyTrainingPreset(kind){
   $("iterations").value=preset.iterations;
   $("terrain-num-rows").value=preset.terrain_num_rows;
   $("terrain-num-cols").value=preset.terrain_num_cols;
+  const batches=$("ppo-mini-batches");if(batches)batches.value=preset.ppo_mini_batches??"";
 }
 function updateTrainingPresets(t){
   const presets=t.capabilities?.train_presets||{};
+  $("vram-probe")?.classList.toggle("hidden",!presets.probe3072);
   for(const kind of ["smoke","full"]){
     const button=document.querySelector(`[data-preset="${kind}"]`);
     if(!button)continue;

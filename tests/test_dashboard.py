@@ -61,16 +61,22 @@ class CommandTests(unittest.TestCase):
         "mode": "train", "velocity_min_abs": "0.9", "velocity_max_abs": "0.8",
       })
 
-  def test_race_training_uses_compact_map_and_allows_explicit_larger_runs(self):
+  def test_race_training_retains_twenty_columns_and_allows_explicit_sizes(self):
     checkpoint=self.root/"logs/mgdp/perception/mgdp_race_v3.pt"
     checkpoint.parent.mkdir(parents=True);checkpoint.write_text("fixture")
     base={"mode":"train","task":"race_mgdp"}
     command=build_command(self.root,sys.executable,base)
-    for flag in ("--env.scene.num-envs=256","--terrain-num-rows=4","--terrain-num-cols=10"):
+    for flag in ("--env.scene.num-envs=2048","--terrain-num-rows=8","--terrain-num-cols=20"):
       self.assertIn(flag,command)
-    larger=build_command(self.root,sys.executable,{**base,"envs":2048,"terrain_num_rows":12,"terrain_num_cols":20})
-    for flag in ("--env.scene.num-envs=2048","--terrain-num-rows=12","--terrain-num-cols=20"):
+    larger=build_command(self.root,sys.executable,{**base,"envs":3072,"terrain_num_rows":12,"terrain_num_cols":20})
+    for flag in ("--env.scene.num-envs=3072","--terrain-num-rows=12","--terrain-num-cols=20"):
       self.assertIn(flag,larger)
+    self.assertIn("--terrain-num-cols=10",build_command(self.root,sys.executable,{**base,"terrain_num_cols":10}))
+    probe=build_command(self.root,sys.executable,{**base,"envs":3072,"ppo_mini_batches":8})
+    self.assertIn("--agent.algorithm.num-mini-batches=8",probe)
+    self.assertIn("--optimize-vram=False",build_command(self.root,sys.executable,{**base,"optimize_vram":False}))
+    with self.assertRaisesRegex(ValueError,"PPO小批次数"):
+      build_command(self.root,sys.executable,{**base,"ppo_mini_batches":0})
     for columns in (0,9):
       with self.assertRaisesRegex(ValueError,"地形训练列数"):
         build_command(self.root,sys.executable,{**base,"terrain_num_cols":columns})

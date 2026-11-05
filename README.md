@@ -55,7 +55,7 @@ python lgdog.py rewards standard --term foot_clearance
 # MGDP 深度感知（需先预训练）
 python lgdog.py train mgdp --envs 2048 --iterations 10000
 # 定向越障 v2：入口→障碍→出口，按各类通过率门控扩速
-python lgdog.py train race_mgdp --envs 256 --terrain-num-rows 4 --terrain-num-cols 10 --iterations 16000
+python lgdog.py train race_mgdp --envs 2048 --terrain-num-rows 8 --terrain-num-cols 20 --iterations 16000
 # 2027 比赛场地：python lgdog.py train race --envs 4096
 ```
 

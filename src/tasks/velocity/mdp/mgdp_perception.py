@@ -282,8 +282,30 @@ class MGPDPerception(nn.Module):
     def feature(self, depth: torch.Tensor, hidden: torch.Tensor | None):
         """depth: (B, frames, h, w) normalized; returns ((B, 64), new_hidden)."""
         token = self.depth_encoder(depth)
+        # Reconstruction needs skip maps during pretraining; frozen feature
+        # inference does not. Do not retain a full-env U-Net activation batch.
+        self.depth_encoder.skip_connections.clear()
         out, hidden = self.memory(token.unsqueeze(1), hidden)
         return out.squeeze(1), hidden
+
+    def feature_batched(self, depth, hidden, batch_size=256):
+        """Bound frozen inference activation memory without mixing GRU states.
+
+        GroupNorm/LayerNorm act within each sample, so environment batches can
+        be split independently. Zero selects the original whole-batch path.
+        """
+        if batch_size < 0:
+            raise ValueError("inference batch size must be nonnegative")
+        if batch_size == 0 or len(depth) <= batch_size:
+            return self.feature(depth, hidden)
+        features, states = [], []
+        for start in range(0, len(depth), batch_size):
+            end = start + batch_size
+            previous = None if hidden is None else hidden[:, start:end].contiguous()
+            feature, state = self.feature(depth[start:end], previous)
+            features.append(feature)
+            states.append(state)
+        return torch.cat(features, dim=0), torch.cat(states, dim=1)
 
     @torch.no_grad()
     def act_feature(self, depth: torch.Tensor, hidden: torch.Tensor | None):

@@ -48,6 +48,7 @@ class PlayConfig:
   camera_inset_corner: Literal["bottom-left", "bottom-right", "top-left", "top-right"] = "bottom-left"
   no_terminations: bool = False
   """Disable all termination conditions (useful for viewing motions with dummy agents)."""
+  optimize_vram: bool = True
 
   # Internal flag used by demo script.
   _demo_mode: tyro.conf.Suppress[bool] = False
@@ -186,7 +187,9 @@ def run_play(task_id: str, cfg: PlayConfig):
     print(
       "[WARN] Video recording with dummy agents is disabled (no checkpoint/log_dir)."
     )
-  env = ManagerBasedRlEnv(cfg=env_cfg, device=device, render_mode=render_mode)
+  from src.sim_memory import compact_model_allocations
+  with compact_model_allocations(cfg.optimize_vram):
+    env = ManagerBasedRlEnv(cfg=env_cfg, device=device, render_mode=render_mode)
 
   if TRAINED_MODE and cfg.video:
     print("[INFO] Recording videos during play")

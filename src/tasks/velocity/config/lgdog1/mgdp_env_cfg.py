@@ -122,6 +122,7 @@ def lgdog1_mgdp_env_cfg(
                         "sensor_name": "depth_rays",
                         "cfg": perception_cfg,
                         "checkpoint": checkpoint,
+                        "inference_batch_size": 256,
                     },
                 )
             },

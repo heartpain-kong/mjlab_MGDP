@@ -26,9 +26,11 @@
   未完成前面路点，直接到最终出口不算成功。所有课的起点和终点均在平地上。
 - 当前10类课程各占1/10：平地、梅花桩、单木桥、沟壑、高墙、匍匐、轮胎阵、随机高低起伏、
   mjlab原生随机粗糙高度场、绕桩→砖木坑连续课。完整定义为10行×20列，每类两列，开局只用第0行。
-  工作台/短命令默认采用小内存训练预设：256环境、4行×10列，每类一列；快速检查为64环境、2行×10列。
+  工作台/短命令保留20列：默认2048环境、8行×20列；快速检查为64环境、2行×20列。
+  另有3072环境、8×20、2轮试运行预设，PPO小批次数为8；这是显存试验，不是已验证的8GB长训配置。
   可手动增加行列和环境数；减少的是重复课程与难度档位，单块障碍密度和0～1难度范围保留。
   详细原因及内存估算见 [赛道训练 RAM OOM 说明](RACE_MGDP_RAM_OOM.md)。
+  显存优化、后端适用范围及3072试运行见 [显存说明](MGDP_VRAM_3072.md)。
 - 难度从低桩、宽梁、小平台间隙、低墙、高净空、低轮胎递进。
   梅花桩每组双排12桩，横向7组共84桩，沿用参考单元的0.6m纵向间距，平台与桩区总长5.3m；
   沟壑包含实心斜坡、双平台和两级下台阶，横向9单元相接覆盖7.2m；单木桥宽0.7→0.4m，
@@ -94,7 +96,7 @@ Kp/Kd/电机强度各 0.9～1.1 倍及初始关节位置 0.5～1.5 倍。
 
 ```bash
 python -m scripts.pretrain_mgdp --task LgDog1-Race-MGDP --steps 4000 --sequence-length 8 --iterations 3000
-python lgdog.py train race_mgdp --envs 256 --terrain-num-rows 4 --terrain-num-cols 10 --iterations 16000
+python lgdog.py train race_mgdp --envs 2048 --terrain-num-rows 8 --terrain-num-cols 20 --iterations 16000
 ```
 
 比赛感知文件默认输出 `logs/mgdp/perception/mgdp_race_v3.pt`，与普通 Rough 感知文件分开。

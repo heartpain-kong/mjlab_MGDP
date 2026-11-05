@@ -241,7 +241,7 @@ assert.equal(nodes.pretrain.disabled,true);
     script = r"""
 const fs=require('fs'),vm=require('vm'),assert=require('node:assert/strict');
 const nodes={};
-for(const id of ['task','train-envs','iterations','terrain-num-rows','terrain-num-cols'])nodes[id]={value:''};
+for(const id of ['task','train-envs','iterations','terrain-num-rows','terrain-num-cols','ppo-mini-batches'])nodes[id]={value:''};
 nodes.task.value='race_mgdp';
 const buttons={smoke:{},full:{}};
 const ctx={window:{LgDogFormat:{}},document:{getElementById:id=>nodes[id],
@@ -251,17 +251,23 @@ vm.runInContext(fs.readFileSync(process.argv[1],'utf8').replace(/\nstart\(\);\s*
 ctx.presets=JSON.parse(process.argv[2]);
 vm.runInContext(`state={tasks:[{alias:'race_mgdp',capabilities:{train_presets:presets}},
   {alias:'standard',capabilities:{}}]};updateTrainingPresets(task());`,ctx);
-assert.equal(nodes['train-envs'].value,256);
-assert.equal(nodes['terrain-num-rows'].value,4);
-assert.equal(nodes['terrain-num-cols'].value,10);
-assert.match(buttons.full.textContent,/4×10/);
+assert.equal(nodes['train-envs'].value,2048);
+assert.equal(nodes['terrain-num-rows'].value,8);
+assert.equal(nodes['terrain-num-cols'].value,20);
+assert.match(buttons.full.textContent,/8×20/);
 nodes['train-envs'].value=512;
 vm.runInContext('updateTrainingPresets(task());',ctx);
 assert.equal(nodes['train-envs'].value,512);
 vm.runInContext(`applyTrainingPreset('smoke');`,ctx);
 assert.equal(nodes['train-envs'].value,64);
 assert.equal(nodes['terrain-num-rows'].value,2);
-assert.equal(nodes['terrain-num-cols'].value,10);
+assert.equal(nodes['terrain-num-cols'].value,20);
+vm.runInContext(`applyTrainingPreset('probe3072');`,ctx);
+assert.equal(nodes['train-envs'].value,3072);
+assert.equal(nodes.iterations.value,2);
+assert.equal(nodes['terrain-num-rows'].value,8);
+assert.equal(nodes['terrain-num-cols'].value,20);
+assert.equal(nodes['ppo-mini-batches'].value,8);
 nodes.task.value='standard';vm.runInContext('updateTrainingPresets(task());',ctx);
 assert.equal(nodes['train-envs'].value,1024);
 assert.equal(nodes['terrain-num-cols'].value,'');

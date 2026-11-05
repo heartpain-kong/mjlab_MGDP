@@ -106,8 +106,9 @@ Rough 默认 256 环境；比赛默认 64 环境、4×10 采集地图、batch 64
   不改变策略训练的 10×20 地图和 HIMLoco 全强度域随机化；
 - 相机：前头顶 `(0.02, 0, 0.075)`，光轴水平朝前，FOV 87°（示意图见
   `E:\rl_vision\deploy\out\camera_mount_diagram.png`）；
-- 训练：`python lgdog.py train race_mgdp --envs 256 --terrain-num-rows 4 --terrain-num-cols 10 --iterations 16000`（同样需要先预训练感知）；
+- 训练：`python lgdog.py train race_mgdp --envs 2048 --terrain-num-rows 8 --terrain-num-cols 20 --iterations 16000`（同样需要先预训练感知）；
   初始化曾在12×20大图下触发主机RAM OOM，原因和小地图预设见 [RAM说明](RACE_MGDP_RAM_OOM.md)；
+  当前保留20列的显存优化与3072试运行见 [显存说明](MGDP_VRAM_3072.md)，实际容量须在本机确认；
 - 真场地复测：`python scripts/sim2sim.py LgDog1-Race-MGDP --onnx=... --map race`。
 
 比赛预训练可直接运行（在项目根目录并激活训练环境）：

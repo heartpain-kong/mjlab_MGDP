@@ -54,6 +54,8 @@ def main():
     if mode in {"train", "play"}:
       child.add_argument("--envs", type=int, default=None if mode == "train" else 4)
       child.add_argument("--checkpoint", default="")
+      child.add_argument("--optimize-vram", action=argparse.BooleanOptionalAction, default=True,
+                         help="回收已验证后端的闲置几何体对表")
     if mode == "train":
       child.add_argument("--terrain-curriculum", choices=("manual", "uniform", "lp_acrl"), default="manual")
       child.add_argument("--lp-temperature", type=float, default=2.0)
@@ -66,6 +68,8 @@ def main():
       child.add_argument("--lp-max-task-probability", type=float, default=0.25)
       child.add_argument("--iterations", type=int, default=16000)
       child.add_argument("--seed", type=int, default=42)
+      child.add_argument("--ppo-mini-batches", type=int, default=None,
+                         help="PPO小批次数，增大可降低反向传播显存；会改变优化批量")
       child.add_argument("--run-name", default="")
       child.add_argument("--terrain-num-rows", type=int, default=None,
                          help="地形课程行数；标准 HIM 默认 10")
