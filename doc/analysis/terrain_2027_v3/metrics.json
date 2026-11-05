@@ -1,4 +1,5 @@
 {
+  "layout_version": 4,
   "stepping_stones/0": {
     "geoms": 9
   },
@@ -162,13 +163,13 @@
     "length_m": 8.692444285720507
   },
   "high_wall/0": {
-    "geoms": 2
+    "geoms": 28
   },
   "high_wall/0.5": {
-    "geoms": 2
+    "geoms": 28
   },
   "high_wall/1": {
-    "geoms": 2
+    "geoms": 28
   },
   "high_wall": {
     "route": [
@@ -184,13 +185,13 @@
     "length_m": 5.3
   },
   "clearance_frame/0": {
-    "geoms": 12
+    "geoms": 309
   },
   "clearance_frame/0.5": {
-    "geoms": 12
+    "geoms": 309
   },
   "clearance_frame/1": {
-    "geoms": 12
+    "geoms": 309
   },
   "clearance_frame": {
     "route": [
@@ -206,13 +207,13 @@
     "length_m": 5.3
   },
   "tire_array/0": {
-    "geoms": 129
+    "geoms": 1153
   },
   "tire_array/0.5": {
-    "geoms": 129
+    "geoms": 1153
   },
   "tire_array/1": {
-    "geoms": 129
+    "geoms": 1153
   },
   "tire_array": {
     "route": [

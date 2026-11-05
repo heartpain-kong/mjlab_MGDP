@@ -28,6 +28,7 @@ class Lessons2027Tests(unittest.TestCase):
     self.assertEqual(set(cfg.scene.terrain.terrain_generator.sub_terrains),set(KINDS))
     self.assertEqual(cfg.scene.terrain.terrain_generator.difficulty_range,(0.,1.))
     self.assertFalse(cfg.curriculum)
+    self.assertEqual(cfg.events["reset_base"].params["pose_range"]["x"],(.2,.4))
 
   def compile(self, kind, difficulty):
     spec=mujoco.MjSpec();spec.worldbody.add_body(name="terrain")
@@ -148,12 +149,48 @@ class Lessons2027Tests(unittest.TestCase):
     self.assertGreater(command.command[i,1],0)
     self.assertAlmostEqual(command.heading_target[i].item(),np.pi/2,places=5)
     model,_=self.compile("clearance_frame",1.)
-    # one cage = plane + 6 legs + 5 roof bars; roof underside29cm
-    self.assertEqual(model.ngeom,12)
+    # Four cages along X, seven lanes across Y, and one shared floor.
+    self.assertEqual(model.ngeom,1+4*7*11)
     roofs=[model.geom(i) for i in range(model.ngeom) if abs(model.geom(i).size[2]-.01)<1e-8]
-    self.assertEqual(len(roofs),5)
+    self.assertEqual(len(roofs),4*7*5)
     for geom in roofs:
       self.assertAlmostEqual(geom.pos[2]-geom.size[2],.29)
+
+  def test_dense_wall_crawl_and_tyre_fields_keep_reference_units_and_clear_pads(self):
+    for kind in ("high_wall","clearance_frame","tire_array"):
+      with self.subTest(kind=kind):
+        model,data=self.compile(kind,1.)
+        floors=[i for i in range(model.ngeom) if min(model.geom_size[i,:2])>=4.]
+        self.assertEqual(len(floors),1)
+        ids=[i for i in range(model.ngeom) if i not in floors]
+        bounds=np.array([np.abs(data.geom_xmat[i].reshape(3,3))@model.geom_size[i] for i in ids])
+        low=(data.geom_xpos[ids]-bounds).min(0)
+        high=(data.geom_xpos[ids]+bounds).max(0)
+        self.assertGreaterEqual(low[0],1.65)
+        self.assertLessEqual(high[0],5.55)
+        self.assertGreaterEqual(low[1],.35)
+        self.assertLessEqual(high[1],7.65)
+        self.assertGreater(high[1]-low[1],6.5)
+        # Includes the earliest successful root position minus the hind-foot
+        # offset: the last obstacle must actually be behind the robot.
+        for x in (1.,1.5,6.3-.15-.52,6.3):
+          ray=mujoco.mj_ray(model,data,np.array([x,4.,1.]),np.array([0.,0.,-1.]),None,1,-1,None)
+          self.assertAlmostEqual(ray,1.,places=6)
+        if kind=="high_wall":
+          self.assertEqual(len(ids),27)
+          np.testing.assert_allclose(np.unique(data.geom_xpos[ids,0]),[2.3,3.7,5.1])
+          for i in ids:
+            np.testing.assert_allclose(model.geom_size[i],[.04,.4,.15])
+        elif kind=="clearance_frame":
+          for y in range(1,8):
+            ray=mujoco.mj_ray(model,data,np.array([1.,float(y),.30]),np.array([1.,0.,0.]),None,1,-1,None)
+            self.assertAlmostEqual(ray,.69,places=5)
+        else:
+          self.assertEqual(len(ids),12*6*16)
+          centres=data.geom_xpos[ids].reshape(12,6,16,3).mean(2)
+          np.testing.assert_allclose(np.diff(centres[0,:,0]),.55)
+          np.testing.assert_allclose(np.diff(centres[:,0,1]),.55)
+          np.testing.assert_allclose(centres[5:7,0,1],[4.-.275,4.+.275])
 
   def test_command_can_follow_every_route_inside_lane_within_timeout(self):
     env,command,robot=self.make_command()

@@ -16,7 +16,7 @@ KINDS = ("start_flat", "stepping_stones", "balance_beam", "gap_steps", "brick_pi
 START_X = 1.0
 GOAL_X = 5.3
 LANE_HALF_WIDTH = 0.28
-LAYOUT_VERSION = 3
+LAYOUT_VERSION = 4  # v3 task, dense obstacle layout revision.
 
 
 def lesson_route(kind, size=(8., 8.)):
@@ -119,13 +119,25 @@ class PassageTerrainCfg(SubTerrainCfg):
           pos=(x,y,height/2),size=(radius,height/2,0),rgba=green,contype=1,conaffinity=1)
         geoms.append(TerrainGeometry(geom=geom))
     elif self.kind == "high_wall":
-      box("high_wall",4.,cy,.04,.4,.04+.26*d)
+      # Three hurdles with room to land between them; repeat the reference
+      # 0.8m wall across the cell rather than leaving an empty lateral field.
+      half_lanes = int(np.floor((cy-.8)/.8+1e-8))
+      for i,x in enumerate((2.3,3.7,5.1)):
+        for j in range(-half_lanes,half_lanes+1):
+          box(f"high_wall_{i}_{j}",x,cy+j*.8,.04,.4,.04+.26*d)
     elif self.kind in ("clearance_frame", "tire_array"):
       if self.kind == "clearance_frame":
-        source = BoxClearanceFrameTerrainCfg(size=self.size,frame_count=1,
-                                             underside_range=(.44,.29))
+        half_lanes = int(np.floor((cy-.82)/1.))
+        source = BoxClearanceFrameTerrainCfg(size=self.size,frame_count=4,
+          frame_spacing=1.,center_x=3.6,lane_count=2*half_lanes+1,lane_spacing=1.,
+          underside_range=(.44,.29))
       else:
-        source = TireArrayTerrainCfg(size=self.size,height=.025+.14*d)
+        # Even row count keeps the centre lane between two rows, as in the
+        # reference 2x4 array. One floor for the whole field, not per tyre.
+        rows = int(np.floor((self.size[1]-.8-2*.2744)/.55))+1
+        rows -= rows%2
+        source = TireArrayTerrainCfg(size=self.size,rows=rows,cols=6,center_x=3.75,
+                                     height=.025+.14*d)
       geoms = list(source.function(d,spec,rng).geometries)
     return TerrainOutput(origin=np.array([START_X,cy,0.]),geometries=geoms)
 

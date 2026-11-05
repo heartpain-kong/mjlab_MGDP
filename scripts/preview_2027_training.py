@@ -6,7 +6,7 @@ from pathlib import Path
 import mujoco
 import numpy as np
 
-from src.tasks.velocity.config.lgdog1.passage_terrain_cfg import PassageTerrainCfg, KINDS, lesson_route
+from src.tasks.velocity.config.lgdog1.passage_terrain_cfg import PassageTerrainCfg, KINDS, lesson_route, LAYOUT_VERSION
 
 
 def build_lesson(kind, difficulty, *, route=False):
@@ -25,8 +25,15 @@ def build_lesson(kind, difficulty, *, route=False):
 def render(model,data,top=False):
   camera=mujoco.MjvCamera();camera.lookat[:]=(3.7,4.,.1)
   camera.distance=6.8;camera.azimuth=90 if top else 135;camera.elevation=-90 if top else -45
+  centres=data.geom_xpos[np.min(model.geom_size[:,:2],axis=1)<3.]
+  dense=len(centres)>0 and np.ptp(centres[:,1])>5.
+  if dense:
+    camera.lookat[:]=(3.6,4.,.1);camera.distance=9.;camera.azimuth=0;camera.elevation=-60
   if top:
     camera.lookat[:]=(3.4,4.1,0.);camera.distance=5.2
+    if dense:
+      camera.lookat[:]=(3.6,4.,0.);camera.distance=8.;camera.azimuth=0
+    camera.elevation=-90
   with mujoco.Renderer(model,height=280,width=420,max_geom=max(10000,model.ngeom+20)) as renderer:
     renderer.update_scene(data,camera=camera)
     if top:
@@ -43,7 +50,7 @@ def main():
   import matplotlib.pyplot as plt
   kinds=[k for k in KINDS if k not in ("start_flat","rough")]
   fig,axes=plt.subplots(len(kinds),3,figsize=(12,2.8*len(kinds)),layout="constrained")
-  metrics={}
+  metrics={"layout_version":LAYOUT_VERSION}
   for row,kind in enumerate(kinds):
     for col,difficulty in enumerate((0.,.5,1.)):
       model,data=build_lesson(kind,difficulty)
@@ -59,6 +66,13 @@ def main():
     ax.imshow(render(model,data,top=True));ax.axis("off")
     ax.set_title(kind+" | orange: ordered route (illustration)")
   fig.savefig(args.output/"routes.png",dpi=150);plt.close(fig)
+  fig,axes=plt.subplots(3,2,figsize=(12,9),layout="constrained")
+  for row,kind in enumerate(("high_wall","clearance_frame","tire_array")):
+    model,data=build_lesson(kind,1.)
+    for col,top in enumerate((False,True)):
+      axes[row,col].imshow(render(model,data,top=top));axes[row,col].axis("off")
+      axes[row,col].set_title(kind+" | "+("top view" if top else "dense target layout"))
+  fig.savefig(args.output/"dense_lessons.png",dpi=150);plt.close(fig)
   (args.output/"metrics.json").write_text(json.dumps(metrics,indent=2),encoding="utf-8")
   print(args.output.resolve())
 

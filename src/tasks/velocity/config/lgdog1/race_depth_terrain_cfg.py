@@ -62,6 +62,9 @@ class BoxClearanceFrameTerrainCfg(SubTerrainCfg):
   frame_size: float = 0.8
   frame_count: int = 2
   frame_spacing: float = 2.2
+  center_x: float | None = None
+  lane_count: int = 1
+  lane_spacing: float = 1.0
   underside_range: tuple[float, float] = (0.34, 0.28)
   bar_half: float = 0.01
   leg_half: float = 0.01
@@ -78,17 +81,21 @@ class BoxClearanceFrameTerrainCfg(SubTerrainCfg):
     half = self.frame_size / 2.0
     side_half = half + self.leg_half  # 0.8m INNER width, matching the source XML.
     cx, cy = self.size[0] / 2.0, self.size[1] / 2.0
+    if self.center_x is not None:
+      cx = self.center_x
     bar_center = underside + self.bar_half
 
-    for index in range(self.frame_count):
-      ox = cx + (index - (self.frame_count - 1) / 2.0) * self.frame_spacing
+    for index in range(self.frame_count*self.lane_count):
+      lane, frame = divmod(index,self.frame_count)
+      ox = cx + (frame - (self.frame_count - 1) / 2.0) * self.frame_spacing
+      oy = cy + (lane - (self.lane_count - 1) / 2.0) * self.lane_spacing
       # 6 legs: x = -half, 0, +half; y = +-half.
       for lx in (-half, 0.0, half):
         for ly in (-side_half, side_half):
           leg = body.add_geom(
             type=mujoco.mjtGeom.mjGEOM_BOX,
             size=(self.leg_half, self.leg_half, underside / 2.0),
-            pos=(ox + lx, cy + ly, underside / 2.0),
+            pos=(ox + lx, oy + ly, underside / 2.0),
             rgba=(0.35, 0.62, 0.20, 1.0),
             contype=1, conaffinity=1,
           )
@@ -98,7 +105,7 @@ class BoxClearanceFrameTerrainCfg(SubTerrainCfg):
         bar = body.add_geom(
           type=mujoco.mjtGeom.mjGEOM_BOX,
           size=(self.bar_half, side_half + self.leg_half, self.bar_half),
-          pos=(ox + lx, cy, bar_center),
+          pos=(ox + lx, oy, bar_center),
           rgba=(0.82, 0.34, 0.22, 1.0),
           contype=1, conaffinity=1,
         )
@@ -108,7 +115,7 @@ class BoxClearanceFrameTerrainCfg(SubTerrainCfg):
         bar = body.add_geom(
           type=mujoco.mjtGeom.mjGEOM_BOX,
           size=(half + self.bar_half, self.bar_half, self.bar_half),
-          pos=(ox, cy + ly, bar_center),
+          pos=(ox, oy + ly, bar_center),
           rgba=(0.82, 0.34, 0.22, 1.0),
           contype=1, conaffinity=1,
         )
@@ -128,6 +135,7 @@ class TireArrayTerrainCfg(SubTerrainCfg):
   inner_radius: float = 0.1646
   height: float = 0.165
   segments: int = 16
+  center_x: float | None = None
 
   def function(self, difficulty: float, spec: mujoco.MjSpec, rng) -> TerrainOutput:
     del rng, difficulty
@@ -139,6 +147,8 @@ class TireArrayTerrainCfg(SubTerrainCfg):
     radial_half = (self.outer_radius - self.inner_radius) / 2.0
     seg_half = math.pi * mid_radius / self.segments * 1.08
     cx, cy = self.size[0] / 2.0, self.size[1] / 2.0
+    if self.center_x is not None:
+      cx = self.center_x
 
     for row in range(self.rows):
       for col in range(self.cols):
