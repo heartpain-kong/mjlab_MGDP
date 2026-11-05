@@ -12,7 +12,7 @@ from mjlab.terrains import TerrainGeneratorCfg
 import src.tasks
 from src.tasks.velocity.mdp import passage
 from src.tasks.velocity.config.lgdog1.blind_mdp import sustained_leg_contact
-from src.tasks.velocity.config.lgdog1.passage_terrain_cfg import PassageTerrainCfg, KINDS
+from src.tasks.velocity.config.lgdog1.passage_terrain_cfg import PassageTerrainCfg, KINDS, lesson_route
 
 
 class MGDPPassageTests(unittest.TestCase):
@@ -51,8 +51,8 @@ class MGDPPassageTests(unittest.TestCase):
         result = terrain.function(difficulty, spec, np.random.default_rng(42))
         model = spec.compile(); data = mujoco.MjData(model); mujoco.mj_forward(model,data)
         np.testing.assert_array_equal(result.origin, [1.,4.,0.])
-        for x in (1., 6.3):
-          hit = mujoco.mj_ray(model,data,np.array([x,4.,1.]),np.array([0.,0.,-1.]),None,1,-1,None)
+        for x,y in ([1.,4.],np.array(lesson_route(kind)[-1])+[1.,4.]):
+          hit = mujoco.mj_ray(model,data,np.array([x,y,1.]),np.array([0.,0.,-1.]),None,1,-1,None)
           self.assertAlmostEqual(hit,1.,places=5,msg=kind)
 
   def fake_env(self):

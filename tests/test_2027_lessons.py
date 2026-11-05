@@ -28,7 +28,7 @@ class Lessons2027Tests(unittest.TestCase):
     self.assertEqual(set(cfg.scene.terrain.terrain_generator.sub_terrains),set(KINDS))
     self.assertEqual(cfg.scene.terrain.terrain_generator.difficulty_range,(0.,1.))
     self.assertFalse(cfg.curriculum)
-    self.assertEqual(cfg.events["reset_base"].params["pose_range"]["x"],(.2,.4))
+    self.assertEqual(cfg.events["reset_base"].params["pose_range"]["x"],(0.,.2))
 
   def compile(self, kind, difficulty):
     spec=mujoco.MjSpec();spec.worldbody.add_body(name="terrain")
@@ -39,20 +39,23 @@ class Lessons2027Tests(unittest.TestCase):
   def matching(self, model, suffix):
     return [model.geom(i) for i in range(model.ngeom) if suffix in model.geom(i).name]
 
-  def test_stones_have_two_support_rows_then_match_reference_six_stones(self):
+  def test_extended_stones_repeat_reference_units_without_changing_gaps(self):
     model,data=self.compile("stepping_stones",0.)
     for y in (-.162,.162):
       hit=mujoco.mj_ray(model,data,np.array([3.,4.+y,1.]),np.array([0.,0.,-1.]),None,1,-1,None)
       self.assertAlmostEqual(1-hit,.02,places=6)
     model,_=self.compile("stepping_stones",1.)
     stones=self.matching(model,"_stone_")
-    self.assertEqual(len(stones),6)
+    self.assertEqual(len(stones),12)
     source=mujoco.MjModel.from_xml_path(str(Path(__file__).resolve().parents[1]/
       "src/assets/terrains/race_obstacle_2027.xml"))
     for geom in stones:
-      ref=source.geom("stone_"+geom.name.split("_stone_")[-1])
+      row,col=map(int,geom.name.split("_stone_")[-1].split("_"))
+      ref=source.geom(f"stone_{row}_{col%3}")
       np.testing.assert_allclose(geom.size,ref.size,atol=1e-8)
-      np.testing.assert_allclose(geom.pos[:2]-[2.,4.],ref.pos[:2],atol=1e-8)
+      np.testing.assert_allclose(geom.pos[:2]-[1.4+1.8*(col//3),4.],ref.pos[:2],atol=1e-8)
+    self.assertAlmostEqual(self.matching(model,"stones_exit")[0].pos[0],6.3)
+    self.assertEqual(lesson_route("stepping_stones")[-1],(6.5,0.))
 
   def test_gap_has_solid_ramp_and_reference_platforms_gap_and_treads(self):
     model,data=self.compile("gap_steps",1.)
@@ -82,6 +85,52 @@ class Lessons2027Tests(unittest.TestCase):
     self.assertEqual(len(self.matching(model,"pit_rail_")),6)
     self.assertEqual(len(self.matching(model,"pit_diagonal")),1)
 
+  def test_joined_course_preserves_units_rotates_pit_and_shares_one_floor(self):
+    model,data=self.compile("slalom_brick",1.)
+    source,source_data=self.compile("brick_pit",1.)
+    self.assertEqual(len(self.matching(model,"slalom_pole")),6)
+    self.assertEqual(len(self.matching(model,"lesson_floor")),1)
+    self.assertEqual(len(self.matching(model,"pit_base_")),2)
+    self.assertEqual(len(self.matching(model,"pit_rail_")),6)
+    rotation=np.array([[0.,1.,0.],[-1.,0.,0.],[0.,0.,1.]])
+    for geom in self.matching(model,"pit_"):
+      suffix=geom.name.split("_pit_")[-1]
+      ref=self.matching(source,"_pit_"+suffix)[0]
+      np.testing.assert_allclose(geom.size,ref.size)
+      np.testing.assert_allclose(geom.pos,rotation@(ref.pos-[2.5,3.,0.])+[5.5,6.9,0.])
+      np.testing.assert_allclose(data.geom_xmat[geom.id].reshape(3,3),
+        rotation@source_data.geom_xmat[ref.id].reshape(3,3),atol=1e-8)
+      bounds=np.abs(data.geom_xmat[geom.id].reshape(3,3))@geom.size
+      self.assertTrue(((geom.pos-bounds)[:2]>=0).all())
+      self.assertTrue(((geom.pos+bounds)[:2]<=8).all())
+    # Flat connecting aisle and flat hind-foot landing at the earliest success.
+    for x,y in ((5.1,6.4),(5.3,6.4),(7.,4.15+.15+.52)):
+      ray=mujoco.mj_ray(model,data,np.array([x,y,1.]),np.array([0.,0.,-1.]),None,1,-1,None)
+      self.assertAlmostEqual(ray,1.,places=6)
+    # Turn on the floor/fill (3-5cm), away from the 15cm diagonal rail.
+    for x,y in ((6.4,6.4),(7.,5.4)):
+      ray=mujoco.mj_ray(model,data,np.array([x,y,1.]),np.array([0.,0.,-1.]),None,1,-1,None)
+      self.assertGreaterEqual(ray,.95-1e-6)
+      self.assertLessEqual(ray,.97+1e-6)
+
+  def test_joined_course_requires_pit_after_slalom_without_resetting_progress(self):
+    env,command,robot=self.make_command()
+    i=KINDS.index("slalom_brick")
+    route=lesson_route("slalom_brick")
+    robot.data.root_link_pos_w[i,:2]=torch.tensor(route[-1])
+    self.assertFalse(passage.passage_success(env)[i])
+    robot.data.root_link_pos_w.zero_()
+    for wp in lesson_route("slalom_posts")[1:]:
+      robot.data.root_link_pos_w[i,:2]=torch.tensor(wp)
+      command._update_command()
+    self.assertFalse(passage.passage_success(env)[i])
+    slalom_progress=command.route_state()[3][i].item()
+    for wp in route[len(lesson_route("slalom_posts")):]:
+      robot.data.root_link_pos_w[i,:2]=torch.tensor(wp)
+      command._update_command()
+    self.assertTrue(passage.passage_success(env)[i])
+    self.assertGreater(command.route_state()[3][i].item(),slalom_progress+4.1)
+
   def test_no_artificial_pits_and_safe_route_endpoints_all_levels(self):
     for kind in KINDS:
       for difficulty in (0.,.5,1.):
@@ -98,16 +147,17 @@ class Lessons2027Tests(unittest.TestCase):
 
   def make_command(self):
     cfg=lgdog1_race_mgdp_env_cfg(with_perception=False)
-    generator=lgdog1_passage_terrain_cfg();generator.num_cols=10
-    robot=NS(data=NS(root_link_pos_w=torch.zeros(10,3),heading_w=torch.zeros(10)))
+    n=len(KINDS)
+    generator=lgdog1_passage_terrain_cfg();generator.num_cols=n
+    robot=NS(data=NS(root_link_pos_w=torch.zeros(n,3),heading_w=torch.zeros(n)))
     class Scene(dict): pass
     scene=Scene(robot=robot)
-    scene.terrain=NS(cfg=NS(terrain_generator=generator),terrain_types=torch.arange(10))
-    scene.env_origins=torch.zeros(10,3)
-    env=NS(num_envs=10,device="cpu",scene=scene,step_dt=.02)
+    scene.terrain=NS(cfg=NS(terrain_generator=generator),terrain_types=torch.arange(n))
+    scene.env_origins=torch.zeros(n,3)
+    env=NS(num_envs=n,device="cpu",scene=scene,step_dt=.02,cfg=cfg)
     command=passage.PassageCommand(cfg.commands["twist"],env)
     env.command_manager=NS(get_term=lambda _:command)
-    command._resample_command(torch.arange(10))
+    command._resample_command(torch.arange(n))
     return env,command,robot
 
   def test_routes_reject_goal_teleport_and_reward_y_motion_without_farming(self):
@@ -195,8 +245,9 @@ class Lessons2027Tests(unittest.TestCase):
   def test_command_can_follow_every_route_inside_lane_within_timeout(self):
     env,command,robot=self.make_command()
     command.speed.fill_(.25)
-    complete=torch.zeros(10,dtype=torch.bool)
-    for _ in range(2250):
+    n=len(KINDS)
+    complete=torch.zeros(n,dtype=torch.bool)
+    for _ in range(int(env.cfg.episode_length_s/env.step_dt)):
       command._update_command()
       heading=robot.data.heading_w.clone()
       vx,vy=command.command[:,0],command.command[:,1]
@@ -209,11 +260,11 @@ class Lessons2027Tests(unittest.TestCase):
       if complete.all(): break
     self.assertTrue(complete.all(),[KINDS[i] for i in torch.where(~complete)[0].tolist()])
     terrain=env.scene.terrain
-    terrain.terrain_levels=torch.zeros(10,dtype=torch.long)
+    terrain.terrain_levels=torch.zeros(n,dtype=torch.long)
     terrain.max_terrain_level=10
-    terrain.terrain_origins=torch.zeros(10,10,3)
+    terrain.terrain_origins=torch.zeros(10,n,3)
     terrain.env_origins=env.scene.env_origins
-    env.cfg=NS(episode_length_s=45.)
+    env.cfg=NS(episode_length_s=75.)
     curriculum=passage.PassageCurriculum(NS(params={}),env)
     saved=curriculum.state_dict()
     curriculum.load_state_dict(saved)

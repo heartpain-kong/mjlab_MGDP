@@ -1,7 +1,7 @@
 """2027 obstacle lessons with supported geometry and graded dimensions.
 
 Hard endpoints follow the bundled race_obstacle_2027.xml. These isolated
-skills are training approximations, not competition scoring.
+skills and joined courses are training approximations, not competition scoring.
 """
 
 from dataclasses import dataclass
@@ -12,20 +12,26 @@ from mjlab.terrains.terrain_generator import SubTerrainCfg, TerrainGeometry, Ter
 from .race_depth_terrain_cfg import BoxClearanceFrameTerrainCfg, TireArrayTerrainCfg
 
 KINDS = ("start_flat", "stepping_stones", "balance_beam", "gap_steps", "brick_pit",
-         "slalom_posts", "high_wall", "clearance_frame", "tire_array", "rough")
+         "slalom_posts", "high_wall", "clearance_frame", "tire_array", "rough", "slalom_brick")
 START_X = 1.0
 GOAL_X = 5.3
 LANE_HALF_WIDTH = 0.28
-LAYOUT_VERSION = 4  # v3 task, dense obstacle layout revision.
+LAYOUT_VERSION = 5  # v3 task, joined course and extended stones.
 
 
 def lesson_route(kind, size=(8., 8.)):
-  """Return waypoints relative to spawn, retaining the two L-shaped lessons."""
+  """Return ordered waypoints relative to spawn for single and joined lessons."""
   cy = size[1]/2
-  if kind == "slalom_posts":
+  if kind in ("slalom_posts","slalom_brick"):
     points = [(1.,cy), (1.9,cy-.6), (2.4,cy-.3), (3.3,cy-.9),
               (4.2,cy-.3), (4.65,cy-.9), (5.4,cy-.9), (5.4,cy-.1),
               (4.8,cy+.3), (5.4,cy+1.2), (5.1,cy+1.9)]
+    if kind == "slalom_brick":
+      # Turn on the pit floor, then cross its diagonal rail while moving;
+      # do not put a slowdown/turning waypoint on top of that rail.
+      points += [(5.1,cy+2.4),(6.4,cy+2.4),(7.,cy+1.4),(7.,cy+.15)]
+  elif kind == "stepping_stones":
+    points = [(START_X,cy),(7.5,cy)]
   elif kind == "brick_pit":
     points = [(1.,cy), (2.,cy-.9), (3.,cy-1.4), (3.,cy+.5),
               (4.,cy+.5), (5.6,cy+.5)]
@@ -46,6 +52,26 @@ class PassageTerrainCfg(SubTerrainCfg):
       raise ValueError("Unknown passage kind/layout version")
     if self.size[0] < 8 or self.size[1] < 6:
       raise ValueError("2027 lessons require a cell of at least 8 x 6 m")
+    if self.kind == "slalom_brick":
+      if self.size[1] < 8:
+        raise ValueError("Joined slalom/brick lesson requires at least 8 x 8 m")
+      slalom=PassageTerrainCfg(kind="slalom_posts",size=self.size).function(difficulty,spec,rng)
+      pit=PassageTerrainCfg(kind="brick_pit",size=self.size).function(difficulty,spec,rng)
+      geoms=list(slalom.geometries)
+      old_origin=np.array([2.5,self.size[1]/2-1.,0.])
+      new_origin=np.array([5.5,self.size[1]/2+2.9,0.])
+      rotation=np.array([[0.,1.,0.],[-1.,0.,0.],[0.,0.,1.]])
+      quat=np.array([2**-.5,0.,0.,-2**-.5])
+      for item in pit.geometries:
+        if item.geom.name.endswith("lesson_floor"):
+          spec.delete(item.geom)  # Keep one shared floor for the whole course.
+          continue
+        item.geom.pos = rotation@(np.array(item.geom.pos)-old_origin)+new_origin
+        rotated=np.empty(4)
+        mujoco.mju_mulQuat(rotated,quat,np.array(item.geom.quat))
+        item.geom.quat=rotated
+        geoms.append(item)
+      return TerrainOutput(origin=slalom.origin,geometries=geoms)
     body, geoms = spec.body("terrain"), []
     prefix = f"lesson_{self.kind}_{len(body.geoms)}_"
     cy = self.size[1]/2
@@ -63,11 +89,11 @@ class PassageTerrainCfg(SubTerrainCfg):
           0.,-.1,color=(.55,.55,.55,1.))
     if self.kind == "stepping_stones":
       height, width = .02+.08*d, .36-.16*d
-      box("stones_entry",2.4,cy,.4,.4,height)
-      box("stones_exit",5.1,cy,.4,.4,height)
+      box("stones_entry",1.8,cy,.4,.4,height)
+      box("stones_exit",6.3,cy,.4,.4,height)
       for row in range(2):
-        # Hard endpoint: six 20cm stones, 30cm stagger, same-row gap40cm.
-        for i,x in enumerate(3.+row*.3*d+np.arange(3)*.6):
+        # Repeat the reference three-stone unit twice along each row.
+        for i,x in enumerate(2.4+row*.3*d+np.arange(6)*.6):
           box(f"stone_{row}_{i}",float(x),cy+(1 if row==0 else -1)*.2,
               width/2,width/2,height)
     elif self.kind == "balance_beam":
@@ -143,6 +169,6 @@ class PassageTerrainCfg(SubTerrainCfg):
 
 
 def lgdog1_passage_terrain_cfg():
-  return TerrainGeneratorCfg(size=(8.,8.),num_rows=10,num_cols=20,
+  return TerrainGeneratorCfg(size=(8.,8.),num_rows=10,num_cols=2*len(KINDS),
     border_width=10.,curriculum=True,difficulty_range=(0.,1.),add_lights=True,
-    sub_terrains={kind:PassageTerrainCfg(kind=kind,proportion=.1) for kind in KINDS})
+    sub_terrains={kind:PassageTerrainCfg(kind=kind,proportion=1./len(KINDS)) for kind in KINDS})

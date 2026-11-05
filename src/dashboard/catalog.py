@@ -32,7 +32,7 @@ _TASK_LIST = (
     docs="doc/MGDP_PASSAGE.md", requires_pretrain=True, directed_passage=True,
     pretrain_command="python scripts/pretrain_mgdp.py --task LgDog1-Race-MGDP --num-envs 256 --steps 4000 --iterations 3000",
     pretrain_checkpoint="logs/mgdp/perception/mgdp_race_v3.pt",
-    description="2027 场地分项课程：双排梅花桩、坡台沟壑、L形绕桩/砖木坑及限高轮胎；沿路线到出口，各类通过率达标后扩速。",
+    description="2027 场地课程：12桩加长梅花桩、绕桩接砖木坑连续路线、坡台沟壑及密集限高轮胎；保留单项练习，沿路线到最终出口后计通过。",
   ),
   TaskSpec(
     alias="him_flat", id="LgDog1-Flat-Blind-HIM-Standard",

@@ -22,7 +22,7 @@ def build_lesson(kind, difficulty, *, route=False):
   return model,data
 
 
-def render(model,data,top=False):
+def render(model,data,top=False,kind=None):
   camera=mujoco.MjvCamera();camera.lookat[:]=(3.7,4.,.1)
   camera.distance=6.8;camera.azimuth=90 if top else 135;camera.elevation=-90 if top else -45
   centres=data.geom_xpos[np.min(model.geom_size[:,:2],axis=1)<3.]
@@ -34,6 +34,11 @@ def render(model,data,top=False):
     if dense:
       camera.lookat[:]=(3.6,4.,0.);camera.distance=8.;camera.azimuth=0
     camera.elevation=-90
+  if kind in ("stepping_stones","slalom_brick"):
+    camera.lookat[:]=(4.2,4.6 if kind=="slalom_brick" else 4.,0.)
+    camera.distance=8.5 if top else 9.
+    camera.azimuth=90 if top else 135
+    camera.elevation=-90 if top else -55
   with mujoco.Renderer(model,height=280,width=420,max_geom=max(10000,model.ngeom+20)) as renderer:
     renderer.update_scene(data,camera=camera)
     if top:
@@ -54,16 +59,16 @@ def main():
   for row,kind in enumerate(kinds):
     for col,difficulty in enumerate((0.,.5,1.)):
       model,data=build_lesson(kind,difficulty)
-      axes[row,col].imshow(render(model,data));axes[row,col].axis("off")
+      axes[row,col].imshow(render(model,data,kind=kind));axes[row,col].axis("off")
       axes[row,col].set_title(f"{kind} | difficulty {difficulty:g}",fontsize=10)
       metrics[f"{kind}/{difficulty:g}"]={"geoms":model.ngeom}
     metrics[kind]={"route":lesson_route(kind),"length_m":float(np.linalg.norm(
       np.diff(np.array(lesson_route(kind)),axis=0),axis=1).sum())}
   fig.savefig(args.output/"lessons.png",dpi=150);plt.close(fig)
-  fig,axes=plt.subplots(1,2,figsize=(12,5),layout="constrained")
-  for ax,kind in zip(axes,("slalom_posts","brick_pit")):
+  fig,axes=plt.subplots(1,3,figsize=(15,5),layout="constrained")
+  for ax,kind in zip(axes,("slalom_posts","brick_pit","slalom_brick")):
     model,data=build_lesson(kind,1.,route=True)
-    ax.imshow(render(model,data,top=True));ax.axis("off")
+    ax.imshow(render(model,data,top=True,kind=kind));ax.axis("off")
     ax.set_title(kind+" | orange: ordered route (illustration)")
   fig.savefig(args.output/"routes.png",dpi=150);plt.close(fig)
   fig,axes=plt.subplots(3,2,figsize=(12,9),layout="constrained")
@@ -73,6 +78,15 @@ def main():
       axes[row,col].imshow(render(model,data,top=top));axes[row,col].axis("off")
       axes[row,col].set_title(kind+" | "+("top view" if top else "dense target layout"))
   fig.savefig(args.output/"dense_lessons.png",dpi=150);plt.close(fig)
+  fig,axes=plt.subplots(2,2,figsize=(13,8.6),layout="constrained")
+  for row,kind in enumerate(("slalom_brick","stepping_stones")):
+    for col,top in enumerate((False,True)):
+      model,data=build_lesson(kind,1.,route=top)
+      axes[row,col].imshow(render(model,data,top=top,kind=kind));axes[row,col].axis("off")
+      label="Slalom -> brick pit: ONE continuous lesson" if row==0 else "Extended stones: 2 rows x 6 = 12 stones"
+      axes[row,col].set_title(label+(" | ordered route" if top else " | target geometry"),fontsize=11)
+  fig.suptitle("2027 training layout 5 | orange = commanded route, not measured policy trajectory",fontsize=13)
+  fig.savefig(args.output/"joined_and_stones.png",dpi=160);plt.close(fig)
   (args.output/"metrics.json").write_text(json.dumps(metrics,indent=2),encoding="utf-8")
   print(args.output.resolve())
 

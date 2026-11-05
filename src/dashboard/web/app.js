@@ -256,7 +256,7 @@ function renderPassage(data){
   card.classList.toggle("hidden",!task()?.directed_passage);
   const speed=metricValue(data,"passage_speed_max");
   $("passage-speed").textContent=speed==null?"等待越障训练数据…":`当前前进速度 0.25–${speed.toFixed(3)} m/s；各类达标后扩速`;
-  const labels={start_flat:"平地",stepping_stones:"梅花桩",balance_beam:"单木桥",gap_steps:"沟壑台阶",brick_pit:"砖木坑",slalom_posts:"绕桩",high_wall:"高墙",clearance_frame:"限高笼",tire_array:"轮胎阵",rough:"粗糙地面"};
+  const labels={start_flat:"平地",stepping_stones:"加长梅花桩",balance_beam:"单木桥",gap_steps:"沟壑台阶",brick_pit:"砖木坑",slalom_posts:"绕桩",high_wall:"高墙",clearance_frame:"限高笼",tire_array:"轮胎阵",rough:"粗糙地面",slalom_brick:"绕桩→砖木坑"};
   const list=$("passage-results");list.replaceChildren();
   for(const [key,label] of Object.entries(labels)){
     const item=data?.passage?.[key];const div=document.createElement("div");

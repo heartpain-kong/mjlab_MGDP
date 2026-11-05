@@ -89,7 +89,7 @@ def build_env(args) -> ManagerBasedRlEnv:
         # Face the obstacle from its entry, without requiring a trained walking
         # controller to reach it during random-action perception collection.
         cfg.events["reset_base"].params["pose_range"] = {
-            "x":(.2,.4),"y":(-.1,.1),"z":(.02,.06),"yaw":(-.2,.2)}
+            "x":(0.,.2),"y":(-.1,.1),"z":(.02,.06),"yaw":(-.2,.2)}
         cfg.curriculum = {}
     cfg.scene.num_envs = args.num_envs
     cfg.seed = args.seed
