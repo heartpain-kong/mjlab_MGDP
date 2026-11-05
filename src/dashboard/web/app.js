@@ -5,6 +5,7 @@ let lastCommand = "";
 const {modeNames, statuses, rewardLabels, metricValue, healthText} = window.LgDogFormat;
 const pendingStops = new Set();
 let pendingDelete = null, deletingJobs = false;
+let pretrainStarting = false;
 
 // 面板每次重启都会换一个 token（server.py 用 secrets 生成）。页面只在加载时取一次，
 // 所以重启过服务后所有 POST 都会被 403 拒绝、启动按钮变灰。这里静默重取 token 再重试一次。
@@ -119,6 +120,7 @@ function updateTask() {
     $("critic-chip").textContent="";$("profile-chip").textContent="";$("experiment-path").textContent="—";
     $("task-capabilities")?.replaceChildren();
     $("task-prereq")?.classList.add("hidden");
+    $("task-prereq-actions")?.classList.add("hidden");
     $("model-hint").textContent="任务由算法和场景决定；当前组合没有可用模型。";
     updateRunNameHint();
     return;
@@ -149,50 +151,64 @@ function renderTaskPrerequisite(t){
   const actions=$("task-prereq-actions");
   const cap=t.capabilities||{};
   if(!cap.needs_pretrain){ box.className="task-prereq hidden"; actions?.classList.add("hidden"); return; }
+  actions?.classList.remove("hidden");
+  const active=(state?.jobs||[]).find(job=>job.mode==="pretrain" && ["running","stopping"].includes(job.status));
+  const button=$("pretrain"), hint=$("pretrain-state");
+  if(button){
+    button.disabled=pretrainStarting||Boolean(active);
+    button.textContent=pretrainStarting?"预训练启动中…":active?(active.status==="stopping"?"预训练停止中…":"预训练运行中…"):
+      cap.pretrain_ready?"重新预训练感知模型":"预训练感知模型";
+  }
+  const latest=(state?.jobs||[]).find(job=>job.mode==="pretrain" && job.task===t.alias);
+  if(hint){
+    if(active) hint.textContent=`${active.task} · ${active.id}，日志在运行记录里`;
+    else if(latest && ["failed","stopped"].includes(latest.status))
+      hint.textContent=`上次预训练${latest.status==="failed"?"失败":"已停止"}，可重新启动；${cap.pretrain_ready?"现有感知模型仍可用":"查看运行日志"}`;
+    else hint.textContent=cap.pretrain_ready?"可重新预训练，完成后替换当前感知模型。":"预训练完成后即可启动策略训练。";
+  }
   if(cap.pretrain_ready){
     box.className="task-prereq ready";
     box.textContent=`感知模型已就绪：${cap.pretrain_checkpoint}`;
-    actions?.classList.add("hidden");
   }else{
     box.className="task-prereq missing";
     box.textContent=`该任务需要先预训练感知模型：${cap.pretrain_command||"python scripts/pretrain_mgdp.py"}（检查点 ${cap.pretrain_checkpoint||""} 不存在）`;
-    actions?.classList.remove("hidden");
   }
 }
 async function startPretrain(){
   const button=$("pretrain");
-  if(!button)return;
+  if(!button || button.disabled)return;
+  const alias=$("task").value;
+  pretrainStarting=true;
   button.disabled=true; button.textContent="预训练启动中…";
   try{
-    const data=await api("/api/pretrain", {task:$("task").value});
+    const data=await api("/api/pretrain", {task:alias});
+    state.jobs=[data.job,...(state.jobs||[]).filter(job=>job.id!==data.job.id)];
     $("pretrain-state").textContent=`已启动 ${data.job.id}，日志在运行记录里`;
     toast("预训练已启动，完成后会自动刷新状态");
     await refresh();
-    pollPretrain(data.job.id);
+    pollPretrain(data.job.id,alias);
   }catch(error){
     toast(error.message);
-    button.disabled=false; button.textContent="预训练感知模型";
+  }finally{
+    pretrainStarting=false;
+    if(task())renderTaskPrerequisite(task());
   }
 }
-function pollPretrain(jobId){
+function pollPretrain(jobId,alias){
   const timer=setInterval(async()=>{
     try{
       const data=await api("/api/state");
       state=data;
       updateTask();
-      if(task()?.capabilities?.pretrain_ready){
-        clearInterval(timer);
-        $("pretrain-state").textContent="感知模型已就绪";
-        toast("感知模型已就绪，可以启动训练");
-        await preview(); await refresh();
-        return;
-      }
       const job=(data.jobs||[]).find(item=>item.id===jobId);
       if(job && ["failed","stopped","completed","finished"].includes(job.status)){
         clearInterval(timer);
-        $("pretrain-state").textContent=`预训练结束（${job.status}），检查点未生成，查看运行日志`;
-        const button=$("pretrain");
-        if(button){ button.disabled=false; button.textContent="重新预训练"; }
+        const ready=data.tasks.find(item=>item.alias===alias)?.capabilities?.pretrain_ready;
+        if(job.status==="completed" && ready) toast("感知预训练完成，可以启动策略训练");
+        else if(job.status==="finished") toast("预训练进程已退出，请查看运行日志确认结果");
+        else toast(`预训练${job.status==="failed"?"失败":job.status==="stopped"?"已停止":"结束但检查点未生成"}，请查看运行日志`);
+        if(task()?.alias===alias)await preview();
+        await refresh();
       }
     }catch(error){ /* panel polling is best-effort */ }
   },4000);
@@ -599,7 +615,7 @@ async function refresh(all=false) {
   try {
     const data=await api("/api/state");state=data;
     $("connection").lastChild.textContent=" 本地服务运行中";
-    renderGpu(data.gpu);renderJobs();if(all)await loadModels();await loadActionMetrics();await loadLog();
+    renderGpu(data.gpu);renderJobs();if(task())renderTaskPrerequisite(task());if(all)await loadModels();await loadActionMetrics();await loadLog();
   }catch(error){$("connection").textContent="服务未连接";if(all)toast(error.message);}
 }
 async function showDocument(id) {

@@ -167,6 +167,71 @@ class FrontendContractTests(unittest.TestCase):
     self.assertEqual(missing, [], f"HTML requests assets not served: {missing}")
 
   @unittest.skipUnless(shutil.which("node"), "node is not installed")
+  def test_pretrain_remains_available_and_old_weights_do_not_finish_new_job(self):
+    script = r"""
+const fs=require('fs'), vm=require('vm'), assert=require('node:assert/strict');
+const nodes={};
+for(const id of ['task','task-prereq','task-prereq-actions','pretrain','pretrain-state']){
+  const classes=new Set(['hidden']);
+  nodes[id]={value:'race_mgdp',disabled:false,textContent:'',className:'',
+    classList:{add:c=>classes.add(c),remove:c=>classes.delete(c),contains:c=>classes.has(c)}};
+}
+const ctx={document:{getElementById:id=>nodes[id]},window:{LgDogFormat:{}},
+  setInterval:fn=>{ctx.poll=fn;return 1;},clearInterval:()=>{ctx.cleared=true;}};
+vm.createContext(ctx);
+const source=fs.readFileSync(process.argv[1],'utf8').replace(/\nstart\(\);\s*$/,'');
+vm.runInContext(source,ctx);
+vm.runInContext(`
+  state={tasks:[{alias:'race_mgdp',capabilities:{needs_pretrain:true,pretrain_ready:true,
+    pretrain_checkpoint:'logs/mgdp/perception/mgdp_race_v3.pt'}},
+    {alias:'standard',capabilities:{needs_pretrain:false}}],jobs:[]};
+  updateTask=()=>renderTaskPrerequisite(task());
+  refresh=async()=>{}; preview=async()=>{};
+  api=async()=>state; toast=text=>globalThis.message=text;
+  updateTask();
+`,ctx);
+assert.equal(nodes['task-prereq-actions'].classList.contains('hidden'),false);
+assert.equal(nodes.pretrain.disabled,false);
+assert.equal(nodes.pretrain.textContent,'重新预训练感知模型');
+vm.runInContext(`state.tasks[0].capabilities.pretrain_ready=false;updateTask();`,ctx);
+assert.equal(nodes['task-prereq-actions'].classList.contains('hidden'),false);
+assert.equal(nodes.pretrain.textContent,'预训练感知模型');
+vm.runInContext(`state.tasks[0].capabilities.pretrain_ready=true;
+  state.jobs=[{id:'new-run',mode:'pretrain',task:'race_mgdp',status:'running'}];
+  updateTask();pollPretrain('new-run','race_mgdp');`,ctx);
+assert.equal(nodes.pretrain.disabled,true);
+(async()=>{
+  // The old checkpoint remains on disk throughout this new running job.
+  await ctx.poll();
+  assert.equal(ctx.cleared,undefined);
+  assert.equal(ctx.message,undefined);
+  assert.equal(nodes.pretrain.disabled,true);
+  vm.runInContext(`state.jobs[0].status='stopping';updateTask();`,ctx);
+  assert.equal(nodes.pretrain.disabled,true);
+  vm.runInContext(`state.jobs[0].status='failed';`,ctx);
+  await ctx.poll();
+  assert.equal(ctx.cleared,true);
+  assert.match(ctx.message,/失败/);
+  assert.doesNotMatch(ctx.message,/完成/);
+  assert.equal(nodes.pretrain.disabled,false);
+  assert.match(nodes['pretrain-state'].textContent,/现有感知模型仍可用/);
+  vm.runInContext(`state.jobs[0].status='completed';pollPretrain('new-run','race_mgdp');`,ctx);
+  await ctx.poll();
+  assert.match(ctx.message,/预训练完成/);
+  assert.equal(nodes.pretrain.disabled,false);
+  // A task switch must not expose pretraining on tasks without an encoder.
+  nodes.task.value='standard';vm.runInContext('updateTask();',ctx);
+  assert.equal(nodes['task-prereq-actions'].classList.contains('hidden'),true);
+  nodes.task.value='race_mgdp';
+  vm.runInContext(`state.jobs[0].task='mgdp';state.jobs[0].status='running';updateTask();`,ctx);
+  assert.equal(nodes.pretrain.disabled,true);
+})().catch(error=>{console.error(error);process.exitCode=1;});
+"""
+    result = subprocess.run(["node", "-e", script, str(WEB / "app.js")],
+                            capture_output=True, text=True, encoding="utf-8", timeout=15)
+    self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
+
+  @unittest.skipUnless(shutil.which("node"), "node is not installed")
   def test_format_module_is_pure_and_usable_from_node(self):
     path = WEB / "js" / "format.js"
     script = (
