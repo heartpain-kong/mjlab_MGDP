@@ -52,24 +52,22 @@ class MGDPVRAMTests(unittest.TestCase):
       for module in (model.depth_encoder,model.depth_decoder,model.memory):
         self.assertTrue(any(p.grad is not None and p.grad.abs().sum()>0 for p in module.parameters()))
 
-  def test_factory_reclaims_only_unused_table_and_restores_on_failure(self):
+  def test_streaming_factory_scope_and_restoration_on_failure(self):
     import mujoco_warp as mjwarp
-    import warp as wp
-    table=wp.zeros(6,dtype=wp.vec2i,device="cpu")
-    filtered=wp.zeros(3,dtype=wp.vec2i,device="cpu")
-    lookup=wp.zeros(6,dtype=wp.vec2i,device="cpu")
-    model=NS(nxn_geom_pair=table,nxn_geom_pair_filtered=filtered,nxn_pairid=lookup)
+    model=NS(ngeom=4)
     factory=lambda *_args,**_kwargs:model
-    with patch.object(mjwarp,"put_model",factory),patch("src.sim_memory._unused_pair_table_safe",return_value=True):
+    with patch.object(mjwarp,"put_model",side_effect=AssertionError("native dense path called")) as native, \
+         patch("src.sim_memory._streaming_model_factory",return_value=factory), \
+         patch("src.sim_memory._unused_pair_table_safe",return_value=True):
       with self.assertRaisesRegex(RuntimeError,"data allocation"):
         with compact_model_allocations() as stats:
           result=mjwarp.put_model(None)
-          self.assertEqual(result.nxn_geom_pair.size,0)
-          self.assertIs(result.nxn_geom_pair_filtered,filtered)
-          self.assertIs(result.nxn_pairid,lookup)
-          self.assertEqual(stats["unused_pair_bytes_released"],table.capacity)
+          self.assertIs(result,model)
+          self.assertTrue(stats["streamed_pair_construction"])
+          self.assertEqual(stats["unused_pair_bytes_avoided"],48)
           raise RuntimeError("data allocation")
-      self.assertIs(mjwarp.put_model,factory)
+      self.assertIs(mjwarp.put_model,native)
+      native.assert_not_called()
 
   def test_unverified_backend_and_explicit_disable_keep_original_factory(self):
     import mujoco_warp as mjwarp
@@ -77,7 +75,8 @@ class MGDPVRAMTests(unittest.TestCase):
     with patch("src.sim_memory._unused_pair_table_safe",return_value=False):
       with compact_model_allocations() as stats:
         self.assertIs(mjwarp.put_model,factory)
-        self.assertEqual(stats["unused_pair_bytes_released"],0)
+        self.assertFalse(stats["streamed_pair_construction"])
+        self.assertEqual(stats["unused_pair_bytes_avoided"],0)
     with compact_model_allocations(False):self.assertIs(mjwarp.put_model,factory)
 
 

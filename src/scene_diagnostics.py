@@ -9,6 +9,7 @@ def scene_memory_estimates(ngeom, num_envs):
     # Local MJWarp put_model creates two int64 index vectors, then stacks them.
     # This excludes its many masks, body-id arrays, and other allocations.
     "pair_index_bytes": pairs * 32,
+    "pair_lookup_bytes": pairs * 8,
     # MJWarp Data stores vec3 positions and mat33 rotations for every world.
     "geom_pose_bytes": num_envs * ngeom * 12 * 4,
   }
@@ -47,9 +48,10 @@ def report_scene_initialization(env_cfg):
     gib = 1024**3
     print(f"[init] scene assembled: geoms={count}, envs={env_cfg.scene.num_envs}; "
           "compiling model and allocating physics buffers...", flush=True)
-    print(f"[init] MJWarp dense-pair index estimate={sizes['pair_index_bytes']/gib:.2f} GiB host; "
+    print(f"[init] Native MJWarp dense-pair index estimate={sizes['pair_index_bytes']/gib:.2f} GiB host; "
           f"geom poses={sizes['geom_pose_bytes']/gib:.2f} GiB device. "
-          "These exclude other allocations; pair indexing depends on backend version.", flush=True)
+          f"Retained pair lookup={sizes['pair_lookup_bytes']/gib:.2f} GiB host/device. "
+          "Streaming mode avoids native full indices; estimates exclude other allocations.", flush=True)
 
   env_cfg.scene.spec_fn = report
   try:
