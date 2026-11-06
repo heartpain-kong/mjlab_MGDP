@@ -32,6 +32,7 @@ from src.tasks.velocity.mdp.curriculums import (
 from src.dashboard.run_naming import resolve_run_name
 from src.scene_diagnostics import report_scene_initialization, report_device_memory
 from src.sim_memory import compact_model_allocations
+from src.cuda_initialization import trace_cuda_initialization
 from src.tasks.velocity.config.lgdog1.terrain_curriculum import configure_terrain_curriculum
 
 
@@ -210,7 +211,10 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
   if grid is not None:
     print(f"[init] building terrain {grid.num_rows}x{grid.num_cols}, "
           f"envs={cfg.env.scene.num_envs}...", flush=True)
-  with report_scene_initialization(cfg.env), compact_model_allocations(cfg.optimize_vram):
+  init_record_dir = (log_dir / f"cuda_init_rank{rank}"
+                     if int(os.environ.get("WORLD_SIZE", "1")) > 1 else log_dir)
+  with report_scene_initialization(cfg.env), compact_model_allocations(cfg.optimize_vram), \
+       trace_cuda_initialization(device, init_record_dir):
     env = ManagerBasedRlEnv(
       cfg=cfg.env, device=device, render_mode="rgb_array" if cfg.video else None
     )

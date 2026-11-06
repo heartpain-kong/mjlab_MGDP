@@ -180,6 +180,7 @@ def compact_model_allocations(enabled=True):
       print("[memory] bounded host pair construction enabled (verified mujoco-warp 3.5.0)", flush=True)
       mjwarp.put_model = build
     if bvh_factory is not None:
+      print("[memory] shared BVH staging enabled (verified mujoco-warp 3.5.0)", flush=True)
       bvh.build_scene_bvh = build_bvh
     else:
       print("[memory] BVH construction source could not be verified; keeping native BVH staging", flush=True)

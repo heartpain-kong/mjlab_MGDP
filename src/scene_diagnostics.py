@@ -5,17 +5,23 @@ from contextlib import contextmanager
 
 def scene_memory_estimates(ngeom, num_envs):
   pairs = ngeom * (ngeom - 1) // 2
-  return {
+  sizes = {
     # Local MJWarp put_model creates two int64 index vectors, then stacks them.
     # This excludes its many masks, body-id arrays, and other allocations.
     "pair_index_bytes": pairs * 32,
     "pair_lookup_bytes": pairs * 8,
     # MJWarp Data stores vec3 positions and mat33 rotations for every world.
     "geom_pose_bytes": num_envs * ngeom * 12 * 4,
+    # Lower/upper vec3 plus int32 group, assuming every geom is enabled.
+    # BVH tree nodes and construction scratch are additional allocations.
+    "bvh_leaf_bytes": num_envs * ngeom * 28,
   }
+  sizes["device_subtotal_bytes"] = sum(sizes[key] for key in (
+    "pair_lookup_bytes", "geom_pose_bytes", "bvh_leaf_bytes"))
+  return sizes
 
 
-def report_device_memory(device, stage):
+def report_device_memory(device, stage, strict=False):
   """Device usage is global; Torch allocator peaks exclude Warp allocations."""
   if not str(device).startswith("cuda"):
     return None
@@ -31,6 +37,8 @@ def report_device_memory(device, stage):
     return {"device_used": total-free, "device_total": total,
             "torch_peak_reserved": torch.cuda.max_memory_reserved(device)}
   except (RuntimeError, AssertionError) as error:
+    if strict:
+      raise
     print(f"[memory] {stage}: GPU counters unavailable: {error}", flush=True)
     return None
 
@@ -52,6 +60,11 @@ def report_scene_initialization(env_cfg):
           f"geom poses={sizes['geom_pose_bytes']/gib:.2f} GiB device. "
           f"Retained pair lookup={sizes['pair_lookup_bytes']/gib:.2f} GiB host/device. "
           "Streaming mode avoids native full indices; estimates exclude other allocations.", flush=True)
+    print(f"[init] Device budget: pair lookup + geom poses + all-geom BVH leaves "
+          f"~{sizes['device_subtotal_bytes']/gib:.2f} GiB "
+          f"(BVH leaves ~{sizes['bvh_leaf_bytes']/gib:.2f} GiB). "
+          "Excludes BVH tree/scratch, other physics buffers, domain randomization, "
+          "policy and other GPU processes; this is not a total/peak estimate.", flush=True)
 
   env_cfg.scene.spec_fn = report
   try:
