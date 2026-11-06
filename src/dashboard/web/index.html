@@ -45,9 +45,8 @@
           <details class="settings-section">
             <summary>训练参数 / 课程设置 <span>环境数、速度范围、地形行数和续训</span></summary>
 <div data-section="train">
-            <div class="presets"><button type="button" data-preset="smoke">快速检查 · 64 环境 / 2 轮</button><button type="button" data-preset="full">正式训练 · 1024 / 16000</button><button id="vram-probe" class="hidden" type="button" data-preset="probe3072">3072 环境试运行 · 8×20 / 2轮</button></div>
+            <div class="presets"><button type="button" data-preset="smoke">快速检查 · 64 环境 / 2 轮</button><button type="button" data-preset="full">正式训练 · 1024 / 16000</button></div>
             <div class="field-grid"><label class="field">并行环境数<input id="train-envs" type="number" min="1" max="8192" value="1024"></label><label class="field">训练轮数<input id="iterations" type="number" min="1" max="1000000" value="16000"></label></div>
-            <label class="field">PPO 小批次数<input id="ppo-mini-batches" type="number" min="1" max="64" placeholder="任务默认"><small>调大可降低反向传播峰值显存，也会改变优化批量；3072试运行使用8。</small></label>
             <div class="field-grid"><label class="field">随机种子<input id="seed" type="number" min="0" value="42"></label><label class="field">实验名称<input id="run-name" value="" placeholder="留空自动生成"><small id="run-name-hint">留空时实时生成下一个 V 编号。</small></label></div>
             <div class="field-grid triple"><label class="field">地形训练行数<input id="terrain-num-rows" type="number" min="2" max="100" value="10"><small>比赛默认8行，标准地形10行。</small></label><label class="field">地形训练列数<input id="terrain-num-cols" type="number" min="1" max="100" placeholder="任务默认"><small>比赛默认20列；至少10列保留全部障碍。</small></label><label class="field">最大难度倍率<input id="terrain-difficulty-max" type="number" min="0.5" max="1.5" step="0.05" placeholder="默认 1.0"></label></div>
             <div class="field-grid"><label class="field">最低速度绝对值 / m·s⁻¹<input id="velocity-min-abs" type="number" min="0.05" max="3" step="0.05" value="0.4"><small>正数会生成负向下限，例如 0.4 → -0.4。</small></label><label class="field">最高速度绝对值 / m·s⁻¹<input id="velocity-max-abs" type="number" min="0.05" max="3" step="0.05" value="0.8"><small>正数会生成正向上限，例如 0.8 → +0.8。</small></label></div>
