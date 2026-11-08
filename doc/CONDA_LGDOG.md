@@ -82,6 +82,20 @@ conda activate lgdog
 
 `configure_lgdog.sh` 会自动做这一步；如果目录根本不存在，重新跑 `bash configure_lgdog.sh --skip-system-deps` 即可。
 
+**`UnavailableInvalidChannel: HTTP 404 ... anaconda/pkgs/pro`**
+本机 `.condarc` 里的镜像频道已下线（清华 `pkgs/pro` 早已删除）。脚本会自动改用
+`--override-channels` + 清华 `pkgs/main` / `cloud/conda-forge`，最后退回 `defaults`。
+也可以手动处理：
+
+```bash
+conda config --remove channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/pro
+conda config --show channels
+# 或指定可用频道重跑
+bash configure_lgdog.sh --skip-system-deps \
+  --conda-channel https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main \
+  --conda-channel https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge
+```
+
 **`CUDA driver not available` / `Invalid device identifier: cuda:0`**
 说明激活钩子没生效：确认是用 `conda activate <prefix>` 而不是直接调 `python`，
 或手动执行 `source server_env.sh && lgdog_server_env "$PWD"` 后再启动训练。

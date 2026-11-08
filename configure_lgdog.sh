@@ -10,6 +10,7 @@
 #   --skip-check         install without the final GPU runtime check
 #   --start              start the workbench after configuration
 #   --ui-port PORT       workbench port used by --start (default: 8088)
+#   --conda-channel URL  extra conda channel for creating the env (repeatable)
 #   -h, --help           show this help
 #
 # The script is idempotent: an existing environment is reused, dependencies are
@@ -32,12 +33,13 @@ SKIP_CHECK=0
 CPU_ONLY=0
 START=0
 UI_PORT="${LGDOG_UI_PORT:-8088}"
+CONDA_CHANNEL_ARGS=()
 
 log() { printf '[lgdog-config] %s\n' "$*"; }
 die() { printf '[lgdog-config] ERROR: %s\n' "$*" >&2; exit 1; }
 
 usage() {
-  sed -n '2,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "${BASH_SOURCE[0]}"
 }
 
 while (($#)); do
@@ -50,6 +52,7 @@ while (($#)); do
     --skip-check) SKIP_CHECK=1; shift ;;
     --start) START=1; shift ;;
     --ui-port) (($# >= 2)) || die "--ui-port needs a value"; UI_PORT="$2"; shift 2 ;;
+    --conda-channel) (($# >= 2)) || die "--conda-channel needs a URL"; CONDA_CHANNEL_ARGS+=(-c "$2"); shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown option: $1 (use --help)" ;;
   esac
@@ -83,6 +86,33 @@ CONDA_BASE="$("${CONDA_BIN}" info --base 2>/dev/null || true)"
 # shellcheck disable=SC1090
 source "${CONDA_BASE}/etc/profile.d/conda.sh"
 log "conda ${CONDA_BASE}"
+
+# 建环境：优先用 .condarc；镜像挂掉（例如清华 pkgs/pro 已下线）时按顺序回退。
+create_env() {
+  local -a fallbacks=(
+    "--override-channels -c https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main -c https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge"
+    "--override-channels -c defaults"
+  )
+  if ((${#CONDA_CHANNEL_ARGS[@]})); then
+    log "using channels: ${CONDA_CHANNEL_ARGS[*]}"
+    "${CONDA_BIN}" create --prefix "${ENV_PREFIX}" "python=${PYVER}" -y --override-channels "${CONDA_CHANNEL_ARGS[@]}"
+    return
+  fi
+  if "${CONDA_BIN}" create --prefix "${ENV_PREFIX}" "python=${PYVER}" -y; then
+    return
+  fi
+  log "default conda channels failed; retrying with explicit mirrors"
+  local variant
+  for variant in "${fallbacks[@]}"; do
+    # shellcheck disable=SC2086
+    if "${CONDA_BIN}" create --prefix "${ENV_PREFIX}" "python=${PYVER}" -y ${variant}; then
+      return
+    fi
+    log "channel variant failed: ${variant}"
+  done
+  return 1
+}
+
 
 # ── 2. System packages ──────────────────────────────────────────────────────
 if ((SKIP_SYSTEM == 0)); then
@@ -129,7 +159,7 @@ if [[ -x "${ENV_PREFIX}/bin/python" ]]; then
   log "reusing conda environment ${ENV_PREFIX}"
 else
   log "creating conda environment ${ENV_PREFIX} (python ${PYVER})"
-  "${CONDA_BIN}" create --prefix "${ENV_PREFIX}" "python=${PYVER}" -y
+  create_env || die "conda 创建环境失败：镜像频道不可用。用 --conda-channel 指定可用频道（可重复），或改用 bash install_ubuntu.sh 走 venv 路线"
 fi
 ENV_PYTHON="${ENV_PREFIX}/bin/python"
 [[ -x "${ENV_PYTHON}" ]] || die "environment creation failed: ${ENV_PYTHON}"
