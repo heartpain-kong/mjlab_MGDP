@@ -7,6 +7,9 @@ from mjlab.managers.manager_base import ManagerTermBase
 from .velocity_command import UniformVelocityCommand, UniformVelocityCommandCfg
 
 
+DEFAULT_SPEED_LIMIT = 1.0
+
+
 class PassageCommand(UniformVelocityCommand):
   def __init__(self, cfg, env):
     super().__init__(cfg, env)
@@ -173,7 +176,7 @@ class PassageCurriculum(ManagerTermBase):
       torch.arange(cols, device=self.device)/cols+.001, right=True)
 
   def __call__(self, env, env_ids, min_episodes=32, success_threshold=.7,
-               max_error=.25, speed_limit=.6):
+               max_error=.25, speed_limit=DEFAULT_SPEED_LIMIT):
     # Initial/randomized reset buffers are not completed episodes.
     ids = env_ids if env_ids is not None else torch.arange(env.num_envs, device=self.device)
     reset_mask = getattr(env, "reset_buf", None)
@@ -232,7 +235,12 @@ class PassageCurriculum(ManagerTermBase):
       "types": self.terrain.terrain_types.detach().cpu().clone()}
 
   def load_state_dict(self, state):
-    if (state.get("version") != 1 or state.get("params") != self.params
+    saved_params = state.get("params")
+    # Increasing only the ceiling preserves the meaning of existing samples,
+    # streaks and difficulty levels. Keep the remaining contract checks strict.
+    legacy_ceiling = (self.params.get("speed_limit") == DEFAULT_SPEED_LIMIT
+                      and saved_params == {**self.params, "speed_limit": .6})
+    if (state.get("version") != 1 or (saved_params != self.params and not legacy_ceiling)
         or state.get("names") != self.column_names or tuple(state.get("grid", ())) != self.grid
         or state.get("fingerprint") != self.fingerprint):
       raise ValueError("Incompatible passage curriculum state")
@@ -251,7 +259,8 @@ class PassageCurriculum(ManagerTermBase):
         or (types < 0).any() or (types >= len(self.count)).any()):
       raise ValueError("Passage resume requires the same environment/terrain grid")
     low, high = state["ranges"]
-    if not .25 <= low <= high <= self.params.get("speed_limit", .6) or not 0 <= int(state["streak"]) < 3:
+    saved_ceiling = saved_params.get("speed_limit", DEFAULT_SPEED_LIMIT)
+    if not .25 <= low <= high <= saved_ceiling or not 0 <= int(state["streak"]) < 3:
       raise ValueError("Invalid passage speed range")
     for key, value in values.items():
       getattr(self,key).copy_(value)

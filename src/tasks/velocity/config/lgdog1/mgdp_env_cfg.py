@@ -207,5 +207,6 @@ def lgdog1_race_mgdp_env_cfg(
     cfg.terminations["left_lane"] = TerminationTermCfg(func=passage.left_lane)
     cfg.rewards = make_mgdp_passage_rewards(base_body=BASE_BODY, foot_sites=FOOT_SITES)
     cfg.curriculum = {} if play else {"passage": CurriculumTermCfg(func=passage.PassageCurriculum,
-      params={"min_episodes": 32, "success_threshold": .7, "max_error": .25, "speed_limit": .6})}
+      params={"min_episodes": 32, "success_threshold": .7, "max_error": .25,
+              "speed_limit": passage.DEFAULT_SPEED_LIMIT})}
     return cfg

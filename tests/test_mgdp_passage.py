@@ -31,6 +31,7 @@ class MGDPPassageTests(unittest.TestCase):
     self.assertEqual(set(cfg.curriculum), {"passage"})
     self.assertIsInstance(cfg.commands["twist"], passage.PassageCommandCfg)
     self.assertEqual(cfg.commands["twist"].ranges.lin_vel_x, (.25,.35))
+    self.assertEqual(cfg.curriculum["passage"].params["speed_limit"], 1.0)
     for task in ("LgDog1-Race-MGDP", "LgDog1-Rough-MGDP"):
       c = load_env_cfg(task)
       self.assertEqual(c.rewards["foot_clearance"].weight, 0)
@@ -110,6 +111,34 @@ class MGDPPassageTests(unittest.TestCase):
     env.episode_length_buf.fill_(200)  # randomized counter, only 100 real steps
     curriculum(env,torch.arange(4),min_episodes=2)
     self.assertEqual(curriculum.count.sum().item(),0)
+
+  def test_resume_legacy_speed_ceiling_and_expand_to_one_meter_per_second(self):
+    old_env, _, _ = self.fake_env()
+    old = passage.PassageCurriculum(NS(params={"min_episodes": 2, "speed_limit": .6}), old_env)
+    old.command.cfg.ranges.lin_vel_x = (.25, .6)
+    old.terrain.terrain_levels.fill_(1)
+    old.streak = 2
+    state = old.state_dict()
+
+    env, xy, _ = self.fake_env()
+    env.scene.terrain.terrain_origins = torch.zeros(3, 2, 3)
+    env.scene.terrain.env_origins = torch.zeros(4, 3)
+    curriculum = passage.PassageCurriculum(NS(params={"min_episodes": 2, "speed_limit": 1.}), env)
+    curriculum.load_state_dict(state)
+    self.assertEqual(curriculum.command.cfg.ranges.lin_vel_x, (.25, .6))
+    self.assertEqual(curriculum.streak, 2)
+    torch.testing.assert_close(curriculum.terrain.terrain_levels, state["levels"])
+    xy[:, 0] = 5.4
+    curriculum(env, torch.arange(4), **curriculum.params)
+    self.assertAlmostEqual(curriculum.command.cfg.ranges.lin_vel_x[1], .625)
+    for _ in range(50):
+      curriculum(env, torch.arange(4), **curriculum.params)
+    self.assertEqual(curriculum.command.cfg.ranges.lin_vel_x, (.25, 1.))
+
+    with self.assertRaisesRegex(ValueError, "Incompatible passage curriculum"):
+      curriculum.load_state_dict({**state, "params": {"min_episodes": 3, "speed_limit": .6}})
+    with self.assertRaisesRegex(ValueError, "Invalid passage speed range"):
+      curriculum.load_state_dict({**state, "ranges": (.25, .625)})
 
   def test_leg_scrape_grace_and_severe_contact(self):
     data = NS(force_history=torch.zeros(2,3,4,3))
