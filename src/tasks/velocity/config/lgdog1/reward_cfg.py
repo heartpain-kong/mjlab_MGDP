@@ -99,14 +99,17 @@ REWARD_PROFILES = {
   "him_standard": {
     "weights": {
       "foot_clearance": 0.0,
-      "feet_stumble": -0.5,
-      # 计数口径返回 0~4，权重 0.25 让每秒贡献（实测约 0.15）与跟踪/姿态同量级；
-      # 旧单点口径同样写 1.0 时实测只有 0.02，基本等于没开。
-      "feet_air_time": 0.25,
-      "soft_landing": -0.002,
-      "track_linear_velocity": 2.0,
+      # 2026-11-06 面板调参结果：按 REWARDS.md 的约定从面板覆盖搬进 profile 记录，
+      # 避免覆盖块长期非空（既挂测试，也让后续改 profile 静默失效）。
+      "track_linear_velocity": 2.4,
+      "track_angular_velocity": 1.2,
+      "body_orientation_l2": -1.2,
+      "feet_stumble": -0.2,
+      "feet_air_time": 0.5,
+      "soft_landing": -0.001,
+      "action_rate_l2": -0.05,
+      "foot_slip": -0.2,
       "pose": 1.5,
-      "action_rate_l2": -0.1,
     },
     "params": {
       # Keep relative shaping available for a separate controlled experiment.

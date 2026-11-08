@@ -53,9 +53,9 @@ class RewardSemanticsTests(unittest.TestCase):
 
   def test_v19_baseline_is_explicit_and_dashboard_overrides_are_empty(self):
     rows={r['name']:r for r in read_rewards(self.root,'him_standard')['rewards']}
-    for name,value in dict(foot_clearance=0.,feet_stumble=-.5,feet_air_time=.25,
-                           track_linear_velocity=2.,pose=1.5,action_rate_l2=-.1,
-                           soft_landing=-.002).items():
+    for name,value in dict(foot_clearance=0.,feet_stumble=-.2,feet_air_time=.5,
+                           track_linear_velocity=2.4,pose=1.5,action_rate_l2=-.05,
+                           soft_landing=-.001).items():
       self.assertEqual(rows[name]['weight'],value)
       self.assertFalse(rows[name]['changed'])
     self.assertEqual(rows['track_linear_velocity']['params']['relative_weight'],0.)
