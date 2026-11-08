@@ -64,6 +64,24 @@ bash run_lgdog.sh server start --ui-port 8088
 
 ## 常见问题
 
+**`EnvironmentNameNotFound: Could not find conda environment: lgdog`**
+环境是用 `conda create --prefix` 建的，父目录不在 conda 的 `envs_dirs` 里，按名字找不到。
+先确认目录还在：
+
+```bash
+ls -d /root/gpufree-data/conda/envs/lgdog/bin/python
+conda activate /root/gpufree-data/conda/envs/lgdog     # 按路径激活，立即可用
+```
+
+再让按名字激活也能用（写进 `~/.condarc`）：
+
+```bash
+conda config --append envs_dirs /root/gpufree-data/conda/envs
+conda activate lgdog
+```
+
+`configure_lgdog.sh` 会自动做这一步；如果目录根本不存在，重新跑 `bash configure_lgdog.sh --skip-system-deps` 即可。
+
 **`CUDA driver not available` / `Invalid device identifier: cuda:0`**
 说明激活钩子没生效：确认是用 `conda activate <prefix>` 而不是直接调 `python`，
 或手动执行 `source server_env.sh && lgdog_server_env "$PWD"` 后再启动训练。

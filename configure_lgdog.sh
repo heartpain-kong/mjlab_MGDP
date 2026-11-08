@@ -139,6 +139,16 @@ if not (3, 10) <= sys.version_info[:2] < (3, 14):
     raise SystemExit(f"Python 3.10-3.13 is required, found {sys.version.split()[0]}")
 PY
 
+# `conda create --prefix` 建的环境不会自动进 envs_dirs，导致
+# `conda activate lgdog` 报 EnvironmentNameNotFound；这里注册父目录，
+# 让按名字激活和按路径激活都能用。
+ENVS_PARENT="$(dirname -- "${ENV_PREFIX}")"
+if [[ -d "${ENVS_PARENT}" ]] && ! "${CONDA_BIN}" config --show envs_dirs 2>/dev/null | grep -qF "${ENVS_PARENT}"; then
+  log "registering ${ENVS_PARENT} in conda envs_dirs"
+  "${CONDA_BIN}" config --append envs_dirs "${ENVS_PARENT}" >/dev/null 2>&1 \
+    || log "warning: could not update envs_dirs; use 'conda activate ${ENV_PREFIX}'"
+fi
+
 # ── 4. Python dependencies ──────────────────────────────────────────────────
 log "upgrading packaging tools"
 "${ENV_PYTHON}" -m pip install --upgrade pip setuptools wheel
