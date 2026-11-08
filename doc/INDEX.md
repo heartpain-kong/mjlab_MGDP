@@ -28,6 +28,7 @@
 | V1–V7b 历史训练记录 | [TRAINING_V.md](TRAINING_V.md) |
 | TerrainV4 分析 | [LGDOG_TERRAIN_V4.md](LGDOG_TERRAIN_V4.md) |
 | 安装训练依赖 | [setup_zh.md](setup_zh.md) |
+| Conda 环境 `lgdog` 一键配置（CUDA 钩子 + 自检） | [CONDA_LGDOG.md](CONDA_LGDOG.md) |
 | GPUFree Ubuntu 22.04 部署、CUDA 修复、SSH 转发和显存经验 | [DEPLOYMENT_GPUFREE.md](DEPLOYMENT_GPUFREE.md) |
 | 服务器一键安装、自检、后台网页和Windows上传 | [SERVER_DEPLOY.md](../SERVER_DEPLOY.md) |
 | 原项目说明 | [中文](UPSTREAM_README_zh.md) / [English](UPSTREAM_README.md) |

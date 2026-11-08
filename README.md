@@ -2,7 +2,15 @@
 
 ## Ubuntu 一键安装
 
-在 Ubuntu 22.04/24.04 的算力租借实例中，把仓库上传或克隆后执行：
+推荐用 Conda（环境名 **`lgdog`**，会写入 CUDA 驱动激活钩子并做 GPU 自检）：
+
+```bash
+cd unitree_rl_mjlab_lgdog
+bash configure_lgdog.sh          # 可选 --skip-system-deps / --torch-index / --start --ui-port 8088
+conda activate /root/gpufree-data/conda/envs/lgdog
+```
+
+不装 Conda 时，用 venv 版本：
 
 ```bash
 cd unitree_rl_mjlab_lgdog
@@ -11,21 +19,21 @@ source .venv/bin/activate
 python scripts/verify_install.py
 ```
 
-脚本会安装系统编译库、创建 `.venv`、安装锁定的 mjlab/MuJoCo/Warp 组合、以 editable 模式安装当前源码，并检查 LgDog 任务是否注册成功。默认使用 Python 3.10–3.13 和 PyPI 的 PyTorch GPU 包；只有做 CPU 导入检查时使用 `bash install_ubuntu.sh --cpu`。显卡训练仍需要 NVIDIA 驱动和可用 CUDA 驱动。
+脚本会安装系统编译库、创建环境、安装锁定的 mjlab/MuJoCo/Warp 组合、以 editable 模式安装当前源码，并检查 LgDog 任务是否注册成功。默认使用 Python 3.10–3.13 和 PyPI 的 PyTorch GPU 包；只有做 CPU 导入检查时使用 `--cpu`。显卡训练仍需要 NVIDIA 驱动和可用 CUDA 驱动。
 
 已有系统依赖或没有 sudo 权限时：
 
 ```bash
-bash install_ubuntu.sh --skip-system-deps
+bash configure_lgdog.sh --skip-system-deps
 ```
 
 需要指定 PyTorch CUDA 源时：
 
 ```bash
-bash install_ubuntu.sh --torch-index https://download.pytorch.org/whl/cu128
+bash configure_lgdog.sh --torch-index https://download.pytorch.org/whl/cu128
 ```
 
-详细参数和手工安装步骤见 [doc/setup_zh.md](doc/setup_zh.md)；GPUFree 平台的 CUDA、SSH 转发和显存记录见 [doc/DEPLOYMENT_GPUFREE.md](doc/DEPLOYMENT_GPUFREE.md)。
+详细参数见 [doc/CONDA_LGDOG.md](doc/CONDA_LGDOG.md) 与 [doc/setup_zh.md](doc/setup_zh.md)；GPUFree 平台的 CUDA、SSH 转发和显存记录见 [doc/DEPLOYMENT_GPUFREE.md](doc/DEPLOYMENT_GPUFREE.md)。
 
 ## 运行
 

@@ -1,0 +1,21 @@
+# Conda environment used by the LgDog (mjlab) training stack.
+#
+# 这个文件只是「环境长什么样」的说明；真正安装依赖请用 configure_lgdog.sh，
+# 因为锁定版本在 requirements-ubuntu.txt 里，而且要写入 CUDA 驱动的激活钩子。
+#
+# 等价手工命令：
+#   conda env create -f environment_lgdog.yml
+#   conda activate lgdog
+#   pip install --extra-index-url https://pypi.nvidia.com -r requirements-ubuntu.txt
+#   pip install --no-deps -e .
+#
+# 或者一条命令（推荐）：
+#   bash configure_lgdog.sh
+name: lgdog
+channels:
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  # 其余依赖（torch / mjlab / mujoco / warp …）由 configure_lgdog.sh 从
+  # requirements-ubuntu.txt 安装，以便固定版本并写入 CUDA 激活钩子。
