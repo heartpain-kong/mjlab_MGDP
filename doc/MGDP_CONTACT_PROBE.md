@@ -179,15 +179,19 @@ rsl-rl-lib 5.0.1 / torch 2.7.1`（本地是 torch 2.14.1，且本地目录有 `.
 
 ### 临时可用配置
 
-在阈值以下训练，用步数换世界数（每轮样本量不变）：
+在阈值以下训练，用步数换世界数（每轮样本量不变）。`lgdog.py train` 没有暴露步数参数，
+直接用 `scripts/train.py`：
 
 ```bash
-python -u lgdog.py train race_mgdp --envs 512 --iterations 16000 \
-  --terrain-num-rows 8 --terrain-num-cols 10 --ppo-mini-batches 4 \
-  --agent.num-steps-per-env 96 --run-name V9_seed42
+python -u scripts/train.py LgDog1-Race-MGDP \
+  --env.scene.num-envs=512 --agent.max-iterations=16000 \
+  --agent.logger=tensorboard --agent.seed=42 --agent.run-name=V9_seed42 \
+  --enable-nan-guard=True --terrain-num-rows=8 --terrain-num-cols=10 \
+  --agent.num-steps-per-env=96 --agent.algorithm.num-mini-batches=4
 ```
 
 512×96 与 1024×48 的每轮样本量相同（≈49k），GPU 不会因为世界数减半而闲置。
+
 
 | 版本与本地不一致（尤其 `mujoco-warp`/`warp-lang`/`torch`） | 先对齐版本再复测 |
 
