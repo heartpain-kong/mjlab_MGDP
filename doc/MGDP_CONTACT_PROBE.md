@@ -132,6 +132,63 @@ git log -1 --oneline; git status --short
 | 512 也是 `found=0` | 与规模无关 → 依赖版本或传感器挂载 |
 | `nacon=0`（reset 后） | 宽相/配对在服务器上没产对 |
 | `nacon>0` 但 `found=0` | 传感器匹配问题（`contact_sensor_maxmatch`/BVH 复用） |
+
+## 2026-11-10 第二轮：物理侧确认
+
+服务器 1024 世界、rows=8：
+
+```
+reset  nacon [0]   nefc [12 12 12 12]
+step5  nacon [0]   nefc [12 12 12 12]
+found 0.0
+```
+
+**`nacon=0` 从 reset 起就是 0** → 不是传感器匹配问题，是物理宽相没有产出任何几何体对；
+`nefc=12` 说明约束数组正常，只是没有接触。
+
+服务器依赖：`mjlab 1.2.0 / mujoco 3.5.0 / mujoco-warp 3.5.0 / warp-lang 1.12.0 /
+rsl-rl-lib 5.0.1 / torch 2.7.1`（本地是 torch 2.14.1，且本地目录有 `.git`，
+服务器目录是解压部署、没有 `.git`）。
+
+### 规模阈值与可疑点
+
+| 世界数 | 每世界 geom | 世界×geom |
+|---:|---:|---:|
+| 512（正常） | 27840 | **14.3 M** |
+| 1024（归零） | 27840 | **28.5 M** |
+
+14.3 M < **2^24 (16.8 M)** < 28.5 M。SAP 宽相里 `wp.utils.array_scan` 只支持
+`int32`/`float32` 前缀和，排序 key 也是 int32；`nsweep = 5 * nworldgeom`。
+当"世界×geom"跨过 2^24 时，前缀和/索引很可能溢出，二分查找失效 → 所有世界都拿不到配对。
+这能解释为什么 512 好、1024 坏，且与 `nconmax`、`optimize_vram`、broadphase 选择都无关。
+
+### 决定性对照（待做）
+
+固定世界数、只改 geom 数：1024 世界 + `rows=2`（geom 约 7–8k，世界×geom ≈ 7.5 M）。
+若接触恢复 → 确认是"世界×geom"乘积阈值，不是世界数本身。
+
+### 代码一致性核对
+
+服务器不是 git 仓库，用文件哈希对照（本地 = GitHub `3fcdbd7`）：
+
+```
+7ff157f2e2cb6c55c9acac1c1c22964f  src/_mjwarp_pairs.py
+3b4013ee97628ebed4793703e1384fae  src/sim_memory.py
+4557aefdf9f8330e80e76a57ddd8d5e1  src/_mjwarp_bvh.py
+```
+
+### 临时可用配置
+
+在阈值以下训练，用步数换世界数（每轮样本量不变）：
+
+```bash
+python -u lgdog.py train race_mgdp --envs 512 --iterations 16000 \
+  --terrain-num-rows 8 --terrain-num-cols 10 --ppo-mini-batches 4 \
+  --agent.num-steps-per-env 96 --run-name V9_seed42
+```
+
+512×96 与 1024×48 的每轮样本量相同（≈49k），GPU 不会因为世界数减半而闲置。
+
 | 版本与本地不一致（尤其 `mujoco-warp`/`warp-lang`/`torch`） | 先对齐版本再复测 |
 
 ## 临时结论
