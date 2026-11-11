@@ -44,6 +44,19 @@ class SapInt64PatchTests(unittest.TestCase):
       _mjwarp_sap.uninstall()
       self.assertIs(cd.sap_broadphase, original)
 
+  def test_int64_cumsum_survives_int32_overflow(self):
+    """前缀和总量超过 2^31 时，int64 版本仍然给出正确的全局前缀和。"""
+    import warp as wp
+
+    nworld, ngeom = 2, 3
+    big = 1 << 30  # 每个元素 2^30，总和 6*2^30 > 2^31
+    values = [[big, big, big], [big, big, big]]
+    range_wp = wp.array2d(values, dtype=int)
+    cum = _mjwarp_sap._cumsum_i64(range_wp, nworld, ngeom)
+    got = wp.to_torch(cum).cpu().numpy().tolist()
+    expected = [big * (i + 1) for i in range(nworld * ngeom)]
+    self.assertEqual(got, expected)
+
 
 if __name__ == "__main__":
   unittest.main()

@@ -129,22 +129,51 @@ def _sap_sweep_i64(
   return kernel
 
 
-def _cumsum_i64(range_wp):
-  """range_（int32, 世界×geom）→ int64 全局前缀和（warp 数组，复用缓冲）。"""
-  import torch
+# 前缀和全部用 Warp 内核算（int64），不经过 torch：
+# 训练时 `sap_broadphase` 会在 CUDA graph 捕获阶段被调用（mjlab 的 create_graph），
+# 那时 `wp.to_torch` 会报 "pointer resides on host memory"，因为数组落在 graph 的 mempool 里。
 
-  rng = wp.to_torch(range_wp).reshape(-1)
-  key = (str(rng.device), rng.numel())
-  cache = getattr(_cumsum_i64, "_cache", None)
-  if cache is None:
-    cache = {}
-    _cumsum_i64._cache = cache
-  buf = cache.get(key)
-  if buf is None:
-    buf = torch.empty(rng.numel(), dtype=torch.int64, device=rng.device)
-    cache[key] = buf
-  torch.cumsum(rng, dim=0, dtype=torch.int64, out=buf)
-  return wp.from_torch(buf, dtype=wp.int64)
+
+@wp.kernel(module="unique", enable_backward=False)
+def _scan_ranges_world(
+  range_in: wp.array2d(dtype=int), cum_out: wp.array2d(dtype=wp.int64), ngeom: int
+):
+  """每个世界单独做前缀和（int64，不会再溢出）。"""
+  worldid = wp.tid()
+  acc = wp.int64(0)
+  for i in range(ngeom):
+    acc += wp.int64(range_in[worldid, i])
+    cum_out[worldid, i] = acc
+
+
+@wp.kernel(module="unique", enable_backward=False)
+def _world_offsets(
+  cum_in: wp.array2d(dtype=wp.int64), ngeom: int, nworld: int, offsets: wp.array(dtype=wp.int64)
+):
+  """把每个世界的前缀和总量累加成世界内偏移（单个线程，nworld 条）。"""
+  acc = wp.int64(0)
+  for w in range(nworld):
+    offsets[w] = acc
+    acc += cum_in[w, ngeom - 1]
+
+
+@wp.kernel(module="unique", enable_backward=False)
+def _add_world_offsets(
+  cum_inout: wp.array2d(dtype=wp.int64), offsets: wp.array(dtype=wp.int64)
+):
+  worldid, i = wp.tid()
+  cum_inout[worldid, i] += offsets[worldid]
+
+
+def _cumsum_i64(range_wp, nworld: int, ngeom: int):
+  """range_（int32, 世界×geom）→ int64 全局前缀和（warp 数组）。"""
+  device = range_wp.device
+  cum = wp.empty((nworld, ngeom), dtype=wp.int64, device=device)
+  offsets = wp.empty(nworld, dtype=wp.int64, device=device)
+  wp.launch(_scan_ranges_world, dim=nworld, inputs=[range_wp, cum, ngeom], device=device)
+  wp.launch(_world_offsets, dim=1, inputs=[cum, ngeom, nworld, offsets], device=device)
+  wp.launch(_add_world_offsets, dim=(nworld, ngeom), inputs=[cum, offsets], device=device)
+  return cum.reshape(-1)
 
 
 def sap_broadphase_i64(m, d, ctx):
@@ -202,7 +231,7 @@ def sap_broadphase_i64(m, d, ctx):
     outputs=[range_],
   )
 
-  cumulative_sum = _cumsum_i64(range_)
+  cumulative_sum = _cumsum_i64(range_, d.nworld, m.ngeom)
 
   nsweep = 5 * nworldgeom
   wp.launch(
