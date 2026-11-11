@@ -189,9 +189,17 @@ def compact_model_allocations(enabled=True):
     else:
       print("[memory] Sensor context reuse source could not be verified; "
             "keeping native context recreation", flush=True)
+    # int64 SAP 宽相：只在"世界数 × geom 数"超过阈值时接管，低于阈值走原生路径。
+    from src import _mjwarp_sap
+    sap_installed = _mjwarp_sap.install()
+    if sap_installed:
+      print("[memory] int64 SAP broadphase available for scenes above "
+            f"{_mjwarp_sap.INT64_THRESHOLD} world-geoms", flush=True)
     try:
       yield stats
     finally:
+      if sap_installed:
+        _mjwarp_sap.uninstall()
       mjwarp.put_model = original
       bvh.build_scene_bvh = original_bvh
       SensorContext.recreate = original_recreate
