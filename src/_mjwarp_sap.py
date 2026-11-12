@@ -30,6 +30,72 @@ SAP_BROADPHASE_SHA256 = "1e6e965c9a45b4d4d8334d3c26480cd3192b27f58d4a7d290626100
 # 超过这个"世界数 × geom 数"就切到 int64 路径；低于它用原生实现（行为完全一致）。
 INT64_THRESHOLD = 8_000_000
 
+# --- 稀疏 pair 表（替代 2.89 GiB 稠密查找表） -------------------------------
+_SPARSE = {"np_keys": None, "np_vals": None, "ngeom": 0, "device": None,
+           "keys": None, "vals": None}
+
+
+def set_sparse_pairs(keys, vals, ngeom):
+  import numpy as np
+  _SPARSE.update(np_keys=np.ascontiguousarray(keys, dtype=np.int64),
+                 np_vals=np.ascontiguousarray(vals, dtype=np.int32),
+                 ngeom=int(ngeom), device=None, keys=None, vals=None)
+
+
+def sparse_available():
+  return _SPARSE["np_keys"] is not None
+
+
+def _sparse_arrays(device):
+  if _SPARSE["keys"] is None or _SPARSE["device"] != str(device):
+    _SPARSE["keys"] = wp.array(_SPARSE["np_keys"], dtype=wp.int64, device=device)
+    _SPARSE["vals"] = wp.array(_SPARSE["np_vals"], dtype=wp.vec2i, device=device)
+    _SPARSE["device"] = str(device)
+  return _SPARSE["keys"], _SPARSE["vals"]
+
+
+@wp.func
+def _search_key(keys: wp.array(dtype=wp.int64), key: wp.int64, count: int) -> int:
+  lower = wp.int32(0)
+  upper = wp.int32(count)
+  while lower < upper:
+    mid = (lower + upper) >> 1
+    if keys[mid] < key:
+      lower = mid + 1
+    else:
+      upper = mid
+  if lower < count and keys[lower] == key:
+    return lower
+  return -1
+
+
+@wp.func
+def _add_pair_value(
+  geom_type: wp.array(dtype=int),
+  naconmax_in: int,
+  geom1: int,
+  geom2: int,
+  worldid: int,
+  value: wp.vec2i,
+  ncollision_out: wp.array(dtype=int),
+  collision_pair_out: wp.array(dtype=wp.vec2i),
+  collision_pairid_out: wp.array(dtype=wp.vec2i),
+  collision_worldid_out: wp.array(dtype=int),
+):
+  pairid = wp.atomic_add(ncollision_out, 0, 1)
+  if pairid >= naconmax_in:
+    return
+  type1 = geom_type[geom1]
+  type2 = geom_type[geom2]
+  if type1 > type2:
+    pair = wp.vec2i(geom2, geom1)
+  else:
+    pair = wp.vec2i(geom1, geom2)
+  collision_pair_out[pairid] = pair
+  collision_pairid_out[pairid] = value
+  collision_worldid_out[pairid] = worldid
+
+
 _cd._int64_sap_state = getattr(_cd, "_int64_sap_state", {"installed": False, "original": None})
 
 
@@ -67,6 +133,11 @@ def _sap_sweep_i64(
     sort_index_in: wp.array2d(dtype=int),
     cumulative_sum_in: wp.array(dtype=wp.int64),
     nsweep_in: int,
+    # 稀疏 pair 表（sparse_in=0 时走稠密表）
+    pair_keys_in: wp.array(dtype=wp.int64),
+    pair_vals_in: wp.array(dtype=wp.vec2i),
+    npairs_in: int,
+    sparse_in: int,
     # Data out:
     ncollision_out: wp.array(dtype=int),
     # Out:
@@ -100,6 +171,39 @@ def _sap_sweep_i64(
         idx = upper_tri_index(ngeom, geom1, geom2)
 
       worldgeomid += nsweep_in
+
+      if sparse_in != 0:
+        lo = wp.min(geom1, geom2)
+        hi = wp.max(geom1, geom2)
+        key = wp.int64(lo) * wp.int64(ngeom) + wp.int64(hi)
+        pos = _search_key(pair_keys_in, key, npairs_in)
+        if pos < 0:
+          continue
+        value = pair_vals_in[pos]
+        if value[0] < -1 and value[1] < 0:
+          continue
+        if (
+          wp.static(
+            _cd._broadphase_filter(
+              opt_broadphase_filter, ngeom_aabb, ngeom_rbound, ngeom_margin
+            )
+          )(geom_aabb, geom_rbound, geom_margin, geom_xpos_in, geom_xmat_in, geom1, geom2, worldid)
+          or value[1] >= 0
+        ):
+          _add_pair_value(
+            geom_type,
+            naconmax_in,
+            geom1,
+            geom2,
+            worldid,
+            value,
+            ncollision_out,
+            collision_pair_out,
+            collision_pairid_out,
+            collision_worldid_out,
+          )
+        continue
+
       pairid = nxn_pairid[idx]
       if pairid[0] < -1 and pairid[1] < 0:
         continue
@@ -233,6 +337,16 @@ def sap_broadphase_i64(m, d, ctx):
 
   cumulative_sum = _cumsum_i64(range_, d.nworld, m.ngeom)
 
+  if sparse_available():
+    pair_keys, pair_vals = _sparse_arrays(d.geom_xpos.device)
+    npairs = int(_SPARSE["np_keys"].size)
+    sparse_flag = 1
+  else:
+    pair_keys = wp.empty(1, dtype=wp.int64, device=d.geom_xpos.device)
+    pair_vals = wp.empty(1, dtype=wp.vec2i, device=d.geom_xpos.device)
+    npairs = 0
+    sparse_flag = 0
+
   nsweep = 5 * nworldgeom
   wp.launch(
     kernel=_sap_sweep_i64(
@@ -256,6 +370,10 @@ def sap_broadphase_i64(m, d, ctx):
       sort_index.reshape((-1, m.ngeom)),
       cumulative_sum,
       nsweep,
+      pair_keys,
+      pair_vals,
+      npairs,
+      sparse_flag,
     ],
     outputs=[d.ncollision, ctx.collision_pair, ctx.collision_pairid, ctx.collision_worldid],
   )
@@ -283,7 +401,8 @@ def install(force: bool = False, threshold: int = INT64_THRESHOLD) -> bool:
   state["original"] = _cd.sap_broadphase
 
   def dispatch(m, d, ctx):
-    if force or d.nworld * m.ngeom >= threshold:
+    # 稀疏表启用时必须走 int64 扫掠：原生扫掠会读已被替换掉的稠密表。
+    if force or _SPARSE["np_keys"] is not None or d.nworld * m.ngeom >= threshold:
       return sap_broadphase_i64(m, d, ctx)
     return state["original"](m, d, ctx)
 

@@ -119,7 +119,6 @@ def build_collision_pairs(mjm, model, opt, types, chunk_size=PAIR_CHUNK_SIZE):
   empty = np.empty((0, 2), dtype=np.int32)
   model.nxn_geom_pair = empty
   model.nxn_geom_pair_filtered = np.concatenate(geom_chunks) if geom_chunks else empty
-  model.nxn_pairid = lookup
   model.nxn_pairid_filtered = np.concatenate(id_chunks) if id_chunks else empty
   model.nsensorcollision = int(sensor_collision_count)
   model.geom_pair_type_count = tuple(histogram)
@@ -130,6 +129,33 @@ def build_collision_pairs(mjm, model, opt, types, chunk_size=PAIR_CHUNK_SIZE):
     opt.broadphase = types.BroadphaseType.SAP_TILE
   else:
     opt.broadphase = types.BroadphaseType.SAP_SEGMENTED
+
+  # SAP 路径用稀疏有序表替代 387M 项的稠密查找表（2.89 GiB）。
+  sparse = opt.broadphase != types.BroadphaseType.NXN
+  if sparse:
+    from mujoco_warp._src import collision_driver as _cdriver
+    sparse = bool(_cdriver._int64_sap_state.get("installed"))
+  if sparse and active:
+    from src._mjwarp_sap import set_sparse_pairs
+    pairs = model.nxn_geom_pair_filtered
+    rng = np.random.default_rng(0)
+    take = min(active, 4096)
+    sample = rng.choice(active, size=take, replace=False)
+    g1 = pairs[sample, 0].astype(np.int64)
+    g2 = pairs[sample, 1].astype(np.int64)
+    dense_index = (g1 * (2*n - g1 - 3)) // 2 + g2 - 1
+    if not np.array_equal(lookup[dense_index], model.nxn_pairid_filtered[sample]):
+      raise RuntimeError("sparse pair table disagrees with the dense lookup")
+    keys = pairs[:, 0].astype(np.int64) * n + pairs[:, 1].astype(np.int64)
+    order = np.argsort(keys, kind="stable")
+    set_sparse_pairs(keys[order], model.nxn_pairid_filtered[order], n)
+    # 稠密表置换成 1 项的占位表，避免上传 2.89 GiB；真实查询走稀疏二分。
+    model.nxn_pairid = np.zeros((1, 2), dtype=np.int32)
+    print(f"[memory] sparse pair lookup: {active} sorted keys "
+          f"({active*16/1024**2:.1f} MiB) replaces {count*8/1024**3:.2f} GiB dense table",
+          flush=True)
+  else:
+    model.nxn_pairid = lookup
   print(f"[memory] collision pairs ready: active={active}, "
         f"elapsed={time.monotonic()-started:.2f}s; uploading model without full pair indices", flush=True)
   return sensor_ids

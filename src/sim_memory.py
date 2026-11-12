@@ -198,7 +198,8 @@ def compact_model_allocations(enabled=True):
     try:
       yield stats
     finally:
-      if sap_installed:
+      # 稀疏 pair 表已经把稠密表换成占位表，补丁必须常驻，否则原生扫掠会越界。
+      if sap_installed and not _mjwarp_sap.sparse_available():
         _mjwarp_sap.uninstall()
       mjwarp.put_model = original
       bvh.build_scene_bvh = original_bvh

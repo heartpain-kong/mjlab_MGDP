@@ -1,49 +1,72 @@
-# Copyright 2026 The Newton Developers
-# Copyright 2026 LgDog contributors
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+"""共享地形 BVH：静态地形只建一份，所有世界共用。
 
-"""Build MJWarp 3.5.0 initial BVH bounds without tiled geometry staging.
+背景：`mujoco_warp._src.bvh.build_scene_bvh` 为每个世界复制一套叶子
+（`lower/upper` 形状 `nworld × bvh_ngeom`），4096 世界 × 27842 geom ≈ 6.7 GB。
+但赛道场景里地形在所有世界中完全相同且静止，射线传感器
+（`include_geom_groups=(0,)`）只查地形组，因此一份 BVH 就能服务所有世界。
 
-Upstream starts every render world from the same single MuJoCo MjData. Compute
-those bounds once and broadcast them, retaining independent per-world BVH leaves,
-groups and roots. Runtime refit and rays continue to use the native implementation.
+判定条件（不满足就退回原生逐世界 BVH）：
+- 所有启用的 geom 都属于 worldbody（静态，不会被物理移动）；
+- 所有这些 geom 的 group 都是 0（地形组）。
+
+地形静止 ⇒ refit 不再需要，`refit_scene_bvh` 对共享 BVH 变成空操作。
 """
 
+from __future__ import annotations
+
+import numpy as np
 import warp as wp
 
-wp.set_module_options({"enable_backward": False})
+# 记录使用共享 BVH 的 RenderContext（id），供 refit 判定。
+_SHARED_RENDER_CONTEXTS: set[int] = set()
 
 
-@wp.kernel
+@wp.kernel(module="unique", enable_backward=False)
 def _broadcast_bounds(
   lower_in: wp.array(dtype=wp.vec3),
   upper_in: wp.array(dtype=wp.vec3),
-  ngeom: int,
+  group_in: wp.array(dtype=int),
+  bvh_ngeom: int,
   lower_out: wp.array(dtype=wp.vec3),
   upper_out: wp.array(dtype=wp.vec3),
   group_out: wp.array(dtype=int),
 ):
   world, geom = wp.tid()
-  index = world * ngeom + geom
+  index = world * bvh_ngeom + geom
   lower_out[index] = lower_in[geom]
   upper_out[index] = upper_in[geom]
   group_out[index] = world
 
 
+def _static_terrain_only(mjm, rc) -> bool:
+  enabled = getattr(rc, "enabled_geom_ids", None)
+  if enabled is None:
+    return False
+  if hasattr(enabled, "numpy"):
+    enabled = enabled.numpy()
+  ids = np.asarray(enabled, dtype=np.int64)
+  if ids.size == 0:
+    return False
+  body = np.asarray(mjm.geom_bodyid)[ids]
+  group = np.asarray(mjm.geom_group)[ids]
+  weld = np.asarray(mjm.body_weldid)[body]
+  static = (body == 0) | (weld == 0)
+  ok = bool(np.all(static) and np.all(group == 0))
+  if not ok:
+    print(f"[memory] shared terrain BVH skipped: enabled={ids.size} "
+          f"bodies={sorted(set(body.tolist()))[:5]} groups={sorted(set(group.tolist()))[:5]}",
+          flush=True)
+  return ok
+
+
 def build_scene_bvh(mjm, mjd, rc, nworld):
+  """静态地形场景只建一份 BVH；否则退回原生逐世界实现。"""
   from mujoco_warp._src import bvh
-  avoided = max(nworld-1, 0) * mjm.ngeom * 60
+
+  if _static_terrain_only(mjm, rc):
+    return _build_shared(mjm, mjd, rc, nworld)
+
+  avoided = max(nworld - 1, 0) * mjm.ngeom * 60
   print(f"[memory] shared BVH initialization: geoms={mjm.ngeom}, worlds={nworld}; "
         f"avoids={avoided/1024**3:.2f} GiB repeated pose/size staging; "
         "per-world BVH and runtime refit unchanged", flush=True)
@@ -65,10 +88,57 @@ def build_scene_bvh(mjm, mjd, rc, nworld):
   wp.launch(
     kernel=_broadcast_bounds,
     dim=(nworld, rc.bvh_ngeom),
-    inputs=[lower, upper, rc.bvh_ngeom],
+    inputs=[lower, upper, group, rc.bvh_ngeom],
     outputs=[rc.lower, rc.upper, rc.group],
   )
   rc.bvh = wp.Bvh(rc.lower, rc.upper, groups=rc.group, constructor="sah")
   rc.bvh_id = rc.bvh.id
   wp.launch(kernel=bvh.compute_bvh_group_roots, dim=nworld,
             inputs=[rc.bvh_id], outputs=[rc.group_root])
+
+
+def _build_shared(mjm, mjd, rc, nworld):
+  from mujoco_warp._src import bvh
+
+  geom_type = wp.array(mjm.geom_type, dtype=int)
+  geom_dataid = wp.array(mjm.geom_dataid, dtype=int)
+  geom_size = wp.array(mjm.geom_size[None, :, :], dtype=wp.vec3)
+  geom_xpos = wp.array(mjd.geom_xpos[None, :, :], dtype=wp.vec3)
+  geom_xmat = wp.array(mjd.geom_xmat.reshape(1, mjm.ngeom, 3, 3), dtype=wp.mat33)
+  # 只分配一个世界的叶子，然后整体缩小 rc 的数组（旧的大数组交给 warp 池回收）。
+  lower = wp.empty(rc.bvh_ngeom, dtype=wp.vec3)
+  upper = wp.empty(rc.bvh_ngeom, dtype=wp.vec3)
+  group = wp.empty(rc.bvh_ngeom, dtype=int)
+  wp.launch(
+    kernel=bvh._compute_bvh_bounds,
+    dim=(1, rc.bvh_ngeom),
+    inputs=[geom_type, geom_dataid, geom_size, geom_xpos, geom_xmat,
+            rc.bvh_ngeom, rc.enabled_geom_ids, rc.mesh_bounds_size,
+            rc.hfield_bounds_size, lower, upper, group],
+  )
+  rc.lower, rc.upper, rc.group = lower, upper, group
+  rc.bvh = wp.Bvh(rc.lower, rc.upper, groups=rc.group, constructor="sah")
+  rc.bvh_id = rc.bvh.id
+
+  single_root = wp.empty(1, dtype=int)
+  wp.launch(kernel=bvh.compute_bvh_group_roots, dim=1,
+            inputs=[rc.bvh_id], outputs=[single_root])
+  root_value = int(single_root.numpy()[0])
+  rc.group_root = wp.full(nworld, root_value, dtype=int)
+
+  _SHARED_RENDER_CONTEXTS.add(id(rc))
+  if not getattr(bvh, "_lgdog_refit_wrapped", False):
+    _original_refit = bvh.refit_scene_bvh
+
+    def _refit_guard(m, d, render_ctx):
+      if id(render_ctx) in _SHARED_RENDER_CONTEXTS:
+        return
+      return _original_refit(m, d, render_ctx)
+
+    bvh.refit_scene_bvh = _refit_guard
+    bvh._lgdog_refit_wrapped = True
+
+  saved = max(nworld - 1, 0) * rc.bvh_ngeom * 28
+  print(f"[memory] terrain BVH shared across {nworld} worlds: leaves={rc.bvh_ngeom} "
+        f"(saves {saved/1024**3:.2f} GiB), static refit disabled", flush=True)
+  return None
