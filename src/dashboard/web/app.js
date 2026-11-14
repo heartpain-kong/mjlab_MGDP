@@ -8,6 +8,7 @@ const pendingStops = new Set();
 let pendingDelete = null, deletingJobs = false;
 let pretrainStarting = false;
 let presetTaskAlias = null;
+let passageSpeedTaskAlias = null;
 
 // 面板每次重启都会换一个 token（server.py 用 secrets 生成）。页面只在加载时取一次，
 // 所以重启过服务后所有 POST 都会被 403 拒绝、启动按钮变灰。这里静默重取 token 再重试一次。
@@ -104,6 +105,8 @@ function collect() {
     lp_max_task_probability:$("lp-max-task-probability")?.value||"0.25",
     velocity_min_abs:task()?.directed_passage?"":$("velocity-min-abs")?.value || "",
     velocity_max_abs:task()?.directed_passage?"":$("velocity-max-abs")?.value || "",
+    passage_speed_mode:task()?.directed_passage?$("passage-speed-mode").value:"",
+    passage_fixed_speed:task()?.directed_passage&&$("passage-speed-mode")?.value==="fixed"?$("passage-fixed-speed").value:"",
     enable_nan_guard:$("enable-nan-guard").checked,
     resume:$("resume").checked, checkpoint:model, onnx:model, viewer:$("viewer").value,
     map:$("map").value, map_file:$("map-file")?.value||"",
@@ -247,6 +250,17 @@ function updateCurriculumOptions(){
   const select=$("terrain-curriculum");if(!select)return;
   const unsupported=!task()||task().scene==="flat";
   const directed=Boolean(task()?.directed_passage);
+  if(passageSpeedTaskAlias!==task()?.alias){
+    const fixed=task()?.passage_fixed_speed_default;
+    $("passage-speed-mode").value=fixed==null?"curriculum":"fixed";
+    $("passage-fixed-speed").value=String(fixed??1);
+    passageSpeedTaskAlias=task()?.alias||null;
+  }
+  const fixedCruise=directed&&$("passage-speed-mode").value==="fixed";
+  $("signed-velocity-fields").classList.toggle("hidden",directed);
+  $("passage-speed-options").classList.toggle("hidden",!directed);
+  $("passage-speed-mode").disabled=!directed;
+  $("passage-fixed-speed").disabled=!fixedCruise;
   select.disabled=unsupported||directed;if(unsupported||directed)select.value="manual";
   $("velocity-min-abs").disabled=directed;
   $("velocity-max-abs").disabled=directed;
@@ -258,7 +272,7 @@ function updateCurriculumOptions(){
   // 隐藏的输入框仍会参与表单校验并被打包。手工模式下必须真正禁用它们：
   // 否则被隐藏的 LP 字段一旦不合法，浏览器无法聚焦提示，表现成「点启动没反应」。
   $("lp-options").querySelectorAll("input,select,button").forEach(control=>{control.disabled=!automatic;});
-  $("terrain-curriculum-hint").textContent=directed?"定向越障：初始 0.25–0.35 m/s，所有障碍通过率和跟踪达标后扩速。":unsupported?"平地任务不使用地形采样课程。":automatic?"自动模式固定使用填写的速度包络，关闭原地形升降与扩速；先固定奖励做对照。":"手工模式按已有进度、存活与跟踪质量升降地形和扩速。";
+  $("terrain-curriculum-hint").textContent=directed?(fixedCruise?`固定巡航目标 ${$("passage-fixed-speed").value} m/s；关闭自动扩速/降速，保留地形升降、路点减速与绕桩转向。完整续训须匹配原速度模式。`:"定向越障：初始0.25–0.35 m/s，所有障碍通过率和跟踪达标后扩速；1.0仅是扩速上限。旧实验请选择此模式续训。"):unsupported?"平地任务不使用地形采样课程。":automatic?"自动模式固定使用填写的速度包络，关闭原地形升降与扩速；先固定奖励做对照。":"手工模式按已有进度、存活与跟踪质量升降地形和扩速。";
 }
 async function updateRunNameHint(){
   const hint=$("run-name-hint"), input=$("run-name");
@@ -302,7 +316,9 @@ function renderPassage(data){
   const card=$("passage-status-card");if(!card)return;
   card.classList.toggle("hidden",!task()?.directed_passage);
   const speed=metricValue(data,"passage_speed_max");
-  $("passage-speed").textContent=speed==null?"等待越障训练数据…":`当前前进速度 0.25–${speed.toFixed(3)} m/s；各类达标后扩速`;
+  const low=metricValue(data,"passage_speed_min")??.25;
+  const fixed=metricValue(data,"passage_speed_fixed");
+  $("passage-speed").textContent=speed==null?"等待越障训练数据…":fixed===1?`当前训练固定巡航目标 ${speed.toFixed(3)} m/s；路点及转向可减速`:`当前训练巡航范围 ${low.toFixed(3)}–${speed.toFixed(3)} m/s；各类达标后扩速`;
   const labels={start_flat:"平地",stepping_stones:"梅花桩",balance_beam:"单木桥（净距400mm）",gap_steps:["LgDog1-Race-MGDP-WallTraining","LgDog1-Race-MGDP-WallTraining-D435i20"].includes(task()?.id)?"楼梯过沟下坡→上坡过沟下楼梯":"坡道→过沟→下楼梯",high_wall:"高墙",clearance_frame:"限高笼",tire_array:"轮胎阵",random_hills:"随机高低起伏",mjlab_rough:"mjlab原生随机粗糙",slalom_brick:"绕桩→砖木坑"};
   const list=$("passage-results");list.replaceChildren();
   for(const [key,label] of Object.entries(labels)){
@@ -818,6 +834,8 @@ async function start() {
     $("map").addEventListener("change",()=>{renderMapInfo();queuePreview();});
     $("resume").addEventListener("change",()=>{showMode();preview();});
     $("terrain-curriculum").addEventListener("change",()=>{updateCurriculumOptions();queuePreview();});
+    $("passage-speed-mode").addEventListener("change",()=>{updateCurriculumOptions();queuePreview();});
+    $("passage-fixed-speed").addEventListener("input",()=>{updateCurriculumOptions();queuePreview();});
     $("run-form").addEventListener("input",event=>{if(event.target.id==="seed")updateRunNameHint();queuePreview();});$("run-form").addEventListener("change",queuePreview);
     document.querySelectorAll("[data-preset]").forEach(button=>button.addEventListener("click",()=>{applyTrainingPreset(button.dataset.preset);preview();}));
     $("run-form").addEventListener("submit",async event=>{event.preventDefault();$("launch").disabled=true;try{const data=await api("/api/run",collect());selectedJob=data.job.id;toast("已启动，查看下方真实日志");await refresh();}catch(error){toast(error.message);}finally{preview();}});

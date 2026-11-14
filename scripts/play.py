@@ -166,6 +166,12 @@ def run_play(task_id: str, cfg: PlayConfig):
   if TRAINED_MODE:
     from src.mgdp_checkpoint import bind_checkpoint_encoder
     bind_checkpoint_encoder(env_cfg, resume_path, getattr(cfg, "perception_checkpoint", None))
+    from src.tasks.velocity.mdp.passage import PassageCommandCfg
+    if isinstance(env_cfg.commands.get('twist'),PassageCommandCfg):
+      from src.config.passage_speed import restore_fixed_speed_for_play
+      fixed=restore_fixed_speed_for_play(env_cfg,torch.load(resume_path,map_location='cpu',weights_only=False))
+      if fixed is not None:
+        print(f'[INFO] Restored passage fixed cruise: {fixed:g} m/s',flush=True)
 
   if TRAINED_MODE and hasattr(agent_cfg.actor, "history_length"):
     # Read only the recorded protocol before allocating physics/rollout buffers.

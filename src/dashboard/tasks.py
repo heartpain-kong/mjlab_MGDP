@@ -34,6 +34,7 @@ class TaskSpec(Mapping):
     pretrain_checkpoint: str = ""
     supports_curriculum: bool = True
     directed_passage: bool = False
+    passage_fixed_speed_default: float | None = None
     shared: bool = False
     resume_sources: tuple[str, ...] = field(default_factory=tuple)
     train_presets: dict[str, dict[str, int]] = field(default_factory=dict)

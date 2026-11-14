@@ -14,6 +14,7 @@ if __name__ == "__main__":
   print("[init] importing training libraries...", flush=True)
 
 import tyro
+import torch
 
 from mjlab.envs import ManagerBasedRlEnv, ManagerBasedRlEnvCfg
 from mjlab.rl import MjlabOnPolicyRunner, RslRlBaseRunnerCfg
@@ -61,6 +62,7 @@ class TrainConfig:
   lp_max_task_probability: float = 0.25
   velocity_min_abs: float | None = None
   velocity_max_abs: float | None = None
+  passage_fixed_speed: float | None = None
   resume_checkpoint: str | None = None
   warm_start_checkpoint: str | None = None
   perception_checkpoint: str | None = None
@@ -113,6 +115,14 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
 
   cfg.agent.seed = seed
   cfg.env.seed = seed
+
+  if cfg.passage_fixed_speed is not None:
+    if cfg.velocity_min_abs is not None or cfg.velocity_max_abs is not None:
+      raise ValueError('固定巡航速度不能与正负速度包络同时设置')
+    from src.config.passage_speed import configure_passage_fixed_speed
+    speed=configure_passage_fixed_speed(cfg.env,cfg.passage_fixed_speed)
+    print(f'[INFO] Passage fixed cruise: {speed:g} m/s; automatic speed changes disabled; '
+          'waypoint slowdown and slalom alignment retained',flush=True)
 
   terrain = cfg.env.scene.terrain
   if any(value is not None for value in (
@@ -230,6 +240,9 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
         raise FileNotFoundError(f"Resume checkpoint not found: {resume_path}")
     else:
       resume_path = get_checkpoint_path(log_root_path, cfg.agent.load_run, cfg.agent.load_checkpoint)
+    if 'passage' in cfg.env.curriculum:
+      from src.config.passage_speed import validate_passage_speed_resume
+      validate_passage_speed_resume(cfg.env,torch.load(resume_path,map_location='cpu',weights_only=False))
     from src.mgdp_checkpoint import bind_checkpoint_encoder
     bind_checkpoint_encoder(cfg.env, resume_path, cfg.perception_checkpoint)
   elif cfg.warm_start_checkpoint is not None:

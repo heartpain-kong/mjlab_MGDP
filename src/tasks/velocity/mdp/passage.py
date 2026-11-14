@@ -178,7 +178,11 @@ class PassageCurriculum(ManagerTermBase):
       torch.arange(cols, device=self.device)/cols+.001, right=True)
 
   def __call__(self, env, env_ids, min_episodes=32, success_threshold=.7,
-               max_error=.25, speed_limit=DEFAULT_SPEED_LIMIT):
+               max_error=.25, speed_limit=DEFAULT_SPEED_LIMIT, fixed_speed=None):
+    if fixed_speed is not None:
+      from src.config.passage_speed import validate_fixed_speed
+      fixed_speed=validate_fixed_speed(fixed_speed)
+      self.command.cfg.ranges.lin_vel_x=(fixed_speed,fixed_speed)
     # Initial/randomized reset buffers are not completed episodes.
     ids = env_ids if env_ids is not None else torch.arange(env.num_envs, device=self.device)
     reset_mask = getattr(env, "reset_buf", None)
@@ -205,6 +209,8 @@ class PassageCurriculum(ManagerTermBase):
     errors = self.error / self.count.clamp(min=1)
     represented = torch.bincount(self.kind_of_column, minlength=len(self.column_names)) > 0
     logs = {"speed_max": torch.tensor(self.command.cfg.ranges.lin_vel_x[1], device=self.device),
+            "speed_min": torch.tensor(self.command.cfg.ranges.lin_vel_x[0], device=self.device),
+            "speed_fixed": torch.tensor(float(fixed_speed is not None),device=self.device),
             "level_mean": self.terrain.terrain_levels.float().mean()}
     # Allocation is equal for the directed lessons; several columns may map to
     # one kind. Log reset-episode counts, rather than averaging per-step booleans.
@@ -219,7 +225,9 @@ class PassageCurriculum(ManagerTermBase):
       bad = (rate < .35).any() | (errors > .4).any()
       self.streak = self.streak + 1 if good else 0
       low, high = self.command.cfg.ranges.lin_vel_x
-      if self.streak >= 3:
+      if fixed_speed is not None:
+        self.streak=0
+      elif self.streak >= 3:
         high = min(speed_limit, high+.025)
         self.streak = 0
       elif bad:
@@ -262,7 +270,13 @@ class PassageCurriculum(ManagerTermBase):
       raise ValueError("Passage resume requires the same environment/terrain grid")
     low, high = state["ranges"]
     saved_ceiling = saved_params.get("speed_limit", DEFAULT_SPEED_LIMIT)
-    if not .25 <= low <= high <= saved_ceiling or not 0 <= int(state["streak"]) < 3:
+    fixed_speed=self.params.get('fixed_speed')
+    if fixed_speed is not None:
+      from src.config.passage_speed import validate_fixed_speed
+      fixed_speed=validate_fixed_speed(fixed_speed)
+    valid_range=((low,high)==(fixed_speed,fixed_speed) if fixed_speed is not None else
+                 .25 <= low <= high <= saved_ceiling)
+    if not valid_range or not 0 <= int(state["streak"]) < 3:
       raise ValueError("Invalid passage speed range")
     for key, value in values.items():
       getattr(self,key).copy_(value)

@@ -195,6 +195,9 @@ class PPOHIMRunner(MjlabOnPolicyRunner):
       })
       if state['module'].camera is not None:
         metadata['mgdp_camera']=json.dumps(state['module'].camera,sort_keys=True)
+      passage=self._passage_curriculum()
+      if passage is not None and passage.params.get('fixed_speed') is not None:
+        metadata['mgdp_passage_fixed_speed']=str(passage.params['fixed_speed'])
     else:
       run_name = (
         wandb.run.name if self.logger.logger_type == "wandb" and wandb.run else "local"

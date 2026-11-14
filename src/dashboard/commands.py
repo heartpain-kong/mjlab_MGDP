@@ -142,10 +142,23 @@ def build_command(root, python, options):
     if velocity_min and velocity_max and velocity_min > velocity_max:
       raise ValueError("最低速度绝对值不能大于最高速度绝对值")
     curriculum = options.get("terrain_curriculum", "manual")
+    fixed_speed=str(options.get('passage_fixed_speed') if options.get('passage_fixed_speed') is not None else '').strip()
+    passage_mode=options.get('passage_speed_mode') or ''
+    if passage_mode not in ('','fixed','curriculum'):
+      raise ValueError('未知定向越障速度模式')
+    if (passage_mode or fixed_speed) and not task.get('directed_passage'):
+      raise ValueError('固定巡航速度仅适用于定向越障任务')
+    if passage_mode=='fixed' and not fixed_speed:
+      raise ValueError('固定巡航模式必须填写正向巡航目标速度')
+    if passage_mode=='curriculum' and fixed_speed:
+      raise ValueError('渐进扩速模式不能同时指定固定巡航速度')
+    if fixed_speed:
+      from src.config.passage_speed import validate_fixed_speed
+      fixed_speed=validate_fixed_speed(fixed_speed)
     if curriculum not in {"manual", "uniform", "lp_acrl"}:
       raise ValueError("未知地形课程；可选 manual、uniform、lp_acrl")
     if task.get("directed_passage") and (curriculum != "manual" or velocity_min or velocity_max):
-      raise ValueError("定向越障使用通过率门控；请保留 manual，速度由任务低速课程管理")
+      raise ValueError("定向越障使用通过率门控地形；请保留 manual，速度使用独立的固定巡航或渐进扩速设置")
     curriculum_flags = []
     if curriculum != "manual":
       if task.get("scene") == "flat":
@@ -170,6 +183,8 @@ def build_command(root, python, options):
             "--agent.logger=tensorboard", f"--agent.seed={seed}", "--enable-nan-guard",
             "True" if options.get("enable_nan_guard") is True else "False"]
     argv += curriculum_flags
+    if fixed_speed != '':
+      argv.append(f'--passage-fixed-speed={fixed_speed}')
     if options.get("optimize_vram") is False:
       argv.append("--optimize-vram=False")
     if mini_batches is not None and str(mini_batches).strip():

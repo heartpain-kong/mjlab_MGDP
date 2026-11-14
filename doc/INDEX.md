@@ -7,6 +7,7 @@
 | MuJoCo 模型查看、策略回放、比赛场地与键盘控制 | [MUJOCO_USAGE.md](MUJOCO_USAGE.md) |
 | 使用浏览器面板、短命令、了解目录迁移 | [WORKBENCH.md](WORKBENCH.md) |
 | D435i下俯20°独立任务、工作台入口与相机参数 | [MGDP_D435I_DOWN20.md](MGDP_D435I_DOWN20.md) |
+| MGDP固定1m/s巡航、显式命令参数与续训 | [MGDP_FIXED_CRUISE.md](MGDP_FIXED_CRUISE.md) |
 | D435i空间采样、薄墙可见性、探索对照及GPU命令 | [MGDP_D435I.md](MGDP_D435I.md) |
 | MGDP 定向越障、reward、通过率门控与接触规则 | [MGDP_PASSAGE.md](MGDP_PASSAGE.md) |
 | 强化课程预训练退出码2、8行默认与独立感知文件修复 | [MGDP_WALL_PRETRAIN_FIX.md](MGDP_WALL_PRETRAIN_FIX.md) |

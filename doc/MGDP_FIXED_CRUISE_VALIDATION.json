@@ -1,0 +1,170 @@
+{
+  "release": "mgdp_fixed_cruise_20261115",
+  "verified_utc": "2026-11-14T23:39:32.878366+00:00",
+  "task": "LgDog1-Race-MGDP-WallTraining-D435i20",
+  "cli_flag": "--passage-fixed-speed=1.0",
+  "tests": [
+    {
+      "log": "mgdp-fixed-speed-regression.log",
+      "passed": 143,
+      "subtests": 68
+    },
+    {
+      "log": "mgdp-fixed-speed-final-ui.log",
+      "passed": 46,
+      "subtests": 16
+    }
+  ],
+  "test_groups_overlap": true,
+  "cpu_flow": {
+    "root": "E:\\mjlab\\work\\mgdp-fixed-speed-1arwzeac",
+    "device": "cpu",
+    "envs": 10,
+    "grid": [
+      8,
+      10
+    ],
+    "high_wall_only_fixture": true,
+    "frozen_encoder_reused": "E:\\mjlab\\work\\down20-pretrain-button-n_1d_k4k\\logs\\mgdp\\perception\\mgdp_wall_d435i20.pt",
+    "fresh_ppo_iterations": 1,
+    "full_resume_iterations": 1,
+    "adaptive_actor_transfer_iterations": 1,
+    "samples": [
+      {
+        "cruise": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "initial_command_norm": [
+          0.9999999403953552,
+          0.9999999403953552,
+          1.0,
+          0.9999999403953552,
+          1.0,
+          0.9999999403953552,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "cruise": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "initial_command_norm": [
+          0.9999999403953552,
+          0.9999999403953552,
+          1.0,
+          0.9999999403953552,
+          1.0,
+          0.9999999403953552,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "cruise": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "initial_command_norm": [
+          0.9999999403953552,
+          0.9999999403953552,
+          1.0,
+          0.9999999403953552,
+          1.0,
+          0.9999999403953552,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ]
+      }
+    ],
+    "tensorboard": {
+      "fresh": {
+        "speed_min": [
+          1.0
+        ],
+        "speed_max": [
+          1.0
+        ],
+        "speed_fixed": [
+          1.0
+        ]
+      },
+      "resume": {
+        "speed_min": [
+          1.0
+        ],
+        "speed_max": [
+          1.0
+        ],
+        "speed_fixed": [
+          1.0
+        ]
+      },
+      "from_adaptive": {
+        "speed_min": [
+          1.0
+        ],
+        "speed_max": [
+          1.0
+        ],
+        "speed_fixed": [
+          1.0
+        ]
+      }
+    },
+    "checkpoint_ranges": [
+      1.0,
+      1.0
+    ],
+    "onnx_fixed_speed": 1.0,
+    "mismatched_resume_rejected_before_physics": true,
+    "gpu_validated": false,
+    "hardware_validated": false,
+    "convergence_validated": false
+  },
+  "preserved": [
+    "original CLI adaptive default",
+    "terrain progression/regression",
+    "waypoint slowdown and slalom alignment",
+    "camera profile and frozen encoder",
+    "wall reward overrides in incremental patch"
+  ],
+  "limits": [
+    "CPU 10-environment high-wall-only fixture",
+    "No GPU convergence or physical 1m/s performance validation",
+    "Existing Linux V2 process is not modified",
+    "Strict constant speed through every turn is not imposed"
+  ]
+}

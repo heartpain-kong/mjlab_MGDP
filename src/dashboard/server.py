@@ -47,6 +47,8 @@ ACTION_METRIC_TAGS = {
   "velocity_tracking_active": "Episode_Metrics/velocity_tracking_active",
   "terrain_level": ("Curriculum/passage/level_mean", "Curriculum/terrain_levels/level_mean", "Curriculum/terrain_sampling/level_mean"),
   "passage_speed_max": "Curriculum/passage/speed_max",
+  "passage_speed_min": "Curriculum/passage/speed_min",
+  "passage_speed_fixed": "Curriculum/passage/speed_fixed",
   "terrain_promote_fraction": "Curriculum/terrain_levels/promote_fraction",
   "terrain_demote_fraction": "Curriculum/terrain_levels/demote_fraction",
   "terrain_tracking_ratio": ("Curriculum/terrain_levels/tracking_ratio", "Curriculum/terrain_sampling/tracking_ratio"),

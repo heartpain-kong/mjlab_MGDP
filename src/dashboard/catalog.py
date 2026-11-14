@@ -60,13 +60,14 @@ _TASK_LIST = (
     label="MGDP · 比赛尺寸强化课程 · D435i下俯20°",algorithm="ppo",scene="race_depth",
     experiment=D435I20_EXPERIMENT,obs=252,critic=261,profile="mgdp",
     docs="doc/MGDP_D435I_DOWN20.md",requires_pretrain=True,directed_passage=True,
+    passage_fixed_speed_default=1.,
     train_presets={name:{**preset,"terrain_num_rows":8,"terrain_num_cols":20}
                    for name,preset in RACE_TRAIN_PRESETS.items()},
     pretrain_checkpoint=D435I20_CHECKPOINT,
     pretrain_command=(f"python -m scripts.pretrain_mgdp --task {D435I20_TASK} "
       f"--depth-profile {D435I20_PROFILE} --num-envs 64 --terrain-rows 8 --terrain-cols 10 "
       f"--batch-size 64 --steps 4000 --iterations 3000 --out {D435I20_CHECKPOINT}"),
-    description="D435i下俯20°：水平87°/垂直58°，32×32射线池化为16×16，光轴Z深度0.2–3m。独立感知与V6实验目录；需配套预训练并新建策略。沿用统一八档课程及高墙规则。",
+    description="D435i下俯20°：水平87°/垂直58°，32×32射线池化为16×16，光轴Z深度0.2–3m。独立感知与V6实验目录；需配套预训练并新建策略。工作台新建训练默认固定巡航1m/s，可选原渐进扩速；沿用统一八档课程及高墙规则。",
   ),
   TaskSpec(
     alias="him_flat", id="LgDog1-Flat-Blind-HIM-Standard",
