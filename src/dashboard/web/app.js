@@ -2,6 +2,7 @@
 const $ = id => document.getElementById(id);
 let state = null, mode = "train", models = [], rewardData = null, selectedJob = null, previewVersion = 0, timer = null, runNameVersion = 0;
 let lastCommand = "";
+let wallRewardData = null;
 const {modeNames, statuses, rewardLabels, metricValue, healthText} = window.LgDogFormat;
 const pendingStops = new Set();
 let pendingDelete = null, deletingJobs = false;
@@ -302,7 +303,7 @@ function renderPassage(data){
   card.classList.toggle("hidden",!task()?.directed_passage);
   const speed=metricValue(data,"passage_speed_max");
   $("passage-speed").textContent=speed==null?"等待越障训练数据…":`当前前进速度 0.25–${speed.toFixed(3)} m/s；各类达标后扩速`;
-  const labels={start_flat:"平地",stepping_stones:"梅花桩",balance_beam:"单木桥（净距400mm）",gap_steps:task()?.id==="LgDog1-Race-MGDP-WallTraining"?"楼梯过沟下坡→上坡过沟下楼梯":"坡道→过沟→下楼梯",high_wall:"高墙",clearance_frame:"限高笼",tire_array:"轮胎阵",random_hills:"随机高低起伏",mjlab_rough:"mjlab原生随机粗糙",slalom_brick:"绕桩→砖木坑"};
+  const labels={start_flat:"平地",stepping_stones:"梅花桩",balance_beam:"单木桥（净距400mm）",gap_steps:["LgDog1-Race-MGDP-WallTraining","LgDog1-Race-MGDP-WallTraining-D435i20"].includes(task()?.id)?"楼梯过沟下坡→上坡过沟下楼梯":"坡道→过沟→下楼梯",high_wall:"高墙",clearance_frame:"限高笼",tire_array:"轮胎阵",random_hills:"随机高低起伏",mjlab_rough:"mjlab原生随机粗糙",slalom_brick:"绕桩→砖木坑"};
   const list=$("passage-results");list.replaceChildren();
   for(const [key,label] of Object.entries(labels)){
     const item=data?.passage?.[key];const div=document.createElement("div");
@@ -486,6 +487,7 @@ async function openTerrainViewer(){
   catch(error){toast(error.message);}
 }
 function showMode() {
+  document.querySelector(".workspace-grid")?.classList.toggle("workspace-rewards",mode==="rewards");
   document.querySelectorAll("[data-section]").forEach(el=>{
     const inactive=el.dataset.section!==mode;
     el.classList.toggle("hidden",inactive);
@@ -516,6 +518,8 @@ function renderRewards(){
   const list=$("reward-list"); list.replaceChildren();
   if(!rewardData?.rewards?.length){const empty=document.createElement("div");empty.className="empty";empty.textContent="没有读取到 reward。";list.append(empty);return;}
   for(const reward of rewardData.rewards){
+    // These task-specific values are edited in the wall panel above.
+    if(wallRewardData?.available&&["passage_progress","passage_success"].includes(reward.name))continue;
     const row=document.createElement("div");row.className="reward-row"+(reward.changed?" changed":"");row.dataset.reward=reward.name;row.dataset.search=`${reward.name} ${rewardLabels[reward.name]||""}`.toLowerCase();row.title="双击查看实现";row.addEventListener("dblclick",()=>showRewardDetail(reward.name));
     const enabled=document.createElement("input");enabled.type="checkbox";enabled.checked=reward.enabled;enabled.title="启用 reward";
     const name=document.createElement("label");name.textContent=rewardLabels[reward.name]||reward.name;const code=document.createElement("small");code.textContent=`${reward.name}${reward.changed?" · 已覆盖":""}`;name.append(code);
@@ -531,12 +535,75 @@ function renderRewards(){
     weight.addEventListener("input",updateSignHint);enabled.addEventListener("change",updateSignHint);updateSignHint();
     row.append(enabled,name,weight,params);list.append(row);
   }
-  $("reward-source").textContent=`${rewardData.profile} · ${rewardData.source}`;
+  $("reward-source").textContent=`${rewardData.profile} · ${rewardData.source}`+(wallRewardData?.available?" · 下方为MGDP共享基础权重；距离和出口奖励请在高墙规则中修改。":"");
   filterRewards();
 }
 function filterRewards(){const query=($("reward-filter")?.value||"").trim().toLowerCase();document.querySelectorAll(".reward-row").forEach(row=>{row.classList.toggle("hidden",Boolean(query&&!row.dataset.search.includes(query)));});}
 function resetRewards(){if(!rewardData?.rewards)return;document.querySelectorAll(".reward-row").forEach(row=>{const reward=rewardData.rewards.find(item=>item.name===row.dataset.reward);const inputs=row.querySelectorAll("input,textarea");inputs[0].checked=reward.baseline!==0;inputs[1].value=reward.baseline;inputs[2].value=JSON.stringify(reward.baseline_params||{});inputs[1].dispatchEvent(new Event("input"));row.classList.remove("changed");});toast("已恢复本方案基线，点击保存后才会写入文件");}
-async function loadRewards(){try{const alias=$("task").value;rewardData=await api(`/api/rewards?task=${encodeURIComponent(alias)}`);if(alias===$("task").value)renderRewards();}catch(error){$("reward-list").textContent=error.message;toast(error.message);}}
+async function loadRewards(){
+  try{
+    const alias=$("task").value;
+    const [base,wall]=await Promise.all([api(`/api/rewards?task=${encodeURIComponent(alias)}`),api(`/api/wall-rewards?task=${encodeURIComponent(alias)}`)]);
+    if(alias!==$("task").value)return;
+    rewardData=base;wallRewardData=wall;renderRewards();renderWallRules();
+  }catch(error){$("reward-list").textContent=error.message;$("wall-rule-panel").classList.add("hidden");toast(error.message);}
+}
+function renderWallRules(values=wallRewardData?.settings){
+  const panel=$("wall-rule-panel"),list=$("wall-rule-fields");
+  panel.classList.toggle("hidden",!wallRewardData?.available);list.replaceChildren();
+  if(!wallRewardData?.available)return;
+  $("wall-rule-state").textContent=wallRewardData.changed?"已保存覆盖":"默认设置";
+  $("wall-rule-note").textContent=wallRewardData.task==="race_mgdp_wall_d435i20"
+    ?"本入口需要D435i下俯20°的配套感知与新策略。高墙规则与原相机强化课程共用；修改奖励目标后需用相同相机与感知迁移策略。"
+    :wallRewardData.contract_changed?"已修改奖励目标：旧参数的检查点需策略迁移，不能直接完整续训。":"默认参数兼容原V5检查点；修改奖励目标后需策略迁移。";
+  for(const [group,schema] of Object.entries(wallRewardData.groups)){
+    const card=document.createElement("section");card.className="wall-rule-card";
+    const title=document.createElement("h3");title.textContent=schema.label;
+    const description=document.createElement("p");description.textContent=schema.description;
+    const fields=document.createElement("div");fields.className="wall-rule-inputs";
+    const effect=document.createElement("small");effect.className="wall-rule-effect";
+    const update=()=>{
+      $("wall-rule-state").textContent="有未保存修改";
+      if(group==="wall_waiting"){
+        const get=key=>fields.querySelector(`[data-key="${key}"]`);
+        const rate=Math.abs(Number(get("weight").value))*Number(get("max_rate").value);
+        effect.textContent=get("enabled").checked?`最大实际扣分：${Number.isFinite(rate)?rate.toFixed(2):"—"} 分/秒`:"等待惩罚已关闭（保存后生效）";
+      }
+    };
+    for(const [key,field] of Object.entries(schema.fields)){
+      const label=document.createElement("label");label.className="field wall-rule-field";
+      const text=document.createElement("span");text.textContent=field.label+(field.unit?`（${field.unit}）`:"");
+      const input=document.createElement("input");input.id=`wall-rule-${group}-${key}`;
+      input.dataset.group=group;input.dataset.key=key;input.setAttribute("aria-label",`${schema.label} · ${field.label}`);
+      if(field.type==="boolean"){input.type="checkbox";input.checked=values[group][key];label.classList.add("wall-rule-switch");}
+      else{input.type="number";input.step="any";input.min=field.min;input.max=field.max;input.value=values[group][key];}
+      input.addEventListener("input",update);label.append(text,input);fields.append(label);
+    }
+    card.append(title,description,fields);
+    if(group==="wall_waiting"){
+      card.append(effect);update();
+    }
+    list.append(card);
+  }
+  $("wall-rule-state").textContent=wallRewardData.changed?"已保存覆盖":"默认设置";
+}
+function collectWallRules(){
+  const settings={};
+  document.querySelectorAll("#wall-rule-fields input").forEach(input=>{
+    let value=input.type==="checkbox"?input.checked:Number(input.value);
+    if(input.type!=="checkbox"&&(!input.value.trim()||!Number.isFinite(value)))throw new Error(`${input.getAttribute("aria-label")}必须是数字`);
+    (settings[input.dataset.group]??={})[input.dataset.key]=value;
+  });return settings;
+}
+async function saveWallRules(){
+  const button=$("save-wall-rules"),alias=$("task").value;
+  try{
+    button.disabled=true;
+    const data=await api("/api/wall-rewards/save",{task:alias,settings:collectWallRules()});
+    if(alias===$("task").value){wallRewardData=data;renderWallRules();}
+    toast("高墙规则已保存，新启动的训练生效；原配置已备份");
+  }catch(error){toast(error.message);}finally{button.disabled=false;}
+}
 async function showRewardDetail(name){try{const data=await api(`/api/reward-detail?task=${encodeURIComponent($("task").value)}&name=${encodeURIComponent(name)}`);$("document-title").textContent=`奖励实现 · ${data.name}`;$("document-path").textContent=`${data.source}${data.line?`:${data.line}`:""} · ${data.binding}`;$("document-text").textContent=data.text;$("document-dialog").showModal();}catch(error){toast(error.message);}}
 function collectRewards(){
   const changes=[];
@@ -756,6 +823,9 @@ async function start() {
     $("run-form").addEventListener("submit",async event=>{event.preventDefault();$("launch").disabled=true;try{const data=await api("/api/run",collect());selectedJob=data.job.id;toast("已启动，查看下方真实日志");await refresh();}catch(error){toast(error.message);}finally{preview();}});
     $("save-rewards").addEventListener("click",async()=>{try{$("save-rewards").disabled=true;const data=await api("/api/rewards/save",{task:$('task').value,changes:collectRewards()});rewardData=data;renderRewards();toast("奖励修改已保存，重启训练后生效；原文件已备份");}catch(error){toast(error.message);}finally{$("save-rewards").disabled=false;}});
     $("reload-rewards").addEventListener("click",loadRewards);
+    $("reload-wall-rules").addEventListener("click",loadRewards);
+    $("reset-wall-rules").addEventListener("click",()=>{if(wallRewardData?.available){renderWallRules(wallRewardData.defaults);$("wall-rule-state").textContent="默认值尚未保存";toast("已恢复默认显示，点击保存高墙规则后生效");}});
+    $("save-wall-rules").addEventListener("click",saveWallRules);
     $("reset-rewards").addEventListener("click",resetRewards);
     $("reward-filter").addEventListener("input",filterRewards);
     $("stop").addEventListener("click",()=>stopJob());

@@ -1,0 +1,179 @@
+{
+  "kind": "ideal_static_raycast_visibility_only",
+  "camera_height_m": 0.395,
+  "wall_thickness_m": 0.08,
+  "wall_width_m": 1.5,
+  "summary": {
+    "legacy16": {
+      "poses": 180,
+      "visible_poses": 166,
+      "visibility_fraction": 0.9222222222222223
+    },
+    "corrected16": {
+      "poses": 180,
+      "visible_poses": 170,
+      "visibility_fraction": 0.9444444444444444
+    },
+    "d435i_edge16": {
+      "poses": 180,
+      "visible_poses": 172,
+      "visibility_fraction": 0.9555555555555556
+    },
+    "d435i_native32": {
+      "poses": 180,
+      "visible_poses": 172,
+      "visibility_fraction": 0.9555555555555556
+    }
+  },
+  "at_1_2m_pitch0": [
+    {
+      "profile": "legacy16",
+      "wall_height_m": 0.1,
+      "distance_m": 1.2,
+      "pitch_deg": 0.0,
+      "rays": 256,
+      "wall_pixels": 10,
+      "visible": true
+    },
+    {
+      "profile": "corrected16",
+      "wall_height_m": 0.1,
+      "distance_m": 1.2,
+      "pitch_deg": 0.0,
+      "rays": 256,
+      "wall_pixels": 20,
+      "visible": true
+    },
+    {
+      "profile": "d435i_edge16",
+      "wall_height_m": 0.1,
+      "distance_m": 1.2,
+      "pitch_deg": 0.0,
+      "rays": 1024,
+      "wall_pixels": 24,
+      "visible": true
+    },
+    {
+      "profile": "d435i_native32",
+      "wall_height_m": 0.1,
+      "distance_m": 1.2,
+      "pitch_deg": 0.0,
+      "rays": 1536,
+      "wall_pixels": 96,
+      "visible": true
+    },
+    {
+      "profile": "legacy16",
+      "wall_height_m": 0.18,
+      "distance_m": 1.2,
+      "pitch_deg": 0.0,
+      "rays": 256,
+      "wall_pixels": 20,
+      "visible": true
+    },
+    {
+      "profile": "corrected16",
+      "wall_height_m": 0.18,
+      "distance_m": 1.2,
+      "pitch_deg": 0.0,
+      "rays": 256,
+      "wall_pixels": 30,
+      "visible": true
+    },
+    {
+      "profile": "d435i_edge16",
+      "wall_height_m": 0.18,
+      "distance_m": 1.2,
+      "pitch_deg": 0.0,
+      "rays": 1024,
+      "wall_pixels": 36,
+      "visible": true
+    },
+    {
+      "profile": "d435i_native32",
+      "wall_height_m": 0.18,
+      "distance_m": 1.2,
+      "pitch_deg": 0.0,
+      "rays": 1536,
+      "wall_pixels": 160,
+      "visible": true
+    },
+    {
+      "profile": "legacy16",
+      "wall_height_m": 0.3,
+      "distance_m": 1.2,
+      "pitch_deg": 0.0,
+      "rays": 256,
+      "wall_pixels": 20,
+      "visible": true
+    },
+    {
+      "profile": "corrected16",
+      "wall_height_m": 0.3,
+      "distance_m": 1.2,
+      "pitch_deg": 0.0,
+      "rays": 256,
+      "wall_pixels": 40,
+      "visible": true
+    },
+    {
+      "profile": "d435i_edge16",
+      "wall_height_m": 0.3,
+      "distance_m": 1.2,
+      "pitch_deg": 0.0,
+      "rays": 1024,
+      "wall_pixels": 48,
+      "visible": true
+    },
+    {
+      "profile": "d435i_native32",
+      "wall_height_m": 0.3,
+      "distance_m": 1.2,
+      "pitch_deg": 0.0,
+      "rays": 1536,
+      "wall_pixels": 256,
+      "visible": true
+    },
+    {
+      "profile": "legacy16",
+      "wall_height_m": 0.4,
+      "distance_m": 1.2,
+      "pitch_deg": 0.0,
+      "rays": 256,
+      "wall_pixels": 30,
+      "visible": true
+    },
+    {
+      "profile": "corrected16",
+      "wall_height_m": 0.4,
+      "distance_m": 1.2,
+      "pitch_deg": 0.0,
+      "rays": 256,
+      "wall_pixels": 50,
+      "visible": true
+    },
+    {
+      "profile": "d435i_edge16",
+      "wall_height_m": 0.4,
+      "distance_m": 1.2,
+      "pitch_deg": 0.0,
+      "rays": 1024,
+      "wall_pixels": 60,
+      "visible": true
+    },
+    {
+      "profile": "d435i_native32",
+      "wall_height_m": 0.4,
+      "distance_m": 1.2,
+      "pitch_deg": 0.0,
+      "rays": 1536,
+      "wall_pixels": 320,
+      "visible": true
+    }
+  ],
+  "limits": [
+    "No stereo matching, texture, noise, latency, or motion blur simulated",
+    "Not a learned encoder test or a policy success rate",
+    "Corrected16 changes FOV, pixel orientation and centre sampling together"
+  ]
+}

@@ -1,0 +1,91 @@
+{
+  "tests": {
+    "passed": 407,
+    "skipped": 5,
+    "subtests": 135,
+    "mode": "partitioned",
+    "groups": [
+      {
+        "log": ".artifacts/mgdp-wall-pretrain-dashboard-group.log",
+        "passed": 20,
+        "skipped": 0,
+        "subtests": 7
+      },
+      {
+        "log": ".artifacts/mgdp-wall-pretrain-other-group.log",
+        "passed": 387,
+        "skipped": 5,
+        "subtests": 128
+      }
+    ]
+  },
+  "targeted_tests_passed": 48,
+  "default_workbench_command": [
+    "E:\\mjlab\\work\\lgdog_validation\\Scripts\\python.exe",
+    "E:\\mjlab\\unitree_rl_mjlab_lgdog\\unitree_rl_mjlab_lgdog\\scripts\\pretrain_mgdp.py",
+    "--task",
+    "LgDog1-Race-MGDP-WallTraining",
+    "--num-envs",
+    "64",
+    "--steps",
+    "4000",
+    "--iterations",
+    "3000",
+    "--terrain-rows",
+    "8",
+    "--batch-size",
+    "64",
+    "--terrain-cols",
+    "10",
+    "--out",
+    "E:\\mjlab\\unitree_rl_mjlab_lgdog\\unitree_rl_mjlab_lgdog\\logs\\mgdp\\perception\\mgdp_wall_v5.pt"
+  ],
+  "cpu_pretrain": {
+    "root": "E:\\mjlab\\work\\wall-pretrain-button-gg9czoyh",
+    "argv": [
+      "E:\\mjlab\\work\\lgdog_validation\\Scripts\\python.exe",
+      "E:\\mjlab\\work\\wall-pretrain-button-gg9czoyh\\scripts\\pretrain_mgdp.py",
+      "--task",
+      "LgDog1-Race-MGDP-WallTraining",
+      "--num-envs",
+      "10",
+      "--steps",
+      "12",
+      "--iterations",
+      "1",
+      "--terrain-rows",
+      "8",
+      "--batch-size",
+      "2",
+      "--terrain-cols",
+      "10",
+      "--out",
+      "E:\\mjlab\\work\\wall-pretrain-button-gg9czoyh\\logs\\mgdp\\perception\\mgdp_wall_v5.pt",
+      "--device",
+      "cpu",
+      "--sequence-length",
+      "2",
+      "--sample-envs",
+      "10",
+      "--seed",
+      "42"
+    ],
+    "device": "cpu",
+    "envs": 10,
+    "steps": 12,
+    "iterations": 1,
+    "wall_only_fixture": true,
+    "wall_task_parsed": true,
+    "grid": [
+      8,
+      10
+    ],
+    "new_wall_encoder_saved": "E:\\mjlab\\work\\wall-pretrain-button-gg9czoyh\\logs\\mgdp\\perception\\mgdp_wall_v5.pt",
+    "old_race_encoder_unchanged": true,
+    "gpu_training_validated": false,
+    "convergence_validated": false
+  },
+  "linux_target": "/home/heartpain/mjlab/unitree_rl_mjlab_lgdog",
+  "linux_target_modified": false,
+  "gpu_training_validated": false
+}

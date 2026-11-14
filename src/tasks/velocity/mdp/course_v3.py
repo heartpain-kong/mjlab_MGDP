@@ -65,7 +65,7 @@ class BodyAwarePassageCommandCfg(PassageCommandCfg):
   course_version: int=3
   # Part of the saved passage fingerprint: old critics/curriculum statistics
   # must not be fully resumed after changing the wall reward objective.
-  wall_reward_contract_version: int=1
+  wall_reward_contract_version: int|str=1
 
   def build(self,env):return BodyAwarePassageCommand(self,env)
 

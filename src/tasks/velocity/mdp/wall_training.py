@@ -207,10 +207,11 @@ class WallWaitingPenalty(WallGeometry):
     return ((self.idle-grace_s)/ramp_s).clamp(0.,1.)*max_rate
 
 
-def guard_wall_shaping_rewards(rewards):
+def guard_wall_shaping_rewards(rewards,progress_reference_mps=.1,min_command_mps=.1):
   """Preserve profile weights/parameters, and wrap only positive base shaping."""
   shaping=('track_linear_velocity','track_angular_velocity','pose','foot_gait','feet_air_time')
   for name,term in rewards.items():
     if name in shaping:
-      term.params={**term.params,'base_func':term.func,'progress_reference_mps':.1,'min_command_mps':.1}
+      term.params={**term.params,'base_func':term.func,'progress_reference_mps':progress_reference_mps,
+                   'min_command_mps':min_command_mps}
       term.func=WallProgressReward

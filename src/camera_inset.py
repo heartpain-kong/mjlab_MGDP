@@ -21,6 +21,8 @@ class CameraInset:
     if corner not in ("bottom-left", "bottom-right", "top-left", "top-right"):
       raise ValueError("Unknown camera inset corner")
     self.camera = find_camera(model)
+    width,height=model.cam_resolution[self.camera]
+    self.aspect=float(width/height) if width>0 and height>0 else 1.
     self.size, self.fps, self.corner = size, fps, corner
     self.enabled, self.dirty = True, True
     self.last_update = float("-inf")
@@ -49,25 +51,26 @@ class CameraInset:
     viewport = viewer.viewport
     if viewport is None:
       return
-    size = min(self.size, viewport.width//3, viewport.height//3)
-    if size < 32:
+    width = min(self.size, viewport.width//3, int(viewport.height//3*self.aspect))
+    height = max(1,round(width/self.aspect))
+    if min(width,height) < 32:
       return
-    if self.renderer is None or self.renderer.width != size:
+    if self.renderer is None or self.renderer.width != width or self.renderer.height != height:
       if self.renderer is not None:
         self.renderer.close()
       # Stock robot XML may only allocate a 640x480 offscreen framebuffer.
-      self.model.vis.global_.offwidth = max(self.model.vis.global_.offwidth, size)
-      self.model.vis.global_.offheight = max(self.model.vis.global_.offheight, size)
-      self.renderer = mujoco.Renderer(self.model, height=size, width=size,
+      self.model.vis.global_.offwidth = max(self.model.vis.global_.offwidth, width)
+      self.model.vis.global_.offheight = max(self.model.vis.global_.offheight, height)
+      self.renderer = mujoco.Renderer(self.model, height=height, width=width,
                                       max_geom=max(10000, self.model.ngeom+100))
     self.renderer.update_scene(data, camera=self.camera)
     image = self.renderer.render().copy()
     image[:3] = image[-3:] = (25, 190, 175)
     image[:, :3] = image[:, -3:] = (25, 190, 175)
-    x = viewport.left + (12 if self.corner.endswith("left") else viewport.width-size-12)
-    y = viewport.bottom + (12 if self.corner.startswith("bottom") else viewport.height-size-12)
+    x = viewport.left + (12 if self.corner.endswith("left") else viewport.width-width-12)
+    y = viewport.bottom + (12 if self.corner.startswith("bottom") else viewport.height-height-12)
     if viewer.is_running():
-      viewer.set_images((mujoco.MjrRect(x, y, size, size), image))
+      viewer.set_images((mujoco.MjrRect(x, y, width, height), image))
     self.last_update, self.dirty = now, False
 
   def close(self):

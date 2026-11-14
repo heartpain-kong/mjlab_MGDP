@@ -1,8 +1,9 @@
 """Task catalog: the single source of truth for launcher metadata."""
 
 from src.him_contract import HIM_INPUT_DIM
-from src.config.mgdp_pretrain import RACE_PRETRAIN
+from src.config.mgdp_pretrain import RACE_PRETRAIN, WALL_PRETRAIN, WALL_PRETRAIN_CHECKPOINT
 from src.config.race_training import RACE_TRAIN_PRESETS
+from src.config.mgdp_camera import D435I20_TASK,D435I20_ALIAS,D435I20_PROFILE,D435I20_CHECKPOINT,D435I20_EXPERIMENT
 
 from .tasks import TaskSpec, capabilities
 
@@ -47,9 +48,25 @@ _TASK_LIST = (
     docs="doc/MGDP_WALL_TRAINING.md", requires_pretrain=True, directed_passage=True,
     train_presets={name: {**preset, "terrain_num_rows": 8, "terrain_num_cols": 20}
                    for name, preset in RACE_TRAIN_PRESETS.items()},
-    pretrain_checkpoint="logs/mgdp/perception/mgdp_race_v3.pt",
-    pretrain_command="python -m scripts.pretrain_mgdp --task LgDog1-Race-MGDP",
+    pretrain_checkpoint=WALL_PRETRAIN_CHECKPOINT,
+    pretrain_command=("python -m scripts.pretrain_mgdp --task LgDog1-Race-MGDP-WallTraining "
+      f"--num-envs {WALL_PRETRAIN.num_envs} --terrain-rows {WALL_PRETRAIN.terrain_rows} "
+      f"--terrain-cols {WALL_PRETRAIN.terrain_cols} --batch-size {WALL_PRETRAIN.batch_size} "
+      f"--steps 4000 --iterations 3000 --out {WALL_PRETRAIN_CHECKPOINT}"),
     description="V5高墙防停滞刷分：正向基础奖励按真实新增进展发放，墙前停留递增惩罚。保留V4统一八档：第6档比赛尺寸、7/8档强化、同区块双段过沟。默认8×20。旧模型用 --warm-start-checkpoint。",
+  ),
+  TaskSpec(
+    alias=D435I20_ALIAS,id=D435I20_TASK,
+    label="MGDP · 比赛尺寸强化课程 · D435i下俯20°",algorithm="ppo",scene="race_depth",
+    experiment=D435I20_EXPERIMENT,obs=252,critic=261,profile="mgdp",
+    docs="doc/MGDP_D435I_DOWN20.md",requires_pretrain=True,directed_passage=True,
+    train_presets={name:{**preset,"terrain_num_rows":8,"terrain_num_cols":20}
+                   for name,preset in RACE_TRAIN_PRESETS.items()},
+    pretrain_checkpoint=D435I20_CHECKPOINT,
+    pretrain_command=(f"python -m scripts.pretrain_mgdp --task {D435I20_TASK} "
+      f"--depth-profile {D435I20_PROFILE} --num-envs 64 --terrain-rows 8 --terrain-cols 10 "
+      f"--batch-size 64 --steps 4000 --iterations 3000 --out {D435I20_CHECKPOINT}"),
+    description="D435i下俯20°：水平87°/垂直58°，32×32射线池化为16×16，光轴Z深度0.2–3m。独立感知与V6实验目录；需配套预训练并新建策略。沿用统一八档课程及高墙规则。",
   ),
   TaskSpec(
     alias="him_flat", id="LgDog1-Flat-Blind-HIM-Standard",

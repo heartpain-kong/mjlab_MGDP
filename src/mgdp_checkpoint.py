@@ -17,6 +17,15 @@ def sensing_contract(env_cfg):
 
 
 def restore_sensing_contract(env_cfg, contract):
+  from src.mgdp_depth import apply_depth_profile, camera_contract
+  current = camera_contract(env_cfg)
+  saved_camera = contract.get('camera') if contract else None
+  if current is not None and current != saved_camera:
+    raise ValueError('Requested MGDP camera profile differs from policy checkpoint')
+  if saved_camera is not None:
+    restored = apply_depth_profile(env_cfg, saved_camera['profile'])
+    if restored != saved_camera:
+      raise ValueError('Unsupported MGDP camera calibration in checkpoint')
   filters = contract.get("sensing") if contract else None
   for sensor in getattr(getattr(env_cfg, "scene", None), "sensors", ()) or ():
     if not hasattr(sensor, "include_geom_groups"):
@@ -46,6 +55,8 @@ def encoder_fingerprint(module):
   digest = hashlib.sha256(json.dumps(module.cfg.to_dict(), sort_keys=True).encode())
   if getattr(module, "sensing", None) is not None:
     digest.update(json.dumps(module.sensing, sort_keys=True).encode())
+  if getattr(module, 'camera', None) is not None:
+    digest.update(json.dumps(module.camera, sort_keys=True).encode())
   for name, value in sorted(module.state_dict().items()):
     value = value.detach().cpu().contiguous()
     digest.update(json.dumps([name, str(value.dtype), list(value.shape)]).encode())
@@ -66,11 +77,14 @@ def save_encoder_contract(env, directory):
     temporary = path.with_suffix(".tmp")
     module.save(temporary)
     temporary.replace(path)
-  return {"version": 1, "file": path.name, "sha256": file_digest(path),
+  contract = {"version": 1, "file": path.name, "sha256": file_digest(path),
           "fingerprint": fingerprint, "control_dt": env.step_dt,
           "history_length": env.cfg.observations["actor"].history_length,
           "inference_precision": env.cfg.observations["perception"].terms["depth_feature"].params.get("inference_precision", "fp32"),
           "sensing": sensing_contract(env.cfg)}
+  if module.camera is not None:
+    contract['camera'] = module.camera
+  return contract
 
 
 def _local_artifact(directory, name):

@@ -16,6 +16,8 @@ from pathlib import Path
 import socket
 from typing import Any, Callable
 from src.config.mgdp_pretrain import pretrain_resources
+from src.config.mgdp_camera import is_wall_task,D435I20_TASK,D435I20_PROFILE
+from src.wall_reward_settings import read_wall_reward_settings,save_wall_reward_settings
 
 from . import history
 from .catalog import (
@@ -165,6 +167,8 @@ def pretrain(ctx: ApiContext, data: dict) -> tuple[int, dict]:
   defaults = pretrain_resources(task["id"])
   envs = integer(data.get("envs", defaults.num_envs), "环境数", 1, 4096)
   rows = integer(data.get("terrain_rows", defaults.terrain_rows), "地形行数", 1, 100)
+  if is_wall_task(task['id']) and rows != 8:
+    raise ValueError('比赛尺寸强化课程的感知预训练必须使用8行地形')
   batch = integer(data.get("batch_size", defaults.batch_size), "训练批大小", 1, 4096)
   steps = integer(data.get("steps", 4000), "采集步数", 10, 200000)
   iterations = integer(data.get("iterations", 3000), "训练迭代", 1, 200000)
@@ -183,6 +187,8 @@ def pretrain(ctx: ApiContext, data: dict) -> tuple[int, dict]:
     cols = integer(cols, "地形列数", defaults.terrain_cols or 1, 100)
     argv.extend(["--terrain-cols", str(cols)])
   argv.extend(["--out", str(output)])
+  if task['id']==D435I20_TASK:
+    argv.extend(['--depth-profile',D435I20_PROFILE])
   return 200, {"job": ctx.jobs.launch(argv, "pretrain", alias), "output": str(output)}
 
 
@@ -197,6 +203,26 @@ def reward_save(ctx: ApiContext, data: dict) -> tuple[int, dict]:
                              after=after, source=result.get("source"),
                              backup=result.get("backup"))
   return 200, {"task": alias, **result}
+
+
+def wall_rewards(ctx: ApiContext,query) -> tuple[int,dict]:
+  alias,task=resolve_task(query.get('task',[DEFAULT_TASK])[0])
+  if not is_wall_task(task['id']):return 200,{'task':alias,'available':False}
+  return 200,{'task':alias,**read_wall_reward_settings(ctx.root)}
+
+
+def wall_reward_save(ctx: ApiContext,data: dict) -> tuple[int,dict]:
+  alias,task=resolve_task(data.get('task',DEFAULT_TASK))
+  if not is_wall_task(task['id']):raise ValueError('高墙规则仅用于比赛尺寸强化课程')
+  before=read_wall_reward_settings(ctx.root)['settings']
+  result=save_wall_reward_settings(ctx.root,data.get('settings'))
+  def history_values(settings):
+    return {name:{'weight':values.get('weight'),'params':{k:v for k,v in values.items() if k!='weight'}}
+            for name,values in settings.items()}
+  history.record_reward_edit(ctx.root,task=alias,profile='mgdp_wall_rules',
+      before=history_values(before),after=history_values(result['settings']),
+      source=result['source'],backup=result['backup'])
+  return 200,{'task':alias,**result}
 
 
 def terrain_save(ctx: ApiContext, data: dict) -> tuple[int, dict]:
@@ -235,6 +261,7 @@ GET_ROUTES = {
   "/api/models": models,
   "/api/metrics": metrics,
   "/api/rewards": rewards,
+  "/api/wall-rewards": wall_rewards,
   "/api/terrain": terrain,
   "/api/reward-detail": reward_detail,
   "/api/log": log,
@@ -246,6 +273,7 @@ POST_ROUTES = {
   "/api/preview": preview,
   "/api/run": run,
   "/api/rewards/save": reward_save,
+  "/api/wall-rewards/save": wall_reward_save,
   "/api/terrain/save": terrain_save,
   "/api/terrain/view": terrain_view,
   "/api/pretrain": pretrain,

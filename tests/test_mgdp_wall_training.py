@@ -279,7 +279,7 @@ class WallTrainingTests(unittest.TestCase):
   def test_workbench_exposes_new_task_and_checks_stage_layout(self):
     from src.dashboard.commands import build_command
     with tempfile.TemporaryDirectory() as tmp:
-      root=Path(tmp);encoder=root/'logs/mgdp/perception/mgdp_race_v3.pt'
+      root=Path(tmp);encoder=root/'logs/mgdp/perception/mgdp_wall_v5.pt'
       encoder.parent.mkdir(parents=True);encoder.write_bytes(b'fixture')
       options={'mode':'train','task':'race_mgdp_wall'}
       command=build_command(root,'python',options)

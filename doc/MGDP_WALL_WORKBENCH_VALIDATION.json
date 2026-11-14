@@ -1,0 +1,49 @@
+{
+  "tests": {
+    "passed": 395,
+    "skipped": 5,
+    "subtests_passed": 135,
+    "mode": "partitioned",
+    "groups": [
+      {
+        "log": ".artifacts/mgdp-wall-workbench-dashboard-group.log",
+        "passed": 20,
+        "skipped": 0,
+        "subtests_passed": 7
+      },
+      {
+        "log": ".artifacts/mgdp-wall-workbench-other-group.log",
+        "passed": 375,
+        "skipped": 5,
+        "subtests_passed": 128
+      }
+    ]
+  },
+  "javascript_syntax": "node --check passed",
+  "browser": {
+    "task": "race_mgdp_wall",
+    "six_rule_groups_rendered": true,
+    "edit_save_reload_passed": true,
+    "invalid_positive_waiting_weight_rejected": true,
+    "defaults_restored": true,
+    "console_errors": [],
+    "temp_root": "E:/mjlab/work/wall-ui-fv4ihjqi",
+    "source_settings_unchanged": true,
+    "screenshot": "analysis/mgdp_wall_workbench/workbench_wall_rules.png"
+  },
+  "cpu": {
+    "device": "cpu",
+    "envs": 10,
+    "grid": [
+      8,
+      10
+    ],
+    "wall_only_fixture": true,
+    "resume_iterations": 1,
+    "old_v5_checkpoint": "E:\\mjlab\\work\\mgdp-wall-guard-validation\\transfer\\model_1.pt",
+    "default_settings_full_resume_passed": true,
+    "onnx_exported": true,
+    "gpu_training_validated": false,
+    "convergence_validated": false
+  }
+}

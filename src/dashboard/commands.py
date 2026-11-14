@@ -10,6 +10,7 @@ import os
 from .catalog import DEFAULT_TASK, SIM2SIM_MAPS, TASKS, resolve_task
 from .run_naming import next_run_name
 from src.config.race_training import MIN_RACE_TERRAIN_COLS
+from src.config.mgdp_camera import is_wall_task
 
 
 def discover_models(root, task_value=DEFAULT_TASK):
@@ -129,7 +130,7 @@ def build_command(root, python, options):
     terrain_difficulty = str(options.get("terrain_difficulty_max") or "").strip()
     if terrain_difficulty:
       terrain_difficulty = number(terrain_difficulty, "最大地形难度倍率", 0.5, 1.5)
-    if task["id"] == "LgDog1-Race-MGDP-WallTraining":
+    if is_wall_task(task['id']):
       if terrain_rows != 8 or (terrain_difficulty != "" and terrain_difficulty != 1.):
         raise ValueError("高墙渐进课程固定8行、难度倍率1；请保留八阶段训练布局")
     velocity_min = str(options.get("velocity_min_abs") or "").strip()

@@ -6,6 +6,14 @@
 
 原任务 `LgDog1-Race-MGDP` 保留旧赛道、旧梅花桩规则和旧路线，供 V7 历史复现。新的规则只接入统一八档课程。
 
+工作台现在可直接编辑高墙相关规则，入口及生效范围见 [高墙规则工作台](MGDP_WALL_WORKBENCH.md)。下文数值是默认值；实际启动使用已保存的覆盖设置。
+
+## 工作台感知预训练入口
+
+强化课程使用独立感知文件`logs/mgdp/perception/mgdp_wall_v5.pt`，预训练默认64环境、8×10地图、批64。原Race任务的`mgdp_race_v3.pt`保留。预训练脚本必须支持`LgDog1-Race-MGDP-WallTraining`；旧版只接受两个任务时会参数解析失败、退出码2。
+
+Linux覆盖、重启工作台和完整命令见 [预训练入口修复](MGDP_WALL_PRETRAIN_FIX.md)。工作台新策略、就绪检查和CLI输出已统一；已有策略续训仍恢复其原配套感知。
+
 ## 已接入的训练行为
 
 1. **无进展失败**：有 XY 移动指令时，4 秒内没有新增累计 5 cm 的最远路线进展，就结束回合。前后晃动不能刷新；局部重置只清空自己的计时。`no_passage_progress` 按失败终止处理。绕桩对齐朝向时 XY 指令为零，不累计这个移动停滞计时。
@@ -40,7 +48,7 @@ V4及更早模型的奖励、地形或终止契约与当前V5不同，必须用 
 
 ```bash
 cd /root
-sha256sum -c mgdp_wall_progress_guard_20261115.zip.sha256 && unzip -o mgdp_wall_progress_guard_20261115.zip -d /root
+sha256sum -c mgdp_wall_workbench_20261115.zip.sha256 && unzip -o mgdp_wall_workbench_20261115.zip -d /root
 cd /root/unitree_rl_mjlab_lgdog
 conda activate /root/lgdog
 source server_env.sh
@@ -72,3 +80,5 @@ python -u -m scripts.train LgDog1-Race-MGDP-WallTraining \
 新任务播放使用相同的梅花桩、身体投影规则及组合沟槽，高墙每级三道。旧 V7 复现使用原任务。应分别验证八级高墙、两段过沟、桩顶落脚、绕桩身体间距、实际速度与能力退化；先看专项效果，再决定是否重训感知或调整探索。
 
 本地已完成奖励回归、零动作真实物理对照，以及旧第18200轮模型向高墙专项布局的CPU PPO迁移、保存、ONNX/JIT导出和完整续训。GPU 峰值显存、长期收敛和真实通过能力尚未验证。
+
+D435i下俯20°使用新增独立入口，配置与覆盖步骤见[下俯20°配置](MGDP_D435I_DOWN20.md)。原相机入口保留。

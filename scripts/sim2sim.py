@@ -574,7 +574,10 @@ def run(args) -> int:
     import json
     from src.mgdp_checkpoint import restore_sensing_contract
     sensing = onnx_meta.get("mgdp_sensing")
-    restore_sensing_contract(meta["env_cfg"], {"sensing": json.loads(sensing)} if sensing else None)
+    camera=onnx_meta.get('mgdp_camera')
+    restore_sensing_contract(meta["env_cfg"],
+      {'sensing':json.loads(sensing) if sensing else None,
+       'camera':json.loads(camera) if camera else None} if sensing or camera else None)
     from src.mgdp_deployment import MGDPPolicyInput, file_digest
     architecture = onnx_meta.get("policy_architecture")
     if architecture == "lgdog_mgdp_v1":

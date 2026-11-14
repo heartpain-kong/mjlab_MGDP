@@ -14,8 +14,17 @@ from .him_env_cfg import (
   lgdog1_him_runner_cfg,
   lgdog1_race_env_cfg,
 )
-from .mgdp_env_cfg import lgdog1_mgdp_env_cfg, lgdog1_race_mgdp_env_cfg, lgdog1_wall_training_env_cfg
+from .mgdp_env_cfg import lgdog1_mgdp_env_cfg, lgdog1_race_mgdp_env_cfg, lgdog1_wall_training_env_cfg, lgdog1_wall_d435i20_env_cfg
 from .mgdp_rl_cfg import lgdog1_mgdp_runner_cfg
+from src.config.mgdp_camera import D435I20_TASK,D435I20_EXPERIMENT
+
+register_mjlab_task(
+  task_id=D435I20_TASK,
+  env_cfg=lgdog1_wall_d435i20_env_cfg(),
+  play_env_cfg=lgdog1_wall_d435i20_env_cfg(play=True),
+  rl_cfg=lgdog1_mgdp_runner_cfg(D435I20_EXPERIMENT),
+  runner_cls=PPOHIMRunner,
+)
 
 register_mjlab_task(
   task_id="LgDog1-Race-MGDP",

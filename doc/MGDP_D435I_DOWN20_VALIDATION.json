@@ -1,0 +1,136 @@
+{
+  "release": "mgdp_d435i_down20_20261115",
+  "verified_utc": "2026-11-14T22:28:30.089809+00:00",
+  "task": "LgDog1-Race-MGDP-WallTraining-D435i20",
+  "alias": "race_mgdp_wall_d435i20",
+  "cpu_flow": {
+    "root": "E:\\mjlab\\work\\down20-pretrain-button-n_1d_k4k",
+    "argv": [
+      "E:\\mjlab\\work\\lgdog_validation\\Scripts\\python.exe",
+      "E:\\mjlab\\work\\down20-pretrain-button-n_1d_k4k\\scripts\\pretrain_mgdp.py",
+      "--task",
+      "LgDog1-Race-MGDP-WallTraining-D435i20",
+      "--num-envs",
+      "10",
+      "--steps",
+      "12",
+      "--iterations",
+      "1",
+      "--terrain-rows",
+      "8",
+      "--batch-size",
+      "2",
+      "--terrain-cols",
+      "10",
+      "--out",
+      "E:\\mjlab\\work\\down20-pretrain-button-n_1d_k4k\\logs\\mgdp\\perception\\mgdp_wall_d435i20.pt",
+      "--depth-profile",
+      "d435i_edge16_down20",
+      "--device",
+      "cpu",
+      "--sequence-length",
+      "2",
+      "--sample-envs",
+      "10",
+      "--seed",
+      "42"
+    ],
+    "device": "cpu",
+    "envs": 10,
+    "steps": 12,
+    "iterations": 1,
+    "wall_only_fixture": true,
+    "wall_task_parsed": true,
+    "grid": [
+      8,
+      10
+    ],
+    "new_wall_encoder_saved": "E:\\mjlab\\work\\down20-pretrain-button-n_1d_k4k\\logs\\mgdp\\perception\\mgdp_wall_d435i20.pt",
+    "old_race_encoder_unchanged": true,
+    "gpu_training_validated": false,
+    "convergence_validated": false,
+    "ppo_iterations": 1,
+    "full_resume_iterations": 1,
+    "camera": {
+      "version": 2,
+      "profile": "d435i_edge16_down20",
+      "rays": [
+        32,
+        32
+      ],
+      "output": [
+        16,
+        16
+      ],
+      "pool": 2,
+      "fovx": 87.0,
+      "fovy": 58.0,
+      "depth_min": 0.2,
+      "depth_max": 3.0,
+      "projection": "optical_z",
+      "pixels": "upright_row_major_centres",
+      "reduction": "nearest_valid",
+      "mount": "mgdp_depth_down20_v1",
+      "pitch_down_deg": 20.0,
+      "extrinsics": {
+        "position_m": [
+          0.02,
+          0.0,
+          0.075
+        ],
+        "quaternion_wxyz": [
+          0.819152044289,
+          0.0,
+          -0.573576436351,
+          0.0
+        ]
+      }
+    },
+    "onnx_camera_verified": true,
+    "jit_exported": true,
+    "hardware_validated": false
+  },
+  "depth_geometry_and_restore_tests": {
+    "log": ".artifacts/mgdp-down20-final-camera.log",
+    "passed": 5
+  },
+  "wide_inset_render": {
+    "shape": [
+      145,
+      256,
+      3
+    ],
+    "passed": true,
+    "log": ".artifacts/mgdp-down20-inset.log"
+  },
+  "regression": {
+    "initial_dashboard": {
+      "passed": 20,
+      "subtests": 7
+    },
+    "initial_other": {
+      "passed": 391,
+      "failed": 1,
+      "skipped": 5,
+      "subtests": 128
+    },
+    "failure": "TaskModelTests.test_default_task_exists_and_is_first",
+    "fix": "Moved new task after original wall course, keeping standard as first/default.",
+    "recheck": {
+      "files": [
+        "tests/test_tasks.py",
+        "tests/test_dashboard.py"
+      ],
+      "passed": 38,
+      "subtests": 7
+    },
+    "unique_tests_passed_after_targeted_recheck": 412,
+    "full_suite_repeated_after_menu_only_fix": false
+  },
+  "limits": [
+    "CPU high-wall-only bounded fixture, not full competition rollout",
+    "No CUDA or physical D435i validation",
+    "No convergence or success-rate claim",
+    "Linux host not updated remotely"
+  ]
+}

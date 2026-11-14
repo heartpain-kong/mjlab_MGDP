@@ -6,7 +6,10 @@
 |---|---|
 | MuJoCo 模型查看、策略回放、比赛场地与键盘控制 | [MUJOCO_USAGE.md](MUJOCO_USAGE.md) |
 | 使用浏览器面板、短命令、了解目录迁移 | [WORKBENCH.md](WORKBENCH.md) |
+| D435i下俯20°独立任务、工作台入口与相机参数 | [MGDP_D435I_DOWN20.md](MGDP_D435I_DOWN20.md) |
+| D435i空间采样、薄墙可见性、探索对照及GPU命令 | [MGDP_D435I.md](MGDP_D435I.md) |
 | MGDP 定向越障、reward、通过率门控与接触规则 | [MGDP_PASSAGE.md](MGDP_PASSAGE.md) |
+| 强化课程预训练退出码2、8行默认与独立感知文件修复 | [MGDP_WALL_PRETRAIN_FIX.md](MGDP_WALL_PRETRAIN_FIX.md) |
 | MGDP 高墙渐进课程、无进展检测、旧策略迁移与原赛道验收 | [MGDP_WALL_TRAINING.md](MGDP_WALL_TRAINING.md) |
 | 高墙基础正奖励进展门控、墙前等待惩罚与真实物理零动作对照 | [MGDP_WALL_PROGRESS_GUARD.md](MGDP_WALL_PROGRESS_GUARD.md) |
 | 所有比赛障碍第6档对齐尺寸、第7/8档强化与完整参数表 | [MGDP_COURSE_V4.md](MGDP_COURSE_V4.md) |
@@ -22,6 +25,7 @@
 | 抬腿异常、连续摆动净空与LP参数 | [CLEARANCE_HEIGHT_LP_TUNING.md](CLEARANCE_HEIGHT_LP_TUNING.md) |
 | 速度扩张条件、进度门与旧 checkpoint 迁移 | [VELOCITY_CURRICULUM.md](VELOCITY_CURRICULUM.md) |
 | V23地形为0：进度门与扩速判据诊断 | [TRAINING_DATA_ANALYSIS_V23_2026-10-27.md](TRAINING_DATA_ANALYSIS_V23_2026-10-27.md) |
+| 工作台编辑高墙门控、等待、越墙与停滞规则 | [MGDP_WALL_WORKBENCH.md](MGDP_WALL_WORKBENCH.md) |
 | 调整奖励、查看最终权重和函数位置 | [REWARDS.md](REWARDS.md) |
 | V21/V19 行走退化、奖励方向与速度课程门限 | [TRAINING_DATA_ANALYSIS_2026-10-27.md](TRAINING_DATA_ANALYSIS_2026-10-27.md) |
 | V2/V8 训练 run、课程和动作数据分析 | [TRAINING_DATA_ANALYSIS_2026-10-20.md](TRAINING_DATA_ANALYSIS_2026-10-20.md) |

@@ -259,6 +259,7 @@ class MGPDPerception(nn.Module):
         super().__init__()
         self.cfg = cfg
         self.sensing = None
+        self.camera = None
         self.depth_encoder = ImageEncoder(
             input_channels=cfg.frames, hidden=(32, 64, 96),
             output_channels=cfg.feature_dim, pool=4,
@@ -409,6 +410,8 @@ class MGPDPerception(nn.Module):
             payload.update(extra)
         if "sensing" not in payload and self.sensing is not None:
             payload["sensing"] = self.sensing
+        if 'camera' not in payload and self.camera is not None:
+            payload['camera'] = self.camera
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         torch.save(payload, path)
@@ -422,6 +425,7 @@ class MGPDPerception(nn.Module):
             )
         model = cls(MGPDPerceptionCfg.from_dict(payload["cfg"]))
         model.sensing = payload.get("sensing")
+        model.camera = payload.get('camera')
         model.depth_encoder.load_state_dict(payload["depth_encoder"])
         model.depth_decoder.load_state_dict(payload["depth_decoder"])
         model.height_encoder.load_state_dict(payload["height_encoder"])

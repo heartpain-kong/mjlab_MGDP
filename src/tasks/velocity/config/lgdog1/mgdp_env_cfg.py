@@ -34,6 +34,9 @@ from src.tasks.velocity.config.lgdog1.race_depth_terrain_cfg import (
 )
 from src.tasks.velocity.mdp.mgdp_observations import mgdp_depth_feature
 from src.tasks.velocity.mdp.mgdp_perception import MGPDPerceptionCfg
+from src.config.mgdp_pretrain import WALL_PRETRAIN_CHECKPOINT
+from src.config.mgdp_camera import (DEPTH_MOUNT_POS, LEGACY_DEPTH_QUAT,
+    D435I20_CHECKPOINT, D435I20_PROFILE, tilt_quaternion)
 from src.tasks.velocity.mdp.curriculums import RewardBasedVelocityCurriculum
 from src.tasks.velocity.mdp import passage
 from . import blind_mdp
@@ -49,23 +52,33 @@ PROPRIO_HISTORY = 4
 
 # 前头顶安装，站立不动时光轴水平朝前（+X），与地面平行。
 # MuJoCo 相机沿 -Z 看，绕 Y 轴 -90° 即可把光轴转到 +X。
-DEPTH_SITE_POS = (0.02, 0.0, 0.075)
+DEPTH_SITE_POS = DEPTH_MOUNT_POS
 # Keep the trained depth tensor's original pixel ordering. The RGB display
 # uses an upright camera at the same mount and optical axis instead.
-DEPTH_SITE_QUAT = (0.7071067812, 0.0, -0.7071067812, 0.0)
+DEPTH_SITE_QUAT = LEGACY_DEPTH_QUAT
 
 DEFAULT_CHECKPOINT = str(
     Path("logs") / "mgdp" / "perception" / "mgdp_perception.pt"
 )
 DEFAULT_RACE_CHECKPOINT = str(Path("logs") / "mgdp" / "perception" / "mgdp_race_v3.pt")
+DEFAULT_WALL_CHECKPOINT = WALL_PRETRAIN_CHECKPOINT
 
 
-def _mgdp_robot_spec():
-    """Robot spec with the horizontal forward depth site added to the trunk."""
+def _mgdp_robot_spec(pitch_down_deg=0.):
+    """Camera mount relative to trunk; positive pitch points the optical axis down."""
     spec = get_spec()
     body = spec.body(BASE_BODY)
-    if not any(site.name == DEPTH_SITE for site in body.sites):
-        body.add_site(name=DEPTH_SITE, pos=DEPTH_SITE_POS, quat=DEPTH_SITE_QUAT)
+    quat=tilt_quaternion(DEPTH_SITE_QUAT,pitch_down_deg)
+    site=next((s for s in body.sites if s.name==DEPTH_SITE),None)
+    if site is None:
+        body.add_site(name=DEPTH_SITE, pos=DEPTH_SITE_POS, quat=quat)
+    else:
+        site.pos=DEPTH_SITE_POS;site.quat=quat
+    if pitch_down_deg:
+        from src.config.lgdog1 import FRONT_CAMERA_NAME,FRONT_CAMERA_QUAT
+        camera=next(c for c in body.cameras if c.name==FRONT_CAMERA_NAME)
+        camera.pos=DEPTH_SITE_POS;camera.quat=tilt_quaternion(FRONT_CAMERA_QUAT,pitch_down_deg)
+        camera.fovy=58.;camera.resolution=(848,480)
     return spec
 
 
@@ -148,6 +161,14 @@ def lgdog1_mgdp_env_cfg(
     return cfg
 
 
+def lgdog1_wall_d435i20_env_cfg(play=False, checkpoint=D435I20_CHECKPOINT, **kwargs):
+    """The same eight-stage course with the confirmed D435i downward mount."""
+    from src.mgdp_depth import apply_depth_profile
+    cfg=lgdog1_wall_training_env_cfg(play=play,checkpoint=checkpoint,**kwargs)
+    apply_depth_profile(cfg,D435I20_PROFILE)
+    return cfg
+
+
 def _configure_mgdp_training(cfg, play):
     trunk = ContactSensorCfg(name="trunk_ground_contact",
       primary=ContactMatch(mode="geom", pattern="trunk_collision", entity="robot"),
@@ -224,9 +245,9 @@ def lgdog1_race_mgdp_env_cfg(
     return cfg
 
 
-def lgdog1_wall_training_env_cfg(play=False, **kwargs):
+def lgdog1_wall_training_env_cfg(play=False, checkpoint=DEFAULT_WALL_CHECKPOINT, **kwargs):
     """V4: every obstacle reaches competition dimensions at stage six."""
-    cfg = lgdog1_race_mgdp_env_cfg(play=play, **kwargs)
+    cfg = lgdog1_race_mgdp_env_cfg(play=play, checkpoint=checkpoint, **kwargs)
     from mjlab.managers.reward_manager import RewardTermCfg
     from mjlab.managers.scene_entity_config import SceneEntityCfg
     from .passage_terrain_cfg import StrictStonesTerrainCfg
@@ -239,6 +260,8 @@ def lgdog1_wall_training_env_cfg(play=False, **kwargs):
         NoPassageProgress, WallCrossingBonus, WallSwingClearance,
         WallWaitingPenalty,guard_wall_shaping_rewards,
     )
+    from src.wall_reward_settings import load_wall_reward_settings,wall_reward_contract
+    rules=load_wall_reward_settings()
     generator = cfg.scene.terrain.terrain_generator
     generator.num_rows = 8
     generator.num_cols = 20
@@ -259,6 +282,7 @@ def lgdog1_wall_training_env_cfg(play=False, **kwargs):
     generator.sub_terrains = lessons
     old=cfg.commands['twist']
     cfg.commands['twist']=BodyAwarePassageCommandCfg(**{f.name:getattr(old,f.name) for f in fields(old) if f.init})
+    cfg.commands['twist'].wall_reward_contract_version=wall_reward_contract(rules)
     cfg.commands["twist"].waypoints = {name:lesson_route(name) for name in lessons}
     cfg.commands['twist'].waypoints['gap_steps']=((0.,0.),(10.4,0.))
     cfg.commands['twist'].waypoints['slalom_brick']=SAFE_SLALOM_ROUTE
@@ -275,19 +299,27 @@ def lgdog1_wall_training_env_cfg(play=False, **kwargs):
     cfg.terminations['slalom_body_projection']=TerminationTermCfg(func=SlalomBodyProjection,
         params={'asset_cfg':SceneEntityCfg('robot',geom_names=('trunk_collision',)),
                 'post_radius_m':.05,'margin_m':.03})
-    guard_wall_shaping_rewards(cfg.rewards)
-    cfg.rewards['wall_waiting']=RewardTermCfg(func=WallWaitingPenalty,weight=-1.,
+    gate=rules['progress_gate']
+    if gate['enabled']:
+        guard_wall_shaping_rewards(cfg.rewards,gate['progress_reference_mps'],gate['min_command_mps'])
+    cfg.rewards['passage_progress'].weight=rules['passage_progress']['weight']
+    cfg.rewards['passage_success'].weight=rules['passage_success']['weight']
+    waiting=rules['wall_waiting'];crossing=rules['wall_crossing']
+    cfg.rewards['wall_waiting']=RewardTermCfg(func=WallWaitingPenalty,
+        weight=waiting['weight'] if waiting['enabled'] else 0.,
         params={'asset_cfg':SceneEntityCfg('robot',site_names=FOOT_SITES),
-                'approach_m':.75,'grace_s':.75,'ramp_s':1.5,'max_rate':2.,
-                'min_progress_m':.02,'min_command_mps':.1})
+                **{k:v for k,v in waiting.items() if k not in ('enabled','weight')},
+                'root_clearance_m':crossing['root_clearance_m'],
+                'foot_clearance_m':crossing['foot_clearance_m']})
     if play:
         return cfg
-    cfg.terminations["no_passage_progress"] = TerminationTermCfg(
-        func=NoPassageProgress, time_out=False,
-        params={"timeout_s": 4., "min_progress_m": .05, "min_command_mps": .1})
+    stall=rules['no_passage_progress']
+    if stall['enabled']:
+        cfg.terminations["no_passage_progress"] = TerminationTermCfg(
+            func=NoPassageProgress,time_out=False,params={k:v for k,v in stall.items() if k!='enabled'})
     feet = SceneEntityCfg("robot", site_names=FOOT_SITES)
-    cfg.rewards["wall_crossing"] = RewardTermCfg(func=WallCrossingBonus, weight=2.,
-        params={"asset_cfg": feet, "root_clearance_m": .35, "foot_clearance_m": .03})
+    cfg.rewards["wall_crossing"] = RewardTermCfg(func=WallCrossingBonus,weight=crossing['weight'],
+        params={"asset_cfg":feet,**{k:v for k,v in crossing.items() if k!='weight'}})
     cfg.rewards["wall_swing_clearance"] = RewardTermCfg(func=WallSwingClearance, weight=-.2,
         params={"asset_cfg": SceneEntityCfg("robot", site_names=FOOT_SITES),
                 "sensor_name": "feet_ground_contact", "margin_m": .03,

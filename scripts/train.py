@@ -67,6 +67,8 @@ class TrainConfig:
   perception_execution: Literal["eager", "cuda_graph"] | None = None
   perception_precision: Literal["fp32", "bf16"] | None = None
   perception_batch_size: int | None = None
+  depth_profile: Literal['d435i_edge16', 'd435i_native32', 'd435i_edge16_down20'] | None = None
+  exploration_std: float | None = None
   torchrunx_log_dir: str | None = None
   gpu_ids: list[int] | Literal["all"] | None = field(default_factory=lambda: [0])
 
@@ -96,6 +98,18 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
 
   if cfg.warm_start_checkpoint is not None and cfg.agent.resume:
     raise ValueError("Choose either policy warm-start or full resume, not both")
+  if cfg.depth_profile is not None:
+    if 'perception' not in cfg.env.observations:
+      raise ValueError('--depth-profile requires an MGDP task')
+    from src.mgdp_depth import apply_depth_profile
+    apply_depth_profile(cfg.env, cfg.depth_profile)
+  if cfg.exploration_std is not None:
+    if not 0.05 <= cfg.exploration_std <= 0.8 or cfg.agent.resume:
+      raise ValueError('--exploration-std must be in [0.05,0.8] and cannot be used with full resume')
+    if 'perception' not in cfg.env.observations:
+      raise ValueError('--exploration-std is scoped to MGDP experiments')
+    cfg.agent.actor.distribution_cfg = {**cfg.agent.actor.distribution_cfg,
+                                       'init_std': cfg.exploration_std}
 
   cfg.agent.seed = seed
   cfg.env.seed = seed
@@ -284,6 +298,9 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
   elif cfg.warm_start_checkpoint is not None:
     from src.mgdp_warmstart import warm_start_mgdp_policy
     warm_start_mgdp_policy(runner, cfg.warm_start_checkpoint)
+  if cfg.exploration_std is not None:
+    from src.mgdp_warmstart import reset_exploration_std
+    reset_exploration_std(runner, cfg.exploration_std)
 
   # Only write config files from rank 0 to avoid race conditions.
   if rank == 0:

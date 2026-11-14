@@ -43,6 +43,9 @@ def get_perception(env, cfg: MGPDPerceptionCfg, checkpoint: str = "") -> MGPDPer
                 "`--env.observations.perception.terms.depth_feature.params.checkpoint <path>`."
             )
         module = module.to(env.device).eval()
+        from src.mgdp_depth import camera_contract
+        if getattr(module, 'camera', None) != camera_contract(getattr(env, 'cfg', None)):
+            raise ValueError('MGDP camera profile differs from encoder; pretrain a matching encoder')
         from src.mgdp_checkpoint import sensing_contract
         filters = sensing_contract(getattr(env, "cfg", None))
         if module.sensing is not None and filters and module.sensing != filters:
@@ -59,6 +62,14 @@ def get_perception(env, cfg: MGPDPerceptionCfg, checkpoint: str = "") -> MGPDPer
 def _depth_image(env, sensor_name: str, cfg: MGPDPerceptionCfg) -> torch.Tensor:
     sensor = env.scene[sensor_name]
     distances = sensor.data.distances  # [B, N], metres, -1 for miss
+    from src.mgdp_depth import D435iPatternCfg, ray_depth
+    pattern = getattr(getattr(sensor, 'cfg', None), 'pattern', None)
+    if isinstance(pattern, D435iPatternCfg):
+        scale = getattr(sensor, '_mgdp_z_scale', None)
+        if scale is None or scale.device != distances.device:
+            scale = pattern.generate_rays(None, distances.device)[1][:, 2].abs()
+            sensor._mgdp_z_scale = scale
+        return ray_depth(distances, pattern, cfg, scale)
     num = distances.shape[1]
     h, w = cfg.depth_hw
     if num != h * w:

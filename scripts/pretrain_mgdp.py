@@ -45,7 +45,8 @@ import torch
 
 from mjlab.envs import ManagerBasedRlEnv
 from mjlab.envs.mdp import height_scan
-from src.config.mgdp_pretrain import pretrain_resources
+from src.config.mgdp_pretrain import pretrain_resources, WALL_PRETRAIN_CHECKPOINT
+from src.config.mgdp_camera import D435I20_TASK,D435I20_PROFILE,D435I20_CHECKPOINT,is_wall_task
 from src.sim_memory import compact_model_allocations
 
 from src.tasks.velocity.config.lgdog1.mgdp_env_cfg import (
@@ -60,7 +61,7 @@ from src.tasks.velocity.mdp.mgdp_perception import MGPDPerception, MGPDPerceptio
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--task",choices=("LgDog1-Rough-MGDP","LgDog1-Race-MGDP"),default="LgDog1-Rough-MGDP",
+    p.add_argument("--task",choices=("LgDog1-Rough-MGDP","LgDog1-Race-MGDP","LgDog1-Race-MGDP-WallTraining",D435I20_TASK),default="LgDog1-Rough-MGDP",
                    help="感知采集地图；比赛任务应采集2027障碍，包含限高和轮胎")
     p.add_argument("--num-envs", type=int, default=None,
                    help="parallel envs: race defaults to 64, rough to 256")
@@ -86,11 +87,20 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--collision-mode", choices=("auto", "sap"), default="auto")
     p.add_argument("--out", default=None)
     p.add_argument("--init-from", default="", help="released MGDP wm_best.pt (optional)")
+    p.add_argument('--depth-profile', choices=('d435i_edge16','d435i_native32',D435I20_PROFILE), default=None)
     args = p.parse_args()
+    if args.task==D435I20_TASK and args.depth_profile is None:
+        args.depth_profile=D435I20_PROFILE
     resources = pretrain_resources(args.task)
     for name in ("num_envs", "terrain_rows", "terrain_cols", "batch_size"):
         if getattr(args, name) is None:
             setattr(args, name, getattr(resources, name))
+    if args.task==D435I20_TASK and args.depth_profile==D435I20_PROFILE and args.out is None:
+        args.out=D435I20_CHECKPOINT
+    if args.depth_profile and args.out is None:
+        args.out = str(Path('logs/mgdp/perception') / f'{args.depth_profile}.pt')
+    if args.task == 'LgDog1-Race-MGDP-WallTraining' and args.out is None:
+        args.out = WALL_PRETRAIN_CHECKPOINT
     args.out = args.out or (DEFAULT_RACE_CHECKPOINT if args.task=="LgDog1-Race-MGDP" else DEFAULT_CHECKPOINT)
     if args.sequence_length < 2 or args.steps < args.sequence_length + 2:
         p.error("sequence-length must be >=2 and steps must exceed sequence-length+1")
@@ -101,14 +111,17 @@ def parse_args() -> argparse.Namespace:
         p.error("iterations, num-envs, sample-envs, batch-size, terrain-rows and log-every must be positive")
     if args.terrain_cols is not None and args.terrain_cols < 1:
         p.error("terrain-cols must be positive")
-    if args.task == "LgDog1-Race-MGDP" and args.terrain_cols < resources.terrain_cols:
+    if (args.task=="LgDog1-Race-MGDP" or is_wall_task(args.task)) and args.terrain_cols < 10:
         p.error("race terrain-cols must be >=10 to retain every obstacle type")
+    if is_wall_task(args.task) and args.terrain_rows != 8:
+        p.error('WallTraining requires exactly 8 terrain rows')
     return args
 
 
 def build_env(args) -> ManagerBasedRlEnv:
     cfg = lgdog1_mgdp_env_cfg(with_perception=False)
-    race = getattr(args,"task","LgDog1-Rough-MGDP")=="LgDog1-Race-MGDP"
+    task = getattr(args,'task','LgDog1-Rough-MGDP')
+    race = task=='LgDog1-Race-MGDP' or is_wall_task(task)
     if race:
         from src.tasks.velocity.config.lgdog1.passage_terrain_cfg import lgdog1_passage_terrain_cfg
         from src.tasks.velocity.config.lgdog1.domain_rand_cfg import configure_race_himloco_randomization
@@ -119,6 +132,16 @@ def build_env(args) -> ManagerBasedRlEnv:
         cfg.events["reset_base"].params["pose_range"] = {
             "x":(0.,.2),"y":(-.1,.1),"z":(.02,.06),"yaw":(-.2,.2)}
         cfg.curriculum = {}
+    if is_wall_task(task):
+        from src.tasks.velocity.config.lgdog1.mgdp_env_cfg import lgdog1_wall_training_env_cfg
+        # Perception collection samples all curriculum rows, without policy gates.
+        cfg = lgdog1_wall_training_env_cfg(play=True, with_perception=False)
+        cfg.events['reset_base'].params['pose_range'] = {
+            'x':(0.,.2),'y':(-.1,.1),'z':(.02,.06),'yaw':(-.2,.2)}
+        cfg.curriculum = {}
+    if getattr(args,'depth_profile',None):
+        from src.mgdp_depth import apply_depth_profile
+        apply_depth_profile(cfg, args.depth_profile)
     cfg.scene.num_envs = args.num_envs
     cfg.seed = args.seed
     terrain = cfg.scene.terrain
@@ -144,8 +167,10 @@ def build_env(args) -> ManagerBasedRlEnv:
 @torch.no_grad()
 def collect(args, env: ManagerBasedRlEnv) -> tuple[torch.Tensor, torch.Tensor]:
     """Roll random actions and record consecutive (depth pair, height) samples."""
-    h, w = DEPTH_HW
-    depth_min = MGPDPerceptionCfg().depth_min
+    profile = getattr(args,'depth_profile',None)
+    from src.mgdp_depth import PROFILES
+    from src.tasks.velocity.mdp.mgdp_observations import _depth_image
+    perception_cfg = MGPDPerceptionCfg(depth_hw=PROFILES[profile]['output'], depth_min=.2, depth_max=3.) if profile else MGPDPerceptionCfg()
     k = min(args.sample_envs, args.num_envs)
     # Terrain types are grouped by environment index. A prefix would record
     # only the first few obstacle columns, especially when num_envs is large.
@@ -165,10 +190,7 @@ def collect(args, env: ManagerBasedRlEnv) -> tuple[torch.Tensor, torch.Tensor]:
             actions = (torch.rand((env.num_envs, 12), device=env.device) - 0.5) * 0.3
         env.step(actions)
 
-        depth = env.scene["depth_rays"].data.distances[sample_ids].reshape(k, 1, h, w)
-        miss = depth < 0
-        depth = torch.where(miss, torch.full_like(depth, DEPTH_MAX), depth)
-        depth = (depth.clamp(depth_min, DEPTH_MAX) / DEPTH_MAX).float().cpu()
+        depth = _depth_image(env, 'depth_rays', perception_cfg)[sample_ids].float().cpu()
 
         height = height_scan(env, "terrain_scan")[sample_ids]
         height = (height / 5.0).clamp(-1.0, 1.0).float().cpu()
@@ -236,6 +258,10 @@ def collect_and_release(args):
         }
         from src.mgdp_checkpoint import sensing_contract
         metadata["sensing"] = sensing_contract(env.cfg)
+        from src.mgdp_depth import camera_contract
+        camera = camera_contract(env.cfg)
+        if camera is not None:
+            metadata['camera'] = camera
         t0 = time.time()
         stacks, heights = collect(args, env)
         print(f"[collect] {args.steps} steps in {time.time() - t0:.1f}s  "
@@ -262,7 +288,9 @@ def main() -> None:
     print(f"[data] sequences={stacks.shape[0]}  stack={tuple(stacks.shape)}  "
           f"height={tuple(heights.shape)}")
 
-    cfg = MGPDPerceptionCfg(depth_hw=DEPTH_HW, height_hw=(17, 11), depth_max=DEPTH_MAX)
+    cfg = MGPDPerceptionCfg(depth_hw=tuple(stacks.shape[-2:]), height_hw=(17, 11),
+                            depth_max=3. if args.depth_profile else DEPTH_MAX,
+                            depth_min=.2 if args.depth_profile else .1)
     model = MGPDPerception(cfg).to(args.device)
     if args.init_from:
         loaded = model.load_released_weights(args.init_from)

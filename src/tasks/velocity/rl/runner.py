@@ -193,6 +193,8 @@ class PPOHIMRunner(MjlabOnPolicyRunner):
         "mgdp_inference_precision": self.env.unwrapped.cfg.observations["perception"].terms["depth_feature"].params.get("inference_precision", "fp32"),
         "control_dt": str(self.env.unwrapped.step_dt),
       })
+      if state['module'].camera is not None:
+        metadata['mgdp_camera']=json.dumps(state['module'].camera,sort_keys=True)
     else:
       run_name = (
         wandb.run.name if self.logger.logger_type == "wandb" and wandb.run else "local"
