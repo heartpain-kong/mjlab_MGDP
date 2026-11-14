@@ -17,7 +17,7 @@ Pipeline
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import replace, fields
 from pathlib import Path
 
 from mjlab.managers.observation_manager import ObservationGroupCfg, ObservationTermCfg
@@ -79,6 +79,7 @@ def lgdog1_mgdp_env_cfg(
     with_perception: bool = True,
     proprio_history: int = PROPRIO_HISTORY,
     depth_hw: tuple[int, int] = DEPTH_HW,
+    terrain_only_sensing: bool = True,
 ):
     """Build the MGDP velocity task env config."""
     cfg = lgdog1_rough_env_cfg(play=play)
@@ -93,6 +94,14 @@ def lgdog1_mgdp_env_cfg(
     cfg.observations["actor"].flatten_history_dim = True
     cfg.observations["actor"].concatenate_dim = -1
 
+    # MGDP's released WarpManager builds one terrain mesh, without the robot.
+    # Keep privileged heights and depth on the same terrain-only convention.
+    # Legacy policies restore their original sensor filters on checkpoint load.
+    if terrain_only_sensing:
+        for sensor in cfg.scene.sensors or ():
+            if isinstance(sensor, RayCastSensorCfg):
+                sensor.include_geom_groups = (0,)
+
     # Depth rays: a pinhole camera made of rays (cheap at thousands of envs).
     depth_sensor = RayCastSensorCfg(
         name="depth_rays",
@@ -102,6 +111,7 @@ def lgdog1_mgdp_env_cfg(
             width=depth_hw[1], height=depth_hw[0], fovy=DEPTH_FOVY
         ),
         max_distance=DEPTH_MAX,
+        include_geom_groups=(0,) if terrain_only_sensing else None,
         exclude_parent_body=True,
         debug_vis=False,
     )
@@ -122,7 +132,7 @@ def lgdog1_mgdp_env_cfg(
                         "sensor_name": "depth_rays",
                         "cfg": perception_cfg,
                         "checkpoint": checkpoint,
-                        "inference_batch_size": 256,
+                        "inference_batch_size": 1024,
                     },
                 )
             },
@@ -180,10 +190,12 @@ def lgdog1_race_mgdp_env_cfg(
     play: bool = False,
     checkpoint: str = DEFAULT_RACE_CHECKPOINT,
     with_perception: bool = True,
+    terrain_only_sensing: bool = True,
 ):
     """MGDP task on the 2027 race terrain, including overhead beam + tyre ring."""
     cfg = lgdog1_mgdp_env_cfg(
-        play=play, checkpoint=checkpoint, with_perception=with_perception
+        play=play, checkpoint=checkpoint, with_perception=with_perception,
+        terrain_only_sensing=terrain_only_sensing,
     )
     if not play:
       configure_race_himloco_randomization(cfg)
@@ -209,4 +221,75 @@ def lgdog1_race_mgdp_env_cfg(
     cfg.curriculum = {} if play else {"passage": CurriculumTermCfg(func=passage.PassageCurriculum,
       params={"min_episodes": 32, "success_threshold": .7, "max_error": .25,
               "speed_limit": passage.DEFAULT_SPEED_LIMIT})}
+    return cfg
+
+
+def lgdog1_wall_training_env_cfg(play=False, **kwargs):
+    """V4: every obstacle reaches competition dimensions at stage six."""
+    cfg = lgdog1_race_mgdp_env_cfg(play=play, **kwargs)
+    from mjlab.managers.reward_manager import RewardTermCfg
+    from mjlab.managers.scene_entity_config import SceneEntityCfg
+    from .passage_terrain_cfg import StrictStonesTerrainCfg
+    from .course_v4_terrain_cfg import UnifiedWallTerrainCfg, UnifiedGapTerrainCfg, UnifiedObstacleTerrainCfg
+    from src.tasks.velocity.mdp.course_v3 import (
+        BodyAwarePassageCommandCfg,SAFE_SLALOM_ROUTE,PositionHistoryContactSensorCfg,
+        StoneGroundContact,SlalomBodyProjection,
+    )
+    from src.tasks.velocity.mdp.wall_training import (
+        NoPassageProgress, WallCrossingBonus, WallSwingClearance,
+        WallWaitingPenalty,guard_wall_shaping_rewards,
+    )
+    generator = cfg.scene.terrain.terrain_generator
+    generator.num_rows = 8
+    generator.num_cols = 20
+    generator.size = (12.,8.)
+    lessons = {}
+    for name, terrain in generator.sub_terrains.items():
+        if name == "gap_steps":
+            lessons[name] = UnifiedGapTerrainCfg(size=generator.size)
+        elif name == "stepping_stones":
+            lessons[name] = StrictStonesTerrainCfg(size=generator.size)
+        elif name == "high_wall":
+            lessons[name] = UnifiedWallTerrainCfg(size=generator.size,
+                counts=(3,)*8 if play else (1,1,1,2,2,3,3,3))
+        else:
+            lessons[name] = UnifiedObstacleTerrainCfg(kind=name,size=generator.size)
+    for terrain in lessons.values():
+        terrain.proportion = 1./len(lessons)
+    generator.sub_terrains = lessons
+    old=cfg.commands['twist']
+    cfg.commands['twist']=BodyAwarePassageCommandCfg(**{f.name:getattr(old,f.name) for f in fields(old) if f.init})
+    cfg.commands["twist"].waypoints = {name:lesson_route(name) for name in lessons}
+    cfg.commands['twist'].waypoints['gap_steps']=((0.,0.),(10.4,0.))
+    cfg.commands['twist'].waypoints['slalom_brick']=SAFE_SLALOM_ROUTE
+    cfg.episode_length_s=120.
+    cfg.commands['twist'].resampling_time_range=(121.,121.)
+    cfg.scene.sensors=tuple(cfg.scene.sensors)+(PositionHistoryContactSensorCfg(
+        name='stone_support_contact',
+        primary=ContactMatch(mode='geom',pattern=FOOT_GEOMS,entity='robot'),
+        secondary=ContactMatch(mode='body',pattern='terrain'),
+        fields=('found','force','pos','normal'),reduce='maxforce',num_slots=4,history_length=cfg.decimation),)
+    cfg.terminations['stone_ground_contact']=TerminationTermCfg(func=StoneGroundContact,
+        params={'sensor_name':'stone_support_contact','entry_end_x':2.2,'exit_start_x':5.9,
+                'floor_tolerance_m':.008,'min_force_n':1.})
+    cfg.terminations['slalom_body_projection']=TerminationTermCfg(func=SlalomBodyProjection,
+        params={'asset_cfg':SceneEntityCfg('robot',geom_names=('trunk_collision',)),
+                'post_radius_m':.05,'margin_m':.03})
+    guard_wall_shaping_rewards(cfg.rewards)
+    cfg.rewards['wall_waiting']=RewardTermCfg(func=WallWaitingPenalty,weight=-1.,
+        params={'asset_cfg':SceneEntityCfg('robot',site_names=FOOT_SITES),
+                'approach_m':.75,'grace_s':.75,'ramp_s':1.5,'max_rate':2.,
+                'min_progress_m':.02,'min_command_mps':.1})
+    if play:
+        return cfg
+    cfg.terminations["no_passage_progress"] = TerminationTermCfg(
+        func=NoPassageProgress, time_out=False,
+        params={"timeout_s": 4., "min_progress_m": .05, "min_command_mps": .1})
+    feet = SceneEntityCfg("robot", site_names=FOOT_SITES)
+    cfg.rewards["wall_crossing"] = RewardTermCfg(func=WallCrossingBonus, weight=2.,
+        params={"asset_cfg": feet, "root_clearance_m": .35, "foot_clearance_m": .03})
+    cfg.rewards["wall_swing_clearance"] = RewardTermCfg(func=WallSwingClearance, weight=-.2,
+        params={"asset_cfg": SceneEntityCfg("robot", site_names=FOOT_SITES),
+                "sensor_name": "feet_ground_contact", "margin_m": .03,
+                "approach_m": .25, "departure_m": .08})
     return cfg

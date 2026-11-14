@@ -1,0 +1,15 @@
+{
+  "passed": true,
+  "device": "cpu",
+  "envs": 4,
+  "steps": 250,
+  "step_dt": 0.02,
+  "fixture": "zero action, wall-only terrain, stage 1, spawn 1m along route",
+  "stationary_no_new_progress_samples": 714,
+  "old_counterfactual_idle_shaping_rate_mean": 2.180839584154241,
+  "new_idle_shaping_rate_max": 0.0,
+  "finite_physics": true,
+  "counterfactual_on_same_states": true,
+  "trained_policy_success_validated": false,
+  "csv": "physical_check.csv"
+}

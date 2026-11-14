@@ -83,6 +83,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     p.add_argument("--optimize-vram", action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument("--collision-mode", choices=("auto", "sap"), default="auto")
     p.add_argument("--out", default=None)
     p.add_argument("--init-from", default="", help="released MGDP wm_best.pt (optional)")
     args = p.parse_args()
@@ -136,7 +137,7 @@ def build_env(args) -> ManagerBasedRlEnv:
         tg.difficulty_range = (0.0, 1.0) if race else (0.4, 1.0)
         print(f"[init] terrain={tg.num_rows}x{tg.num_cols}, envs={args.num_envs}; "
               "building scene, compiling MuJoCo and initializing physics...", flush=True)
-    with compact_model_allocations(getattr(args, "optimize_vram", True)):
+    with compact_model_allocations(getattr(args, "optimize_vram", True), getattr(args, "collision_mode", "auto")):
         return ManagerBasedRlEnv(cfg=cfg, device=args.device)
 
 
@@ -233,6 +234,8 @@ def collect_and_release(args):
             "terrain_grid": (generator.num_rows, generator.num_cols),
             "domain_randomization": himloco_randomization_metadata(env.cfg),
         }
+        from src.mgdp_checkpoint import sensing_contract
+        metadata["sensing"] = sensing_contract(env.cfg)
         t0 = time.time()
         stacks, heights = collect(args, env)
         print(f"[collect] {args.steps} steps in {time.time() - t0:.1f}s  "

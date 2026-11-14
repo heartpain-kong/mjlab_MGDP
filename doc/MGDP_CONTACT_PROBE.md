@@ -1,5 +1,9 @@
 # 接触丢失探针：本地 vs GPUFree（race_mgdp）
 
+2026-11-12 更新：本文保留历史排查记录。约 `2^24 world-geoms` 是服务器观察到的规模阈值，
+不等于已经证明 int32 在该值溢出。当前重构、已验证范围和新的独立探针见
+[MGDP 后端重构说明](MGDP_REFACTOR_2026-11-12.md)。
+
 ## 症状
 
 `lgdog1_velocity_race_mgdp_v3` 下所有大环境数的 run（V4_new 6144、V5 5120、V6 5120、V7 5120、V8 4096）

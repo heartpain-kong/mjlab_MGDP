@@ -20,10 +20,24 @@ class ActionMonitorVecEnvWrapper(RslRlVecEnvWrapper):
                raw_action_penalty_coef: float = 0.0):
     super().__init__(env, clip_actions=clip_actions)
     self.raw_action_penalty_coef = float(raw_action_penalty_coef)
-    self.raw_action_abs_max_seen = 0.0
-    self.raw_action_abs_mean_last = 0.0
-    self.action_saturation_fraction_last = 0.0
+    self._raw_action_abs_max_seen = None
+    self._raw_action_abs_mean_last = None
+    self._action_saturation_fraction_last = None
     self.action_monitor_steps = 0
+
+  # Convert only when a caller explicitly requests the diagnostic scalar.
+  # The rollout hot path keeps these reductions on device.
+  @property
+  def raw_action_abs_max_seen(self):
+    return 0.0 if self._raw_action_abs_max_seen is None else float(self._raw_action_abs_max_seen.item())
+
+  @property
+  def raw_action_abs_mean_last(self):
+    return 0.0 if self._raw_action_abs_mean_last is None else float(self._raw_action_abs_mean_last.item())
+
+  @property
+  def action_saturation_fraction_last(self):
+    return 0.0 if self._action_saturation_fraction_last is None else float(self._action_saturation_fraction_last.item())
 
   def step(self, actions: torch.Tensor):
     raw_actions = actions.detach()
@@ -39,9 +53,10 @@ class ActionMonitorVecEnvWrapper(RslRlVecEnvWrapper):
       saturation = (raw_abs >= limit).float().mean()
       clipped_actions = torch.clamp(actions, -limit, limit)
 
-    self.raw_action_abs_max_seen = max(self.raw_action_abs_max_seen, float(raw_max.item()))
-    self.raw_action_abs_mean_last = float(raw_mean.item())
-    self.action_saturation_fraction_last = float(saturation.item())
+    self._raw_action_abs_max_seen = (raw_max if self._raw_action_abs_max_seen is None
+                                    else torch.maximum(self._raw_action_abs_max_seen, raw_max))
+    self._raw_action_abs_mean_last = raw_mean
+    self._action_saturation_fraction_last = saturation
     self.action_monitor_steps += 1
 
     # Let the base wrapper preserve TensorDict conversion, timeout handling,

@@ -6,19 +6,22 @@
 （`include_geom_groups=(0,)`）只查地形组，因此一份 BVH 就能服务所有世界。
 
 判定条件（不满足就退回原生逐世界 BVH）：
-- 所有启用的 geom 都属于 worldbody（静态，不会被物理移动）；
+- 所有启用的 geom 都焊接到 worldbody，且不属于 mocap/flex；
 - 所有这些 geom 的 group 都是 0（地形组）。
 
-地形静止 ⇒ refit 不再需要，`refit_scene_bvh` 对共享 BVH 变成空操作。
+仅在经源码校验的 ray-only context 中共享；相机仍保留逐世界 BVH。
+地形静止 ⇒ refit 不再需要，运行时按 context 标记分流。
 """
 
 from __future__ import annotations
 
+from contextvars import ContextVar
+
 import numpy as np
 import warp as wp
 
-# 记录使用共享 BVH 的 RenderContext（id），供 refit 判定。
-_SHARED_RENDER_CONTEXTS: set[int] = set()
+# Visual field expansion cannot reuse a tree built from the host base model.
+SHARING_ALLOWED = ContextVar("lgdog_static_bvh_allowed", default=True)
 
 
 @wp.kernel(module="unique", enable_backward=False)
@@ -38,32 +41,26 @@ def _broadcast_bounds(
   group_out[index] = world
 
 
-def _static_terrain_only(mjm, rc) -> bool:
-  enabled = getattr(rc, "enabled_geom_ids", None)
-  if enabled is None:
-    return False
-  if hasattr(enabled, "numpy"):
-    enabled = enabled.numpy()
-  ids = np.asarray(enabled, dtype=np.int64)
+def static_terrain_only(mjm, ids) -> bool:
+  ids = np.asarray(ids, dtype=np.int64)
   if ids.size == 0:
     return False
   body = np.asarray(mjm.geom_bodyid)[ids]
   group = np.asarray(mjm.geom_group)[ids]
   weld = np.asarray(mjm.body_weldid)[body]
   static = (body == 0) | (weld == 0)
-  ok = bool(np.all(static) and np.all(group == 0))
-  if not ok:
-    print(f"[memory] shared terrain BVH skipped: enabled={ids.size} "
-          f"bodies={sorted(set(body.tolist()))[:5]} groups={sorted(set(group.tolist()))[:5]}",
-          flush=True)
-  return ok
+  # Mocap bodies can be welded to world but still move independently per world.
+  return bool(not mjm.nflex and np.all(static) and np.all(group == 0)
+              and np.all(np.asarray(mjm.body_mocapid)[body] < 0))
 
 
 def build_scene_bvh(mjm, mjd, rc, nworld):
   """静态地形场景只建一份 BVH；否则退回原生逐世界实现。"""
   from mujoco_warp._src import bvh
 
-  if _static_terrain_only(mjm, rc):
+  # Only the verified context factory may opt in: it avoids the large leaf
+  # allocation BEFORE build_scene_bvh and installs matching runtime ray dispatch.
+  if getattr(rc, "_lgdog_shared_terrain", False):
     return _build_shared(mjm, mjd, rc, nworld)
 
   avoided = max(nworld - 1, 0) * mjm.ngeom * 60
@@ -105,10 +102,7 @@ def _build_shared(mjm, mjd, rc, nworld):
   geom_size = wp.array(mjm.geom_size[None, :, :], dtype=wp.vec3)
   geom_xpos = wp.array(mjd.geom_xpos[None, :, :], dtype=wp.vec3)
   geom_xmat = wp.array(mjd.geom_xmat.reshape(1, mjm.ngeom, 3, 3), dtype=wp.mat33)
-  # 只分配一个世界的叶子，然后整体缩小 rc 的数组（旧的大数组交给 warp 池回收）。
-  lower = wp.empty(rc.bvh_ngeom, dtype=wp.vec3)
-  upper = wp.empty(rc.bvh_ngeom, dtype=wp.vec3)
-  group = wp.empty(rc.bvh_ngeom, dtype=int)
+  lower, upper, group = rc.lower, rc.upper, rc.group
   wp.launch(
     kernel=bvh._compute_bvh_bounds,
     dim=(1, rc.bvh_ngeom),
@@ -126,19 +120,8 @@ def _build_shared(mjm, mjd, rc, nworld):
   root_value = int(single_root.numpy()[0])
   rc.group_root = wp.full(nworld, root_value, dtype=int)
 
-  _SHARED_RENDER_CONTEXTS.add(id(rc))
-  if not getattr(bvh, "_lgdog_refit_wrapped", False):
-    _original_refit = bvh.refit_scene_bvh
-
-    def _refit_guard(m, d, render_ctx):
-      if id(render_ctx) in _SHARED_RENDER_CONTEXTS:
-        return
-      return _original_refit(m, d, render_ctx)
-
-    bvh.refit_scene_bvh = _refit_guard
-    bvh._lgdog_refit_wrapped = True
-
   saved = max(nworld - 1, 0) * rc.bvh_ngeom * 28
   print(f"[memory] terrain BVH shared across {nworld} worlds: leaves={rc.bvh_ngeom} "
-        f"(saves {saved/1024**3:.2f} GiB), static refit disabled", flush=True)
+        f"(avoids {saved/1024**3:.2f} GiB leaf arrays, excluding tree/scratch), "
+        "static refit disabled", flush=True)
   return None

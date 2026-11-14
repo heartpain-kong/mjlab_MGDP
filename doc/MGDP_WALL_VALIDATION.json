@@ -1,0 +1,21 @@
+{
+  "release": "mgdp_wall_training_20261114",
+  "task": "LgDog1-Race-MGDP-WallTraining",
+  "tests": {"passed": 359, "skipped": 5, "subtests": 127},
+  "cpu_ppo": {
+    "envs": 8,
+    "grid": [8, 10],
+    "source_policy_iteration": 10300,
+    "source_policy_sha256": "7d77e7800edac9c09f1252521edc8ff9d9c561c8ade240c168fdb0e92c2a02cd",
+    "encoder_fingerprint": "7da635cf4a664d5ede1a876944c6af3a79d3b8ce746ab13e6306eafa0c65e3bb",
+    "actor_transfer_passed": true,
+    "new_training_iterations": 2,
+    "full_resume_iterations": 1,
+    "onnx_exported": true,
+    "jit_exported": true
+  },
+  "gpu_training_validated": false,
+  "convergence_validated": false,
+  "original_course_high_wall_success_validated": false,
+  "validation_logs": [".artifacts/mgdp-wall-full-tests.log", ".artifacts/mgdp-wall-ppo.log"]
+}

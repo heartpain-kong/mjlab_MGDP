@@ -10,6 +10,8 @@ adding the term only requires an env config change - no runner surgery.
 
 from __future__ import annotations
 
+import warnings
+
 import torch
 
 from src.tasks.velocity.mdp.mgdp_perception import MGPDPerception, MGPDPerceptionCfg
@@ -41,6 +43,14 @@ def get_perception(env, cfg: MGPDPerceptionCfg, checkpoint: str = "") -> MGPDPer
                 "`--env.observations.perception.terms.depth_feature.params.checkpoint <path>`."
             )
         module = module.to(env.device).eval()
+        from src.mgdp_checkpoint import sensing_contract
+        filters = sensing_contract(getattr(env, "cfg", None))
+        if module.sensing is not None and filters and module.sensing != filters:
+            raise ValueError("MGDP感知模型的深度/高度扫描过滤设置与当前环境不同；"
+                             "请使用配套感知权重或在当前设置下重新预训练")
+        if module.sensing is None and filters and all(v == [0] for v in filters.values()):
+            warnings.warn("旧MGDP感知权重没有记录传感器约定；当前新训练只扫描地形。"
+                          "建议重新预训练感知模型后创建新策略训练。", stacklevel=2)
         state = {"module": module, "hidden": None, "prev": None}
         setattr(env, _STATE_ATTR, state)
     return state["module"]
@@ -69,6 +79,8 @@ def mgdp_depth_feature(
     cfg=None,
     checkpoint: str = "",
     inference_batch_size: int = 256,
+    inference_execution: str = "eager",
+    inference_precision: str = "fp32",
 ) -> torch.Tensor:
     """Return the temporal MGDP feature ``[B, 64]`` for the actor group."""
     cfg = _as_cfg(cfg)
@@ -82,18 +94,21 @@ def mgdp_depth_feature(
     prev = state["prev"]
     if prev is None or prev.shape[0] != batch:
         prev = depth
-    elif reset.any():
+    else:
         # Do not stack a frame from the previous episode across a reset.
         prev = torch.where(reset.view(-1, 1, 1, 1), depth, prev)
     stack = torch.cat([prev, depth], dim=1)
 
     hidden = state["hidden"]
-    if hidden is not None and reset.any():
-        hidden = hidden.clone()
-        hidden[:, reset] = 0.0
+    if hidden is not None:
+        hidden = hidden * (~reset).view(1, -1, 1)
 
     with torch.no_grad():
-        feature, hidden = module.feature_batched(stack, hidden, inference_batch_size)
+        if inference_execution == "eager" and inference_precision == "fp32":
+            feature, hidden = module.feature_batched(stack, hidden, inference_batch_size)
+        else:
+            feature, hidden = module.feature_batched(
+                stack, hidden, inference_batch_size, inference_execution, inference_precision)
 
     state["prev"] = depth.detach()
     state["hidden"] = hidden.detach()

@@ -1,0 +1,105 @@
+{
+  "release": "mgdp_wall_progress_guard_20261115",
+  "task": "LgDog1-Race-MGDP-WallTraining",
+  "experiment": "lgdog1_velocity_race_mgdp_wall_v5",
+  "geometry_reference": "MGDP_COURSE_V4.md",
+  "wall_reward_contract_version": 1,
+  "gated_shaping_terms": [
+    "track_linear_velocity",
+    "track_angular_velocity",
+    "pose",
+    "foot_gait",
+    "feet_air_time"
+  ],
+  "wall_waiting": {
+    "approach_m": 0.75,
+    "grace_s": 0.75,
+    "ramp_s": 1.5,
+    "max_cost_rate": 2.0,
+    "min_new_progress_m": 0.02
+  },
+  "progress_reference_mps": 0.1,
+  "stall_termination": {
+    "timeout_s": 4.0,
+    "min_new_progress_m": 0.05
+  },
+  "tests": {
+    "passed": 387,
+    "skipped": 5,
+    "subtests_passed": 128,
+    "mode": "partitioned",
+    "groups": [
+      {
+        "log": ".artifacts/mgdp-wall-guard-dashboard-group.log",
+        "passed": 20,
+        "skipped": 0,
+        "subtests_passed": 7
+      },
+      {
+        "log": ".artifacts/mgdp-wall-guard-other-group.log",
+        "passed": 367,
+        "skipped": 5,
+        "subtests_passed": 121
+      }
+    ],
+    "monolithic_run": {
+      "passed": 386,
+      "failed": 1,
+      "skipped": 5,
+      "failed_test": "tests/test_dashboard.py::HTTPTests::test_launch_requires_token_and_rejects_cross_origin",
+      "error": "Windows socket ConnectionAbortedError 10053",
+      "repeated_twice": true
+    },
+    "isolated_http_retry": "passed in 0.60s",
+    "dashboard_module_retry": "20 passed, 7 subtests"
+  },
+  "physical_probe": {
+    "passed": true,
+    "device": "cpu",
+    "envs": 4,
+    "steps": 250,
+    "step_dt": 0.02,
+    "fixture": "zero action, wall-only terrain, stage 1, spawn 1m along route",
+    "stationary_no_new_progress_samples": 714,
+    "old_counterfactual_idle_shaping_rate_mean": 2.180839584154241,
+    "new_idle_shaping_rate_max": 0.0,
+    "finite_physics": true,
+    "counterfactual_on_same_states": true,
+    "trained_policy_success_validated": false,
+    "csv": "physical_check.csv"
+  },
+  "physical_probe_5s_mean_env_integrals": {
+    "old_counterfactual_shaping_rate": 10.906470341682434,
+    "new_shaping_rate": 0.15824455462396145,
+    "waiting_reward_rate": -5.052264948487282
+  },
+  "cpu_ppo": {
+    "device": "cpu",
+    "envs": 10,
+    "grid": [
+      8,
+      10
+    ],
+    "cell_size": [
+      12,
+      8
+    ],
+    "lessons": 10,
+    "wall_only_fixture": true,
+    "transfer_iterations": 2,
+    "resume_iterations": 1,
+    "source_iteration": 18200,
+    "encoder_matched": true,
+    "checkpoint": "E:\\mjlab\\work\\mgdp-wall-guard-validation\\transfer\\model_1.pt",
+    "new_contact_history_sensor_constructed": true,
+    "projection_termination_constructed": true,
+    "onnx_exported": true,
+    "jit_exported": true,
+    "gpu_training_validated": false,
+    "convergence_validated": false
+  },
+  "original_legacy_task_unchanged": true,
+  "other_terrain_base_reward_unchanged": true,
+  "gpu_training_validated": false,
+  "trained_policy_success_validated": false
+}

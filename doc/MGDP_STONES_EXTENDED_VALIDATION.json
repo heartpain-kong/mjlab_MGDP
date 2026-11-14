@@ -1,0 +1,91 @@
+{
+  "release": "mgdp_stones_extended_20261115",
+  "task": "LgDog1-Race-MGDP-WallTraining",
+  "curriculum_stages": 8,
+  "competition_display_stage": 6,
+  "competition_internal_level": 5,
+  "reference_xml": "src/assets/terrains/race_obstacle_2027.xml",
+  "reference_sha256": "f1e0d56fc1c536818e96b7d93ebaf9719613d5d581ada5ad53b350fd84703feb",
+  "competition_reference_matches": true,
+  "stage_dimensions_fixed_within_row": true,
+  "stage_widths_m": [
+    0.36,
+    0.32,
+    0.28,
+    0.25,
+    0.22,
+    0.2,
+    0.18,
+    0.16
+  ],
+  "stage_heights_m": [
+    0.02,
+    0.03,
+    0.04,
+    0.06,
+    0.08,
+    0.1,
+    0.12,
+    0.15
+  ],
+  "stage_lateral_clear_gaps_m": [
+    0.04,
+    0.08,
+    0.12,
+    0.15,
+    0.18,
+    0.2,
+    0.22,
+    0.24
+  ],
+  "stage_same_row_clear_gaps_m": [
+    0.24,
+    0.28,
+    0.32,
+    0.35,
+    0.38,
+    0.4,
+    0.42,
+    0.44
+  ],
+  "longitudinal_stagger_m": 0.3,
+  "platform_size_m": [
+    0.8,
+    0.8
+  ],
+  "training_stones_per_row": 6,
+  "reference_stones_per_row": 3,
+  "tests": {
+    "passed": 372,
+    "skipped": 5,
+    "subtests_passed": 127,
+    "log": ".artifacts/mgdp-stones-extended-full-tests.log"
+  },
+  "cpu_ppo": {
+    "device": "cpu",
+    "envs": 10,
+    "grid": [
+      8,
+      10
+    ],
+    "cell_size": [
+      12,
+      8
+    ],
+    "lessons": 10,
+    "transfer_iterations": 2,
+    "resume_iterations": 1,
+    "source_iteration": 18200,
+    "encoder_matched": true,
+    "checkpoint": "E:\\mjlab\\work\\mgdp-stones-extended-validation\\transfer\\model_1.pt",
+    "new_contact_history_sensor_constructed": true,
+    "projection_termination_constructed": true,
+    "onnx_exported": true,
+    "jit_exported": true,
+    "gpu_training_validated": false,
+    "convergence_validated": false
+  },
+  "legacy_terrain_geometry_preserved": true,
+  "gpu_training_validated": false,
+  "convergence_validated": false
+}

@@ -41,6 +41,17 @@ _TASK_LIST = (
     description="2027 场地课程：密集越障、绕桩接砖木坑、随机起伏及原生粗糙高度场；单木桥净距400mm，最终出口计通过。训练启用HIMLoco全强度域随机化，含外力和推搡。",
   ),
   TaskSpec(
+    alias="race_mgdp_wall", id="LgDog1-Race-MGDP-WallTraining",
+    label="MGDP · 比赛尺寸强化课程", algorithm="ppo", scene="race_depth",
+    experiment="lgdog1_velocity_race_mgdp_wall_v5", obs=252, critic=261, profile="mgdp",
+    docs="doc/MGDP_WALL_TRAINING.md", requires_pretrain=True, directed_passage=True,
+    train_presets={name: {**preset, "terrain_num_rows": 8, "terrain_num_cols": 20}
+                   for name, preset in RACE_TRAIN_PRESETS.items()},
+    pretrain_checkpoint="logs/mgdp/perception/mgdp_race_v3.pt",
+    pretrain_command="python -m scripts.pretrain_mgdp --task LgDog1-Race-MGDP",
+    description="V5高墙防停滞刷分：正向基础奖励按真实新增进展发放，墙前停留递增惩罚。保留V4统一八档：第6档比赛尺寸、7/8档强化、同区块双段过沟。默认8×20。旧模型用 --warm-start-checkpoint。",
+  ),
+  TaskSpec(
     alias="him_flat", id="LgDog1-Flat-Blind-HIM-Standard",
     label="HIM-PPO · 平地", algorithm="him", scene="flat",
     experiment="lgdog1_velocity_flat_him_standard_v1", obs=HIM_INPUT_DIM,

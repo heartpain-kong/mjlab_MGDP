@@ -99,6 +99,53 @@ class MGDPCheckpointTests(unittest.TestCase):
     self.assertIsNone(bind_checkpoint_encoder(cfg,"nonexistent.pt"))
     self.assertIsNone(save_encoder_contract(NS(cfg=cfg),"nonexistent"))
 
+  def test_precision_is_saved_restored_and_mismatches_are_rejected(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      root=Path(tmp);module=MGPDPerception(MGPDPerceptionCfg()).eval()
+      env=self.env(module,root/"public.pt")
+      params=env.cfg.observations["perception"].terms["depth_feature"].params
+      params["inference_precision"]="bf16"
+      contract=save_encoder_contract(env,root)
+      self.assertEqual(contract["inference_precision"],"bf16")
+      policy=root/"model.pt";torch.save({"infos":{"mgdp_perception":contract}},policy)
+      params["inference_precision"]="fp32"
+      bind_checkpoint_encoder(env.cfg,policy)
+      self.assertEqual(params["inference_precision"],"bf16")
+      validate_runtime_encoder(env,{"infos":{"mgdp_perception":contract}})
+      params["inference_precision"]="fp32"
+      with self.assertRaisesRegex(ValueError,"precision"):
+        validate_runtime_encoder(env,{"infos":{"mgdp_perception":contract}})
+
+  def test_sensing_contract_restores_new_and_legacy_filters(self):
+    from src.mgdp_checkpoint import sensing_contract, restore_sensing_contract
+    from src.tasks.velocity.config.lgdog1.mgdp_env_cfg import lgdog1_race_mgdp_env_cfg
+    cfg = lgdog1_race_mgdp_env_cfg()
+    new = sensing_contract(cfg)
+    self.assertEqual(new, {"terrain_scan": [0], "depth_rays": [0]})
+    restore_sensing_contract(cfg, None)
+    self.assertEqual(sensing_contract(cfg), {"terrain_scan": [0,1,2], "depth_rays": None})
+    restore_sensing_contract(cfg, {"sensing": new})
+    self.assertEqual(sensing_contract(cfg), new)
+
+  def test_encoder_preserves_sensing_metadata_and_rejects_mismatched_environment(self):
+    from src.tasks.velocity.config.lgdog1.mgdp_env_cfg import lgdog1_race_mgdp_env_cfg
+    from src.tasks.velocity.mdp.mgdp_observations import get_perception
+    with tempfile.TemporaryDirectory() as tmp:
+      path = Path(tmp)/"encoder.pt"
+      module = MGPDPerception(MGPDPerceptionCfg())
+      filters = {"terrain_scan": [0], "depth_rays": [0]}
+      module.save(path, extra={"sensing": filters})
+      restored = MGPDPerception.from_checkpoint(path)
+      self.assertNotEqual(encoder_fingerprint(module), encoder_fingerprint(restored))
+      copy = Path(tmp)/"sidecar.pt"
+      restored.save(copy)
+      self.assertEqual(MGPDPerception.from_checkpoint(copy).sensing, filters)
+      self.assertEqual(encoder_fingerprint(restored),
+                       encoder_fingerprint(MGPDPerception.from_checkpoint(copy)))
+      env = NS(device="cpu", cfg=lgdog1_race_mgdp_env_cfg(terrain_only_sensing=False))
+      with self.assertRaisesRegex(ValueError, "过滤设置"):
+        get_perception(env, MGPDPerceptionCfg(), str(copy))
+
   def test_play_entry_binds_original_encoder_before_allocating_physics(self):
     from scripts import play
     class StopBeforePhysics(Exception):pass

@@ -103,6 +103,7 @@ function collect() {
     lp_max_task_probability:$("lp-max-task-probability")?.value||"0.25",
     velocity_min_abs:task()?.directed_passage?"":$("velocity-min-abs")?.value || "",
     velocity_max_abs:task()?.directed_passage?"":$("velocity-max-abs")?.value || "",
+    enable_nan_guard:$("enable-nan-guard").checked,
     resume:$("resume").checked, checkpoint:model, onnx:model, viewer:$("viewer").value,
     map:$("map").value, map_file:$("map-file")?.value||"",
     vx:$("vx").value, vy:$("vy").value, wz:$("wz").value,
@@ -301,7 +302,7 @@ function renderPassage(data){
   card.classList.toggle("hidden",!task()?.directed_passage);
   const speed=metricValue(data,"passage_speed_max");
   $("passage-speed").textContent=speed==null?"等待越障训练数据…":`当前前进速度 0.25–${speed.toFixed(3)} m/s；各类达标后扩速`;
-  const labels={start_flat:"平地",stepping_stones:"密集梅花桩",balance_beam:"单木桥（净距400mm）",gap_steps:"密集沟壑台阶",high_wall:"高墙",clearance_frame:"限高笼",tire_array:"轮胎阵",random_hills:"随机高低起伏",mjlab_rough:"mjlab原生随机粗糙",slalom_brick:"绕桩→砖木坑"};
+  const labels={start_flat:"平地",stepping_stones:"梅花桩",balance_beam:"单木桥（净距400mm）",gap_steps:task()?.id==="LgDog1-Race-MGDP-WallTraining"?"楼梯过沟下坡→上坡过沟下楼梯":"坡道→过沟→下楼梯",high_wall:"高墙",clearance_frame:"限高笼",tire_array:"轮胎阵",random_hills:"随机高低起伏",mjlab_rough:"mjlab原生随机粗糙",slalom_brick:"绕桩→砖木坑"};
   const list=$("passage-results");list.replaceChildren();
   for(const [key,label] of Object.entries(labels)){
     const item=data?.passage?.[key];const div=document.createElement("div");

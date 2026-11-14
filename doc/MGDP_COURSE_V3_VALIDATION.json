@@ -1,0 +1,118 @@
+{
+  "release": "mgdp_course_v3_20261115",
+  "task": "LgDog1-Race-MGDP-WallTraining",
+  "experiment": "lgdog1_velocity_race_mgdp_wall_v3",
+  "lessons": 10,
+  "default_grid": [
+    8,
+    20
+  ],
+  "minimum_columns": 10,
+  "cell_size_m": [
+    12,
+    8
+  ],
+  "gap_sequence": [
+    "stairs_up",
+    "gap",
+    "ramp_down",
+    "flat_0.8m",
+    "ramp_up",
+    "gap",
+    "stairs_down"
+  ],
+  "wall_heights_cm": [
+    10,
+    12,
+    15,
+    18,
+    21,
+    25,
+    30,
+    35
+  ],
+  "training_wall_counts": [
+    1,
+    1,
+    1,
+    2,
+    2,
+    3,
+    3,
+    3
+  ],
+  "play_wall_counts": [
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3
+  ],
+  "stone_stagger_m": 0.3,
+  "stone_floor_check_cell_x_m": [
+    2.2,
+    5.9
+  ],
+  "tests": {
+    "passed": 370,
+    "skipped": 5,
+    "subtests_passed": 127,
+    "log": ".artifacts/mgdp-course-v3-final-tests.log"
+  },
+  "cpu_ppo": {
+    "device": "cpu",
+    "envs": 10,
+    "grid": [
+      8,
+      10
+    ],
+    "cell_size": [
+      12,
+      8
+    ],
+    "lessons": 10,
+    "transfer_iterations": 2,
+    "resume_iterations": 1,
+    "source_iteration": 18200,
+    "encoder_matched": true,
+    "checkpoint": "E:\\mjlab\\work\\mgdp-course-v3-fixed-validation\\transfer\\model_1.pt",
+    "new_contact_history_sensor_constructed": true,
+    "projection_termination_constructed": true,
+    "onnx_exported": true,
+    "jit_exported": true,
+    "gpu_training_validated": false,
+    "convergence_validated": false
+  },
+  "route_geometry": {
+    "old_nominal": {
+      "sampled_poses": 20496,
+      "minimum_clearance_m": -0.016589942443733692,
+      "worst_root_xy_yaw": [
+        3.9,
+        0.23333333333333317,
+        2.553590050042226
+      ],
+      "translation_tracking_radius_m": 0.0,
+      "heading_error_rad": 0.0,
+      "turning_root_radius_m": null
+    },
+    "new_with_tracking_and_turning": {
+      "sampled_poses": 31176,
+      "minimum_clearance_m": 0.050470905951947684,
+      "worst_root_xy_yaw": [
+        4.236568542494924,
+        0.753431457505076,
+        0.7635011087932843
+      ],
+      "translation_tracking_radius_m": 0.08,
+      "heading_error_rad": 0.12,
+      "turning_root_radius_m": 0.06
+    }
+  },
+  "gpu_training_validated": false,
+  "convergence_validated": false,
+  "legacy_task_preserved": true
+}

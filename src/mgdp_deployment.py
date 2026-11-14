@@ -17,7 +17,10 @@ def file_digest(path):
 
 
 class MGDPPolicyInput:
-  def __init__(self, model, sensor_cfg, checkpoint, history_length=4):
+  def __init__(self, model, sensor_cfg, checkpoint, history_length=4, inference_precision="fp32"):
+    if inference_precision not in ("fp32", "bf16"):
+      raise ValueError("Invalid MGDP deployment inference precision")
+    self.inference_precision = inference_precision
     self.module = MGPDPerception.from_checkpoint(checkpoint).cpu().eval()
     self.cfg = self.module.cfg
     self.site = model.site(sensor_cfg.frame.name).id
@@ -61,6 +64,8 @@ class MGDPPolicyInput:
       start += width
     depth = self.depth(model, data)
     previous = depth if self.previous is None else self.previous
-    feature, self.hidden = self.module.feature(torch.cat([previous, depth], dim=1), self.hidden)
+    feature, self.hidden = self.module.feature_batched(
+      torch.cat([previous, depth], dim=1), self.hidden, 0,
+      precision=self.inference_precision)
     self.previous = depth
     return np.concatenate([*terms, feature[0].numpy()]).astype(np.float32)

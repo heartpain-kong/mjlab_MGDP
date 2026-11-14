@@ -4,19 +4,20 @@
 `mujoco_warp._src.collision_driver.sap_broadphase` 用一张**全局 int32 前缀和**
 （`wp.utils.array_scan`，只支持 int32/float32）来定位"第几个世界的第几对 geom"。
 前缀和的总量 = 所有世界里 AABB 重叠对数 ≈ 世界数 × geom 数 × 平均重叠数。
-当"世界数 × geom 数"超过约 2^24（1.6e7）时，前缀和溢出成负数，
-`sap_broadphase` 里的 `while worldgeomid < nworkpackages` 直接不执行 ——
-**整个场景一个碰撞对都不产出**，接触全为 0，而且不报错。
+服务器观察到规模跨过约 2^24 world-geoms 后接触归零；这不是 int32
+本身的上限，首发根因尚需 GPU 对照确认。这里消除累计重叠工作量及
+扫掠游标的 int32 溢出风险，不把该观察阈值当作已证明的整数边界。
 
 本模块保留原有的投影 / 分段排序 / range 三个内核，只把
-"前缀和 + 扫描"换成 int64（torch.cumsum on int64），并把扫描内核的索引改成 int64。
-显存代价 = 世界数 × geom 数 × 8 B（4096×27838 ≈ 0.9 GB），可接受。
+"前缀和 + 扫描"换成纯 Warp int64 分块计算，不在 CUDA graph 内调用 Torch。
+稀疏配对表由 Model 持有，工作缓存由 Data 持有，支持多个独立环境。
 """
 
 from __future__ import annotations
 
 import hashlib
 import inspect
+from functools import lru_cache
 
 import warp as wp
 
@@ -31,27 +32,32 @@ SAP_BROADPHASE_SHA256 = "1e6e965c9a45b4d4d8334d3c26480cd3192b27f58d4a7d290626100
 INT64_THRESHOLD = 8_000_000
 
 # --- 稀疏 pair 表（替代 2.89 GiB 稠密查找表） -------------------------------
-_SPARSE = {"np_keys": None, "np_vals": None, "ngeom": 0, "device": None,
-           "keys": None, "vals": None}
-
-
-def set_sparse_pairs(keys, vals, ngeom):
+def set_sparse_pairs(model, keys, vals):
   import numpy as np
-  _SPARSE.update(np_keys=np.ascontiguousarray(keys, dtype=np.int64),
-                 np_vals=np.ascontiguousarray(vals, dtype=np.int32),
-                 ngeom=int(ngeom), device=None, keys=None, vals=None)
+  model._lgdog_sparse_pairs = {
+    "np_keys": np.ascontiguousarray(keys, dtype=np.int64),
+    "np_vals": np.ascontiguousarray(vals, dtype=np.int32), "devices": {}}
 
 
-def sparse_available():
-  return _SPARSE["np_keys"] is not None
+def sparse_available(model):
+  return getattr(model, "_lgdog_sparse_pairs", None) is not None
 
 
-def _sparse_arrays(device):
-  if _SPARSE["keys"] is None or _SPARSE["device"] != str(device):
-    _SPARSE["keys"] = wp.array(_SPARSE["np_keys"], dtype=wp.int64, device=device)
-    _SPARSE["vals"] = wp.array(_SPARSE["np_vals"], dtype=wp.vec2i, device=device)
-    _SPARSE["device"] = str(device)
-  return _SPARSE["keys"], _SPARSE["vals"]
+def _sparse_arrays(model, device):
+  state = model._lgdog_sparse_pairs
+  key = str(device)
+  if key not in state["devices"]:
+    _require_uncaptured_allocation(wp.get_device(device), "sparse pair lookup")
+    state["devices"][key] = (
+      wp.array(state["np_keys"], dtype=wp.int64, device=device),
+      wp.array(state["np_vals"], dtype=wp.vec2i, device=device))
+  return state["devices"][key]
+
+
+def _require_uncaptured_allocation(device, purpose):
+  if device.is_capturing:
+    raise RuntimeError(f"MGDP {purpose} must be allocated before CUDA graph capture; "
+                       "construct model and data inside compact_model_allocations()")
 
 
 @wp.func
@@ -112,6 +118,7 @@ def _binary_search_i64(
   return upper
 
 
+@lru_cache(maxsize=None)
 def _sap_sweep_i64(
   opt_broadphase_filter: int, ngeom_aabb: int, ngeom_rbound: int, ngeom_margin: int
 ):
@@ -145,12 +152,12 @@ def _sap_sweep_i64(
     collision_pairid_out: wp.array(dtype=wp.vec2i),
     collision_worldid_out: wp.array(dtype=int),
   ):
-    worldgeomid = wp.tid()
+    worldgeomid = wp.int64(wp.tid())
 
     nworldgeom = nworld_in * ngeom
     nworkpackages = cumulative_sum_in[nworldgeom - 1]
 
-    while wp.int64(worldgeomid) < nworkpackages:
+    while worldgeomid < nworkpackages:
       # binary search to find current and next geom pair indices
       i = _binary_search_i64(cumulative_sum_in, wp.int64(worldgeomid), 0, nworldgeom)
       j = wp.int64(i) + wp.int64(worldgeomid) + wp.int64(1)
@@ -170,7 +177,7 @@ def _sap_sweep_i64(
       else:
         idx = upper_tri_index(ngeom, geom1, geom2)
 
-      worldgeomid += nsweep_in
+      worldgeomid += wp.int64(nsweep_in)
 
       if sparse_in != 0:
         lo = wp.min(geom1, geom2)
@@ -239,15 +246,26 @@ def _sap_sweep_i64(
 
 
 @wp.kernel(module="unique", enable_backward=False)
-def _scan_ranges_world(
-  range_in: wp.array2d(dtype=int), cum_out: wp.array2d(dtype=wp.int64), ngeom: int
+def _scan_ranges_blocks(
+  range_in: wp.array2d(dtype=int), cum_out: wp.array2d(dtype=wp.int64),
+  blocks_out: wp.array2d(dtype=wp.int64), ngeom: int,
 ):
-  """每个世界单独做前缀和（int64，不会再溢出）。"""
-  worldid = wp.tid()
+  """Independent 256-geom blocks, rather than one long serial scan per world."""
+  worldid, block = wp.tid()
   acc = wp.int64(0)
-  for i in range(ngeom):
+  for i in range(block * 256, wp.min((block + 1) * 256, ngeom)):
     acc += wp.int64(range_in[worldid, i])
     cum_out[worldid, i] = acc
+  blocks_out[worldid, block] = acc
+
+
+@wp.kernel(module="unique", enable_backward=False)
+def _scan_block_totals(blocks: wp.array2d(dtype=wp.int64)):
+  worldid = wp.tid()
+  acc = wp.int64(0)
+  for block in range(blocks.shape[1]):
+    acc += blocks[worldid, block]
+    blocks[worldid, block] = acc
 
 
 @wp.kernel(module="unique", enable_backward=False)
@@ -263,37 +281,94 @@ def _world_offsets(
 
 @wp.kernel(module="unique", enable_backward=False)
 def _add_world_offsets(
-  cum_inout: wp.array2d(dtype=wp.int64), offsets: wp.array(dtype=wp.int64)
+  cum_inout: wp.array2d(dtype=wp.int64), offsets: wp.array(dtype=wp.int64),
+  blocks: wp.array2d(dtype=wp.int64),
 ):
   worldid, i = wp.tid()
-  cum_inout[worldid, i] += offsets[worldid]
+  offset = offsets[worldid]
+  if i >= 256:
+    offset += blocks[worldid, i // 256 - 1]
+  cum_inout[worldid, i] += offset
 
 
-def _cumsum_i64(range_wp, nworld: int, ngeom: int):
+def _cumsum_i64(range_wp, nworld: int, ngeom: int, workspace=None):
   """range_（int32, 世界×geom）→ int64 全局前缀和（warp 数组）。"""
   device = range_wp.device
-  cum = wp.empty((nworld, ngeom), dtype=wp.int64, device=device)
-  offsets = wp.empty(nworld, dtype=wp.int64, device=device)
-  wp.launch(_scan_ranges_world, dim=nworld, inputs=[range_wp, cum, ngeom], device=device)
-  wp.launch(_world_offsets, dim=1, inputs=[cum, ngeom, nworld, offsets], device=device)
-  wp.launch(_add_world_offsets, dim=(nworld, ngeom), inputs=[cum, offsets], device=device)
+  if workspace is None:
+    workspace = {
+      "cum": wp.empty((nworld, ngeom), dtype=wp.int64, device=device),
+      "offsets": wp.empty(nworld, dtype=wp.int64, device=device),
+      "blocks": wp.empty((nworld, (ngeom+255)//256), dtype=wp.int64, device=device)}
+  cum, offsets, blocks = (workspace[k] for k in ("cum", "offsets", "blocks"))
+  if not nworld or not ngeom:
+    return cum.reshape(-1)
+  wp.launch(_scan_ranges_blocks, dim=blocks.shape, inputs=[range_wp, cum, blocks, ngeom], device=device)
+  wp.launch(_scan_block_totals, dim=nworld, inputs=[blocks], device=device)
+  wp.launch(_world_offsets, dim=1, inputs=[blocks, blocks.shape[1], nworld, offsets], device=device)
+  wp.launch(_add_world_offsets, dim=(nworld, ngeom), inputs=[cum, offsets, blocks], device=device)
   return cum.reshape(-1)
+
+
+def _workspace(m, d):
+  key = (str(d.geom_xpos.device), d.nworld, m.ngeom, int(m.opt.broadphase))
+  cached = getattr(d, "_lgdog_sap_workspace", None)
+  if cached is None or cached[0] != key:
+    device, shape = d.geom_xpos.device, (d.nworld, m.ngeom)
+    _require_uncaptured_allocation(device, "SAP workspace")
+    arrays = {
+      "lower": wp.empty((*shape, 2), dtype=float, device=device),
+      "upper": wp.empty(shape, dtype=float, device=device),
+      "sort": wp.empty((*shape, 2), dtype=int, device=device),
+      "range": wp.empty(shape, dtype=int, device=device),
+      "cum": wp.empty(shape, dtype=wp.int64, device=device),
+      "offsets": wp.empty(d.nworld, dtype=wp.int64, device=device),
+      "blocks": wp.empty((d.nworld, (m.ngeom+255)//256), dtype=wp.int64, device=device),
+      "segments": wp.empty(d.nworld+1 if m.opt.broadphase == BroadphaseType.SAP_SEGMENTED else 0,
+                           dtype=int, device=device),
+      "empty_keys": wp.empty(1, dtype=wp.int64, device=device),
+      "empty_vals": wp.empty(1, dtype=wp.vec2i, device=device)}
+    d._lgdog_sap_workspace = (key, arrays)
+  return d._lgdog_sap_workspace[1]
+
+
+def prepare_workspace(m, d):
+  """Allocate shared scratch BEFORE the first step/forward CUDA graph exists.
+
+  Arrays allocated inside step capture belong to that graph's allocation nodes.
+  A forward graph launched first (as env.reset does) cannot use those pointers.
+  CUB also keeps stream-local sort scratch, so prime it outside capture too.
+  This touches scratch only, not physical state or collision counters.
+  """
+  device = d.geom_xpos.device
+  _require_uncaptured_allocation(device, "SAP preparation")
+  work = _workspace(m, d)
+  if (device.is_cuda and m.opt.broadphase == BroadphaseType.SAP_SEGMENTED
+      and not work.get("sort_prepared", False)):
+    import numpy as np
+    work["lower"].zero_()
+    work["sort"].zero_()
+    work["segments"].assign(np.arange(d.nworld + 1, dtype=np.int32) * m.ngeom)
+    wp.utils.segmented_sort_pairs(work["lower"].reshape((-1, m.ngeom)),
+                                  work["sort"].reshape((-1, m.ngeom)),
+                                  d.nworld * m.ngeom, work["segments"])
+    wp.synchronize_device(device)
+    work["sort_prepared"] = True
+  return work
 
 
 def sap_broadphase_i64(m, d, ctx):
   """与原生 ``sap_broadphase`` 等价的 int64 实现。"""
+  from src._mjwarp_static_collision import broadphase
+  if broadphase(m, d, ctx):
+    return
   nworldgeom = d.nworld * m.ngeom
 
   direction = wp.vec3(0.5935, 0.7790, 0.1235)
   direction = wp.normalize(direction)
 
-  projection_lower = wp.empty((d.nworld, m.ngeom, 2), dtype=float)
-  projection_upper = wp.empty((d.nworld, m.ngeom), dtype=float)
-  sort_index = wp.empty((d.nworld, m.ngeom, 2), dtype=int)
-  range_ = wp.empty((d.nworld, m.ngeom), dtype=int)
-  segmented_index = wp.empty(
-    d.nworld + 1 if m.opt.broadphase == BroadphaseType.SAP_SEGMENTED else 0, dtype=int
-  )
+  work = _workspace(m, d)
+  projection_lower, projection_upper, sort_index, range_, segmented_index = (
+    work[k] for k in ("lower", "upper", "sort", "range", "segments"))
 
   wp.launch(
     kernel=_cd._sap_project(m.opt.broadphase),
@@ -335,15 +410,14 @@ def sap_broadphase_i64(m, d, ctx):
     outputs=[range_],
   )
 
-  cumulative_sum = _cumsum_i64(range_, d.nworld, m.ngeom)
+  cumulative_sum = _cumsum_i64(range_, d.nworld, m.ngeom, work)
 
-  if sparse_available():
-    pair_keys, pair_vals = _sparse_arrays(d.geom_xpos.device)
-    npairs = int(_SPARSE["np_keys"].size)
+  if sparse_available(m):
+    pair_keys, pair_vals = _sparse_arrays(m, d.geom_xpos.device)
+    npairs = int(m._lgdog_sparse_pairs["np_keys"].size)
     sparse_flag = 1
   else:
-    pair_keys = wp.empty(1, dtype=wp.int64, device=d.geom_xpos.device)
-    pair_vals = wp.empty(1, dtype=wp.vec2i, device=d.geom_xpos.device)
+    pair_keys, pair_vals = work["empty_keys"], work["empty_vals"]
     npairs = 0
     sparse_flag = 0
 
@@ -402,7 +476,8 @@ def install(force: bool = False, threshold: int = INT64_THRESHOLD) -> bool:
 
   def dispatch(m, d, ctx):
     # 稀疏表启用时必须走 int64 扫掠：原生扫掠会读已被替换掉的稠密表。
-    if force or _SPARSE["np_keys"] is not None or d.nworld * m.ngeom >= threshold:
+    if force or sparse_available(m) or (getattr(m, "_lgdog_sap_i64", False)
+                                      and d.nworld * m.ngeom >= threshold):
       return sap_broadphase_i64(m, d, ctx)
     return state["original"](m, d, ctx)
 

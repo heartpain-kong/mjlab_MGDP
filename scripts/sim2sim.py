@@ -571,6 +571,10 @@ def run(args) -> int:
   onnx_meta = sess.get_modelmeta().custom_metadata_map
   mgdp = "perception" in meta["env_cfg"].observations
   if mgdp:
+    import json
+    from src.mgdp_checkpoint import restore_sensing_contract
+    sensing = onnx_meta.get("mgdp_sensing")
+    restore_sensing_contract(meta["env_cfg"], {"sensing": json.loads(sensing)} if sensing else None)
     from src.mgdp_deployment import MGDPPolicyInput, file_digest
     architecture = onnx_meta.get("policy_architecture")
     if architecture == "lgdog_mgdp_v1":
@@ -591,7 +595,8 @@ def run(args) -> int:
       checkpoint = Path(args.perception)
       history_length = meta["env_cfg"].observations["actor"].history_length
     sensor_cfg = next(s for s in meta["env_cfg"].scene.sensors if s.name == "depth_rays")
-    history = MGDPPolicyInput(model, sensor_cfg, checkpoint, history_length)
+    history = MGDPPolicyInput(model, sensor_cfg, checkpoint, history_length,
+                             onnx_meta.get("mgdp_inference_precision", "fp32"))
     expected = history_length * 47 + history.module.cfg.gru_hidden
     if len(in_shape) != 2 or in_shape[1] != expected:
       raise ValueError(f"MGDP policy shape {in_shape} does not match {expected}")

@@ -1,0 +1,129 @@
+{
+  "cell_size": [
+    12,
+    8
+  ],
+  "route": [
+    [
+      0.0,
+      0.0
+    ],
+    [
+      0.65,
+      -0.6
+    ],
+    [
+      1.4,
+      0.02
+    ],
+    [
+      2.3,
+      -1.22
+    ],
+    [
+      3.2,
+      0.02
+    ],
+    [
+      4.1,
+      -1.22
+    ],
+    [
+      4.85,
+      -1.22
+    ],
+    [
+      4.85,
+      -0.08
+    ],
+    [
+      3.5,
+      -0.08
+    ],
+    [
+      3.5,
+      0.3
+    ],
+    [
+      4.7,
+      1.2
+    ],
+    [
+      4.1,
+      1.95
+    ],
+    [
+      4.1,
+      2.4
+    ],
+    [
+      5.4,
+      2.4
+    ],
+    [
+      6.0,
+      1.4
+    ],
+    [
+      6.0,
+      0.15
+    ]
+  ],
+  "route_length_m": 16.700901117893974,
+  "wall_heights_cm": [
+    10,
+    12,
+    15,
+    18,
+    21,
+    25,
+    30,
+    35
+  ],
+  "stone_stagger_m": 0.3,
+  "gap_sequence": [
+    "stairs",
+    "gap",
+    "downslope",
+    "upslope",
+    "gap",
+    "downstairs"
+  ],
+  "stone_competition_stage": {
+    "display_stage": 6,
+    "internal_level": 5,
+    "top_size_m": [
+      0.2,
+      0.2
+    ],
+    "height_m": 0.1,
+    "same_row_clear_gap_m": 0.4,
+    "lateral_clear_gap_m": 0.2,
+    "longitudinal_stagger_m": 0.3,
+    "platform_size_m": [
+      0.8,
+      0.8
+    ]
+  },
+  "stone_stage_widths_m": [
+    0.36,
+    0.32,
+    0.28,
+    0.25,
+    0.22,
+    0.2,
+    0.18,
+    0.16
+  ],
+  "stone_stage_heights_m": [
+    0.02,
+    0.03,
+    0.04,
+    0.06,
+    0.08,
+    0.1,
+    0.12,
+    0.15
+  ],
+  "stone_stage_dimensions_fixed_within_row": true
+}

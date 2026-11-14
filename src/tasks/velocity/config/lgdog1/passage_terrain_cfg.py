@@ -20,6 +20,8 @@ GOAL_X = 5.3
 LANE_HALF_WIDTH = 0.28
 LAYOUT_VERSION = 7  # Remove separate pit/slalom/old rough; add two heightfield lessons.
 BEAM_EDGE_GAP = 0.4
+WALL_CENTRES = (2.3, 3.7, 5.1)
+WALL_HALF_THICKNESS = .04
 
 
 def _lateral_lanes(size_y, width, gap):
@@ -56,6 +58,18 @@ class PassageTerrainCfg(SubTerrainCfg):
   # Included in checkpoint fingerprints, even when the dataclass shape and
   # terrain dimensions otherwise look the same as the old implementation.
   layout_version: int = LAYOUT_VERSION
+
+  def wall_parameters(self, difficulty):
+    return WALL_CENTRES, .04 + .26 * difficulty
+
+  def gap_entry_style(self):
+    return "ramp"
+
+  def stone_stagger(self, difficulty):
+    return .3*difficulty
+
+  def stone_parameters(self, difficulty):
+    return .02+.08*difficulty, .36-.16*difficulty
 
   def _heightfield(self, difficulty, spec, rng):
     """Use native mjlab generators, adding passage entry/exit landing pads."""
@@ -132,13 +146,13 @@ class PassageTerrainCfg(SubTerrainCfg):
       box("lesson_floor", self.size[0]/2,cy,self.size[0]/2,self.size[1]/2,
           0.,-.1,color=(.55,.55,.55,1.))
     if self.kind == "stepping_stones":
-      height, width = .02+.08*d, .36-.16*d
+      height, width = self.stone_parameters(d)
       for lane,y in _lateral_lanes(self.size[1],.8,.2):
         box(f"stones_entry_{lane}",1.8,y,.4,.4,height)
         box(f"stones_exit_{lane}",6.3,y,.4,.4,height)
         for row in range(2):
           # Repeat the reference unit along X, then repeat paired lanes along Y.
-          for i,x in enumerate(2.4+row*.3*d+np.arange(6)*.6):
+          for i,x in enumerate(2.4+row*self.stone_stagger(d)+np.arange(6)*.6):
             box(f"stone_{lane}_{row}_{i}",float(x),y+(1 if row==0 else -1)*.2,
                 width/2,width/2,height)
     elif self.kind == "balance_beam":
@@ -147,18 +161,27 @@ class PassageTerrainCfg(SubTerrainCfg):
         box(f"beam_lane_{lane}",4.,y,1.5,width/2,.02+.08*d)
     elif self.kind == "gap_steps":
       height, ramp_length, gap = .06+.30*d, .8+.189092*d, .04+.32*d
-      # Solid wedge, two 80cm platforms and two descending 32cm treads.
+      # Same platforms/gap/descent for ramp and three-step ascent variants.
       x0, half_width = 2., .4
-      mesh = spec.add_mesh(name=prefix+"ramp", uservert=[
-        x0,-half_width,0, x0,half_width,0,
-        x0+ramp_length,-half_width,0, x0+ramp_length,half_width,0,
-        x0+ramp_length,-half_width,height, x0+ramp_length,half_width,height])
+      style = self.gap_entry_style()
+      if style not in ("ramp", "stairs"):
+        raise ValueError("Gap entry style must be ramp or stairs")
+      if style == "ramp":
+        mesh = spec.add_mesh(name=prefix+"ramp", uservert=[
+          x0,-half_width,0, x0,half_width,0,
+          x0+ramp_length,-half_width,0, x0+ramp_length,half_width,0,
+          x0+ramp_length,-half_width,height, x0+ramp_length,half_width,height])
       platform0, platform1 = x0+ramp_length, x0+ramp_length+.8+gap
       for lane,y in _lateral_lanes(self.size[1],.8,0.):
         # Touching side faces form a continuous-width obstacle; share one mesh.
-        ramp = body.add_geom(name=prefix+f"gap_ramp_{lane}",type=mujoco.mjtGeom.mjGEOM_MESH,
-          meshname=mesh.name,pos=(0,y,0),rgba=green,contype=1,conaffinity=1)
-        geoms.append(TerrainGeometry(geom=ramp))
+        if style == "ramp":
+          ramp = body.add_geom(name=prefix+f"gap_ramp_{lane}",type=mujoco.mjtGeom.mjGEOM_MESH,
+            meshname=mesh.name,pos=(0,y,0),rgba=green,contype=1,conaffinity=1)
+          geoms.append(TerrainGeometry(geom=ramp))
+        else:
+          tread = ramp_length/3
+          for i in range(3):
+            box(f"gap_rise_{lane}_{i}",x0+(i+.5)*tread,y,tread/2,.4,height*(i+1)/3)
         box(f"gap_platform0_{lane}",platform0+.4,y,.4,.4,height)
         box(f"gap_platform1_{lane}",platform1+.4,y,.4,.4,height)
         for i in range(2):
@@ -192,9 +215,10 @@ class PassageTerrainCfg(SubTerrainCfg):
       # Three hurdles with room to land between them; repeat the reference
       # 0.8m wall across the cell rather than leaving an empty lateral field.
       half_lanes = int(np.floor((cy-.8)/.8+1e-8))
-      for i,x in enumerate((2.3,3.7,5.1)):
+      centres, height = self.wall_parameters(d)
+      for i,x in enumerate(centres):
         for j in range(-half_lanes,half_lanes+1):
-          box(f"high_wall_{i}_{j}",x,cy+j*.8,.04,.4,.04+.26*d)
+          box(f"high_wall_{i}_{j}",x,cy+j*.8,WALL_HALF_THICKNESS,.4,height)
     elif self.kind in ("clearance_frame", "tire_array"):
       if self.kind == "clearance_frame":
         half_lanes = int(np.floor((cy-.82)/1.))
@@ -209,6 +233,106 @@ class PassageTerrainCfg(SubTerrainCfg):
         source = TireArrayTerrainCfg(size=self.size,rows=rows,cols=6,center_x=3.75,
                                      height=.025+.14*d)
       geoms = list(source.function(d,spec,rng).geometries)
+    return TerrainOutput(origin=np.array([START_X,cy,0.]),geometries=geoms)
+
+
+@dataclass(kw_only=True)
+class WallSkillTerrainCfg(PassageTerrainCfg):
+  """Eight auxiliary training stages; the original terrain stays unchanged."""
+  kind: str = "high_wall"
+  heights: tuple[float, ...] = (.10, .12, .15, .18, .21, .25, .30, .35)
+  counts: tuple[int, ...] = (1, 1, 1, 2, 2, 3, 3, 3)
+  skill_version: int = 3
+
+  def wall_parameters(self, difficulty):
+    if (self.kind != "high_wall" or len(self.heights) != 8 or len(self.counts) != 8
+        or any(h <= 0 for h in self.heights) or any(n not in (1,2,3) for n in self.counts)):
+      raise ValueError("Invalid eight-stage high-wall training course")
+    stage = min(7, int(float(np.clip(difficulty, 0., 1.)) * 8))
+    return WALL_CENTRES[:self.counts[stage]], self.heights[stage]
+
+
+@dataclass(kw_only=True)
+class GapSkillTerrainCfg(PassageTerrainCfg):
+  """Paired same-row gap dimensions; only the ascent shape differs."""
+  kind: str = "gap_steps"
+  entry_style: str = "ramp"
+  skill_version: int = 2
+
+  def gap_entry_style(self):
+    return self.entry_style
+
+  def function(self, difficulty, spec, rng):
+    # The generator jitters difficulty independently for every cell. Quantizing
+    # both variants to the same eight stages keeps SAME-ROW height/gap identical.
+    stage = min(7, int(float(np.clip(difficulty, 0., 1.))*8))
+    return super().function(stage/7, spec, rng)
+
+
+@dataclass(kw_only=True)
+class StrictStonesTerrainCfg(PassageTerrainCfg):
+  """Competition dimensions at stage six, then two harder stages."""
+  kind: str = "stepping_stones"
+  skill_version: int = 4
+  widths: tuple[float, ...] = (.36, .32, .28, .25, .22, .20, .18, .16)
+  heights: tuple[float, ...] = (.02, .03, .04, .06, .08, .10, .12, .15)
+
+  def stone_parameters(self, difficulty):
+    if len(self.widths) != 8 or len(self.heights) != 8:
+      raise ValueError("The stone curriculum requires eight width/height stages")
+    # Ignore row jitter: stage n-2 is the fixed competition reference, while
+    # the last two rows provide smaller landing areas and higher steps.
+    stage = min(7, int(float(np.clip(difficulty, 0., 1.))*8))
+    return self.heights[stage], self.widths[stage]
+
+  def stone_stagger(self, difficulty):
+    # Half of the 60cm longitudinal pitch, even at the easiest stage.
+    return .3
+
+
+@dataclass(kw_only=True)
+class CombinedGapTerrainCfg(PassageTerrainCfg):
+  """ONE cell: stairs-gap-downslope, connector, upslope-gap-downstairs."""
+  kind: str = "gap_steps"
+  skill_version: int = 3
+  connector_length: float = .8
+
+  def gap_parameters(self, difficulty):
+    stage=min(7,int(float(np.clip(difficulty,0.,1.))*8));d=stage/7
+    height,length,gap=.06+.30*d,.8+.189092*d,.04+.32*d
+    return height,length,gap,length/3,.32
+
+  def function(self, difficulty, spec, rng):
+    if self.size[0] < 12 or self.size[1] < 6:
+      raise ValueError("The combined gap lesson requires a cell of at least 12x6m")
+    height,length,gap,up_tread,down_tread=self.gap_parameters(difficulty)
+    body=spec.body('terrain');geoms=[];prefix=f'combined_gap_{len(body.geoms)}_'
+    cy=self.size[1]/2;green=(.35,.62,.20,1.)
+    def box(name,x,y,sx,sy,top,bottom=0.):
+      g=body.add_geom(name=prefix+name,type=mujoco.mjtGeom.mjGEOM_BOX,
+        pos=(x,y,(top+bottom)/2),size=(sx,sy,(top-bottom)/2),rgba=green,contype=1,conaffinity=1)
+      geoms.append(TerrainGeometry(geom=g))
+    box('floor',self.size[0]/2,cy,self.size[0]/2,self.size[1]/2,0.,-.1)
+    def ramp(name,x,y,down=False):
+      top_x=x if down else x+length
+      mesh=spec.add_mesh(name=prefix+name+'_mesh',uservert=[
+        x,-.4,0.,x,.4,0.,x+length,-.4,0.,x+length,.4,0.,top_x,-.4,height,top_x,.4,height])
+      g=body.add_geom(name=prefix+name,type=mujoco.mjtGeom.mjGEOM_MESH,
+        meshname=mesh.name,pos=(0.,y,0.),rgba=green,contype=1,conaffinity=1)
+      geoms.append(TerrainGeometry(geom=g))
+    first=2.;first_top=first+3*up_tread;first_after=first_top+.8+gap
+    first_end=first_after+.8+length;second=first_end+self.connector_length
+    second_top=second+length;second_after=second_top+.8+gap
+    for lane,y in _lateral_lanes(self.size[1],.8,0.):
+      for i in range(3):
+        box(f'first_rise_{lane}_{i}',first+(i+.5)*up_tread,y,up_tread/2,.4,height*(i+1)/3)
+      for name,x in [('first_platform0',first_top),('first_platform1',first_after),
+                     ('second_platform0',second_top),('second_platform1',second_after)]:
+        box(f'{name}_{lane}',x+.4,y,.4,.4,height)
+      ramp(f'first_downslope_{lane}',first_after+.8,y,down=True)
+      ramp(f'second_upslope_{lane}',second,y)
+      for i in range(2):
+        box(f'second_tread_{lane}_{i}',second_after+.8+(i+.5)*down_tread,y,down_tread/2,.4,height*(2-i)/3)
     return TerrainOutput(origin=np.array([START_X,cy,0.]),geometries=geoms)
 
 

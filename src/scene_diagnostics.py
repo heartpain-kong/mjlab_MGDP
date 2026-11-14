@@ -58,13 +58,14 @@ def report_scene_initialization(env_cfg):
           "compiling model and allocating physics buffers...", flush=True)
     print(f"[init] Native MJWarp dense-pair index estimate={sizes['pair_index_bytes']/gib:.2f} GiB host; "
           f"geom poses={sizes['geom_pose_bytes']/gib:.2f} GiB device. "
-          f"Retained pair lookup={sizes['pair_lookup_bytes']/gib:.2f} GiB host/device. "
-          "Streaming mode avoids native full indices; estimates exclude other allocations.", flush=True)
-    print(f"[init] Device budget: pair lookup + geom poses + all-geom BVH leaves "
+          f"Native dense pair lookup={sizes['pair_lookup_bytes']/gib:.2f} GiB host/device. "
+          "Verified sparse mode avoids both; actual path is logged separately.", flush=True)
+    print(f"[init] Native device subtotal: pair lookup + geom poses + all-geom BVH leaves "
           f"~{sizes['device_subtotal_bytes']/gib:.2f} GiB "
           f"(BVH leaves ~{sizes['bvh_leaf_bytes']/gib:.2f} GiB). "
           "Excludes BVH tree/scratch, other physics buffers, domain randomization, "
-          "policy and other GPU processes; this is not a total/peak estimate.", flush=True)
+          "policy and other GPU processes; this is not a total/peak estimate. "
+          "Static ray-only BVHs can share leaves/tree across worlds; geom poses remain per-world.", flush=True)
 
   env_cfg.scene.spec_fn = report
   try:

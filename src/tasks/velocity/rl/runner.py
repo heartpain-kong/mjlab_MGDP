@@ -73,6 +73,8 @@ class PPOHIMRunner(MjlabOnPolicyRunner):
 
   def save(self, path: str, infos=None):
     infos = {**(infos or {})}
+    if getattr(self, "_mgdp_warm_start", None) is not None:
+      infos["mgdp_warm_start"] = self._mgdp_warm_start
     from src.mgdp_checkpoint import save_encoder_contract
     perception = save_encoder_contract(self.env.unwrapped, Path(path).parent)
     if perception is not None:
@@ -114,6 +116,8 @@ class PPOHIMRunner(MjlabOnPolicyRunner):
         raise ValueError("定向越障 v2 不能完整续训旧 MGDP：缺少通过率课程状态，请创建新训练")
       passage.load_state_dict(state)
     infos = super().load(path, load_cfg, strict, map_location)
+    if infos and "mgdp_warm_start" in infos:
+      self._mgdp_warm_start = infos["mgdp_warm_start"]
     if passage is not None:
       with torch.inference_mode():
         self.env.reset()
@@ -169,6 +173,8 @@ class PPOHIMRunner(MjlabOnPolicyRunner):
         "control_dt": str(self.env.unwrapped.step_dt),
       })
     elif "perception" in self.env.unwrapped.cfg.observations:
+      import json
+      from src.mgdp_checkpoint import sensing_contract
       from src.mgdp_deployment import file_digest
       state = getattr(self.env.unwrapped, "_mgdp_perception_state", None)
       if state is None:
@@ -183,6 +189,8 @@ class PPOHIMRunner(MjlabOnPolicyRunner):
         "history_order": "term_major_oldest_to_newest",
         "perception_checkpoint": sidecar.name,
         "perception_sha256": file_digest(sidecar),
+        "mgdp_sensing": json.dumps(sensing_contract(self.env.unwrapped.cfg), sort_keys=True),
+        "mgdp_inference_precision": self.env.unwrapped.cfg.observations["perception"].terms["depth_feature"].params.get("inference_precision", "fp32"),
         "control_dt": str(self.env.unwrapped.step_dt),
       })
     else:

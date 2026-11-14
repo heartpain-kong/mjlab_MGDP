@@ -1,5 +1,8 @@
 # MGDP 迁移到 mjlab：训练说明
 
+2026-11-12：静态地形共享 BVH、稀疏碰撞配对、旧策略传感器兼容及服务器检查命令，见
+[MGDP 后端重构说明](MGDP_REFACTOR_2026-11-12.md)。新训练先重新预训练地形感知编码器。
+
 把 [MGDP](https://github.com/arclab-hku/MGDP)（Advanced Science 2026）的**感知部分**迁到 mjlab/LgDog1，
 在 MuJoCo Warp 上训练「深度感知 + 本体历史」的足式速度策略。
 

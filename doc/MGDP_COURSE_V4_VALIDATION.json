@@ -1,0 +1,242 @@
+{
+  "release": "mgdp_course_v4_20261115",
+  "task": "LgDog1-Race-MGDP-WallTraining",
+  "experiment": "lgdog1_velocity_race_mgdp_wall_v4",
+  "stages": 8,
+  "competition_display_stage": 6,
+  "competition_internal_level": 5,
+  "default_grid": [
+    8,
+    20
+  ],
+  "cell_size_m": [
+    12,
+    8
+  ],
+  "reference_xml": "src/assets/terrains/race_obstacle_2027.xml",
+  "reference_sha256": "f1e0d56fc1c536818e96b7d93ebaf9719613d5d581ada5ad53b350fd84703feb",
+  "competition_units_validated": [
+    "stepping_stones",
+    "balance_beam",
+    "gap_steps",
+    "high_wall",
+    "clearance_frame",
+    "tire_array",
+    "slalom_posts",
+    "brick_pit"
+  ],
+  "synthetic_training_references": [
+    "random_hills",
+    "mjlab_rough"
+  ],
+  "flat_is_unchanged": true,
+  "geometry_notes": [
+    "Training repeats reference units; it does not reproduce the complete arena layout.",
+    "Tires reuse all 48 convex sectors of the reference mesh; pit copies all reference solid boxes.",
+    "Gap modules use the reference platform, gap, step and wedge dimensions, with the requested stairs/ramp sequence."
+  ],
+  "stage_parameters": {
+    "wall_heights_m": [
+      0.1,
+      0.12,
+      0.15,
+      0.18,
+      0.24,
+      0.3,
+      0.35,
+      0.4
+    ],
+    "stone_widths_m": [
+      0.36,
+      0.32,
+      0.28,
+      0.25,
+      0.22,
+      0.2,
+      0.18,
+      0.16
+    ],
+    "stone_heights_m": [
+      0.02,
+      0.03,
+      0.04,
+      0.06,
+      0.08,
+      0.1,
+      0.12,
+      0.15
+    ],
+    "beam_widths_m": [
+      0.7,
+      0.64,
+      0.58,
+      0.52,
+      0.46,
+      0.4,
+      0.35,
+      0.3
+    ],
+    "beam_heights_m": [
+      0.02,
+      0.03,
+      0.04,
+      0.06,
+      0.08,
+      0.1,
+      0.12,
+      0.15
+    ],
+    "gap_platform_heights_m": [
+      0.06,
+      0.1,
+      0.16,
+      0.22,
+      0.3,
+      0.36,
+      0.42,
+      0.48
+    ],
+    "gap_widths_m": [
+      0.04,
+      0.08,
+      0.14,
+      0.22,
+      0.3,
+      0.36,
+      0.42,
+      0.48
+    ],
+    "frame_clearances_m": [
+      0.44,
+      0.41,
+      0.38,
+      0.35,
+      0.32,
+      0.29,
+      0.27,
+      0.25
+    ],
+    "tire_heights_m": [
+      0.025,
+      0.05,
+      0.08,
+      0.11,
+      0.14,
+      0.165,
+      0.19,
+      0.22
+    ],
+    "post_diameters_m": [
+      0.05,
+      0.06,
+      0.07,
+      0.08,
+      0.09,
+      0.1,
+      0.115,
+      0.13
+    ],
+    "post_heights_m": [
+      0.03,
+      0.04,
+      0.05,
+      0.065,
+      0.08,
+      0.1,
+      0.13,
+      0.16
+    ],
+    "pit_height_scales": [
+      0.2,
+      0.35,
+      0.5,
+      0.65,
+      0.85,
+      1.0,
+      1.2,
+      1.4
+    ],
+    "competition_display_stage": 6,
+    "random_hills_amplitudes_m": [
+      0.025,
+      0.06,
+      0.095,
+      0.13,
+      0.16499999999999998,
+      0.19999999999999998,
+      0.25,
+      0.3
+    ],
+    "rough_amplitudes_m": [
+      0.02,
+      0.036000000000000004,
+      0.052000000000000005,
+      0.068,
+      0.084,
+      0.1,
+      0.125,
+      0.15
+    ]
+  },
+  "route_geometry": {
+    "old_nominal_at_max_radius": {
+      "sampled_poses": 20496,
+      "minimum_clearance_m": -0.03158994244373369,
+      "worst_root_xy_yaw": [
+        3.9,
+        0.23333333333333317,
+        2.553590050042226
+      ],
+      "translation_tracking_radius_m": 0.0,
+      "heading_error_rad": 0.0,
+      "turning_root_radius_m": null
+    },
+    "new_with_tracking_and_turning": {
+      "sampled_poses": 31176,
+      "minimum_clearance_m": 0.035470905951947684,
+      "worst_root_xy_yaw": [
+        4.236568542494924,
+        0.753431457505076,
+        0.7635011087932843
+      ],
+      "translation_tracking_radius_m": 0.08,
+      "heading_error_rad": 0.12,
+      "turning_root_radius_m": 0.06
+    },
+    "maximum_post_radius_m": 0.065
+  },
+  "tests": {
+    "passed": 380,
+    "skipped": 5,
+    "subtests_passed": 127,
+    "log": ".artifacts/mgdp-course-v4-full-tests.log"
+  },
+  "cpu_ppo": {
+    "device": "cpu",
+    "envs": 10,
+    "grid": [
+      8,
+      10
+    ],
+    "cell_size": [
+      12,
+      8
+    ],
+    "lessons": 10,
+    "transfer_iterations": 2,
+    "resume_iterations": 1,
+    "source_iteration": 18200,
+    "encoder_matched": true,
+    "checkpoint": "E:\\mjlab\\work\\mgdp-course-v4-validation\\transfer\\model_1.pt",
+    "new_contact_history_sensor_constructed": true,
+    "projection_termination_constructed": true,
+    "onnx_exported": true,
+    "jit_exported": true,
+    "gpu_training_validated": false,
+    "convergence_validated": false
+  },
+  "legacy_task_preserved": true,
+  "gpu_training_validated": false,
+  "convergence_validated": false,
+  "gpu_peak_memory_validated": false
+}

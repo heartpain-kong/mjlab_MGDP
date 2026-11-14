@@ -101,3 +101,24 @@ def trace_cuda_initialization(device, directory):
       replace(Simulation, "create_graph", "simulation-graphs")
       with trace.phase("environment-construction"):
         yield
+
+
+@contextmanager
+def trace_cuda_execution(device, directory):
+  """Optional sync boundaries around execution, outside graph capture.
+
+  In particular reset launches forward before sensing; report a failing forward
+  here instead of attributing its pending error to the next Torch ray operation.
+  """
+  if not str(device).startswith("cuda"):
+    yield
+    return
+  from mjlab.sim import Simulation
+  with _TRACE_LOCK:
+    trace = InitializationTrace(device, directory)
+    with ExitStack() as stack:
+      for attribute in ("forward", "step", "sense"):
+        original = getattr(Simulation, attribute)
+        stack.callback(setattr, Simulation, attribute, original)
+        setattr(Simulation, attribute, trace.wrap("runtime-" + attribute, original))
+      yield

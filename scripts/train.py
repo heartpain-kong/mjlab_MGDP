@@ -46,6 +46,8 @@ class TrainConfig:
   video_interval: int = 2000
   enable_nan_guard: bool = False
   optimize_vram: bool = True
+  collision_mode: Literal["auto", "sap"] = "auto"
+  active_kinematics: bool = True
   terrain_num_rows: int | None = None
   terrain_num_cols: int | None = None
   terrain_difficulty_max: float | None = None
@@ -60,7 +62,11 @@ class TrainConfig:
   velocity_min_abs: float | None = None
   velocity_max_abs: float | None = None
   resume_checkpoint: str | None = None
+  warm_start_checkpoint: str | None = None
   perception_checkpoint: str | None = None
+  perception_execution: Literal["eager", "cuda_graph"] | None = None
+  perception_precision: Literal["fp32", "bf16"] | None = None
+  perception_batch_size: int | None = None
   torchrunx_log_dir: str | None = None
   gpu_ids: list[int] | Literal["all"] | None = field(default_factory=lambda: [0])
 
@@ -88,6 +94,9 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
 
   configure_torch_backends()
 
+  if cfg.warm_start_checkpoint is not None and cfg.agent.resume:
+    raise ValueError("Choose either policy warm-start or full resume, not both")
+
   cfg.agent.seed = seed
   cfg.env.seed = seed
 
@@ -114,6 +123,13 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
       lower, _ = generator.difficulty_range
       generator.difficulty_range = (lower, float(cfg.terrain_difficulty_max))
       print(f"[INFO] Terrain difficulty range: {generator.difficulty_range}")
+
+  from src.tasks.velocity.config.lgdog1.passage_terrain_cfg import WallSkillTerrainCfg
+  if terrain is not None and terrain.terrain_generator is not None:
+    generator = terrain.terrain_generator
+    if isinstance(generator.sub_terrains.get("high_wall"), WallSkillTerrainCfg):
+      if generator.num_rows != 8 or tuple(generator.difficulty_range) != (0., 1.):
+        raise ValueError("高墙渐进课程固定8行、难度范围0到1；请使用 --terrain-num-rows=8")
 
   if cfg.terrain_curriculum != "manual" and int(os.environ.get("WORLD_SIZE", "1")) > 1:
     raise ValueError("当前自动地形课程仅支持单GPU；多GPU训练请使用 manual")
@@ -202,18 +218,29 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
       resume_path = get_checkpoint_path(log_root_path, cfg.agent.load_run, cfg.agent.load_checkpoint)
     from src.mgdp_checkpoint import bind_checkpoint_encoder
     bind_checkpoint_encoder(cfg.env, resume_path, cfg.perception_checkpoint)
+  elif cfg.warm_start_checkpoint is not None:
+    from src.mgdp_checkpoint import bind_checkpoint_encoder
+    bind_checkpoint_encoder(cfg.env, Path(cfg.warm_start_checkpoint), cfg.perception_checkpoint)
   elif cfg.perception_checkpoint is not None:
     if "perception" not in cfg.env.observations:
       raise ValueError("当前任务不使用MGDP感知模型")
     cfg.env.observations["perception"].terms["depth_feature"].params["checkpoint"] = cfg.perception_checkpoint
 
+  from src.tasks.velocity.mdp.mgdp_inference import configure_perception_runtime
+  configure_perception_runtime(cfg.env, cfg.perception_execution,
+                               cfg.perception_precision, cfg.perception_batch_size)
+  if "perception" in cfg.env.observations:
+    params = cfg.env.observations["perception"].terms["depth_feature"].params
+    print(f"[speed] MGDP inference: execution={params.get('inference_execution', 'eager')}, "
+          f"precision={params.get('inference_precision', 'fp32')}, "
+          f"batch={params.get('inference_batch_size', 256)}; full-batch GRU", flush=True)
   grid = cfg.env.scene.terrain.terrain_generator if cfg.env.scene.terrain else None
   if grid is not None:
     print(f"[init] building terrain {grid.num_rows}x{grid.num_cols}, "
           f"envs={cfg.env.scene.num_envs}...", flush=True)
   init_record_dir = (log_dir / f"cuda_init_rank{rank}"
                      if int(os.environ.get("WORLD_SIZE", "1")) > 1 else log_dir)
-  with report_scene_initialization(cfg.env), compact_model_allocations(cfg.optimize_vram), \
+  with report_scene_initialization(cfg.env), compact_model_allocations(cfg.optimize_vram, cfg.collision_mode, cfg.active_kinematics), \
        trace_cuda_initialization(device, init_record_dir):
     env = ManagerBasedRlEnv(
       cfg=cfg.env, device=device, render_mode="rgb_array" if cfg.video else None
@@ -254,6 +281,9 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
   if resume_path is not None:
     print(f"[INFO]: Loading model checkpoint from: {resume_path}")
     runner.load(str(resume_path))
+  elif cfg.warm_start_checkpoint is not None:
+    from src.mgdp_warmstart import warm_start_mgdp_policy
+    warm_start_mgdp_policy(runner, cfg.warm_start_checkpoint)
 
   # Only write config files from rank 0 to avoid race conditions.
   if rank == 0:

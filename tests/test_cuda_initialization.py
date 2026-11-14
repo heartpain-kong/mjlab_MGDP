@@ -6,11 +6,27 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from src.cuda_initialization import InitializationTrace, trace_cuda_initialization
+from src.cuda_initialization import InitializationTrace, trace_cuda_initialization, trace_cuda_execution
 from src.scene_diagnostics import report_device_memory, scene_memory_estimates
 
 
 class CUDAInitializationTests(unittest.TestCase):
+  def test_execution_trace_attributes_forward_error_before_sensing(self):
+    from mjlab.sim import Simulation
+    original = (Simulation.forward, Simulation.step, Simulation.sense)
+    def forward(_self):
+      raise RuntimeError("first forward graph access")
+    with tempfile.TemporaryDirectory() as directory, \
+         patch("src.cuda_initialization.report_device_memory"), \
+         patch.object(Simulation, "forward", forward):
+      with self.assertRaisesRegex(RuntimeError, "first forward graph"):
+        with trace_cuda_execution("cuda:0", directory):
+          Simulation.forward(None)
+      record = json.loads((Path(directory)/"init_error.json").read_text(encoding="utf-8"))
+      self.assertEqual(record["phase"], "runtime-forward")
+      self.assertIs(Simulation.forward, forward)
+    self.assertEqual((Simulation.forward, Simulation.step, Simulation.sense), original)
+
   def test_nested_error_record_keeps_specific_stage_and_original_exception(self):
     with tempfile.TemporaryDirectory() as directory, \
          patch("src.cuda_initialization.report_device_memory"):

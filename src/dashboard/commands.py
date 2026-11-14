@@ -129,6 +129,9 @@ def build_command(root, python, options):
     terrain_difficulty = str(options.get("terrain_difficulty_max") or "").strip()
     if terrain_difficulty:
       terrain_difficulty = number(terrain_difficulty, "最大地形难度倍率", 0.5, 1.5)
+    if task["id"] == "LgDog1-Race-MGDP-WallTraining":
+      if terrain_rows != 8 or (terrain_difficulty != "" and terrain_difficulty != 1.):
+        raise ValueError("高墙渐进课程固定8行、难度倍率1；请保留八阶段训练布局")
     velocity_min = str(options.get("velocity_min_abs") or "").strip()
     if velocity_min:
       velocity_min = number(velocity_min, "最低速度绝对值", 0.05, 3.0)
@@ -163,7 +166,8 @@ def build_command(root, python, options):
       raise ValueError("实验名只能使用 1–80 位英文字母、数字、下划线、点和短横线")
     argv = [str(python), str(scripts / "train.py"), task["id"],
             f"--env.scene.num-envs={envs}", f"--agent.max-iterations={iterations}",
-            "--agent.logger=tensorboard", f"--agent.seed={seed}", "--enable-nan-guard", "True"]
+            "--agent.logger=tensorboard", f"--agent.seed={seed}", "--enable-nan-guard",
+            "True" if options.get("enable_nan_guard") is True else "False"]
     argv += curriculum_flags
     if options.get("optimize_vram") is False:
       argv.append("--optimize-vram=False")

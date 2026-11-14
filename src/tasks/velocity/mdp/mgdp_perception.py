@@ -258,6 +258,7 @@ class MGPDPerception(nn.Module):
     def __init__(self, cfg: MGPDPerceptionCfg):
         super().__init__()
         self.cfg = cfg
+        self.sensing = None
         self.depth_encoder = ImageEncoder(
             input_channels=cfg.frames, hidden=(32, 64, 96),
             output_channels=cfg.feature_dim, pool=4,
@@ -288,7 +289,8 @@ class MGPDPerception(nn.Module):
         out, hidden = self.memory(token.unsqueeze(1), hidden)
         return out.squeeze(1), hidden
 
-    def feature_batched(self, depth, hidden, batch_size=256):
+    def feature_batched(self, depth, hidden, batch_size=256,
+                        execution="eager", precision="fp32"):
         """Bound frozen inference activation memory without mixing GRU states.
 
         GroupNorm/LayerNorm act within each sample, so environment batches can
@@ -296,16 +298,19 @@ class MGPDPerception(nn.Module):
         """
         if batch_size < 0:
             raise ValueError("inference batch size must be nonnegative")
-        if batch_size == 0 or len(depth) <= batch_size:
-            return self.feature(depth, hidden)
-        features, states = [], []
-        for start in range(0, len(depth), batch_size):
-            end = start + batch_size
-            previous = None if hidden is None else hidden[:, start:end].contiguous()
-            feature, state = self.feature(depth[start:end], previous)
-            features.append(feature)
-            states.append(state)
-        return torch.cat(features, dim=0), torch.cat(states, dim=1)
+        from .mgdp_inference import FrozenDepthRuntime
+        runtime = getattr(self, "_frozen_depth_runtime", None)
+        settings = (execution, precision)
+        if runtime is None or (runtime.execution, runtime.precision) != settings:
+            runtime = FrozenDepthRuntime(self, execution, precision)
+            self._frozen_depth_runtime = runtime
+        chunk = batch_size or len(depth)
+        tokens = [runtime.encode(depth[start:start + chunk])
+                  for start in range(0, len(depth), chunk)]
+        token = tokens[0] if len(tokens) == 1 else torch.cat(tokens, dim=0)
+        # Environments are independent in the batch dimension: run GRU once.
+        out, hidden = self.memory(token.unsqueeze(1), hidden)
+        return out.squeeze(1), hidden
 
     @torch.no_grad()
     def act_feature(self, depth: torch.Tensor, hidden: torch.Tensor | None):
@@ -402,6 +407,8 @@ class MGPDPerception(nn.Module):
         }
         if extra:
             payload.update(extra)
+        if "sensing" not in payload and self.sensing is not None:
+            payload["sensing"] = self.sensing
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         torch.save(payload, path)
@@ -414,6 +421,7 @@ class MGPDPerception(nn.Module):
                 f"{path} is not an mjlab MGDP checkpoint (format={payload.get('format')!r})"
             )
         model = cls(MGPDPerceptionCfg.from_dict(payload["cfg"]))
+        model.sensing = payload.get("sensing")
         model.depth_encoder.load_state_dict(payload["depth_encoder"])
         model.depth_decoder.load_state_dict(payload["depth_decoder"])
         model.height_encoder.load_state_dict(payload["height_encoder"])

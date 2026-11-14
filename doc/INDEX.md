@@ -7,7 +7,13 @@
 | MuJoCo 模型查看、策略回放、比赛场地与键盘控制 | [MUJOCO_USAGE.md](MUJOCO_USAGE.md) |
 | 使用浏览器面板、短命令、了解目录迁移 | [WORKBENCH.md](WORKBENCH.md) |
 | MGDP 定向越障、reward、通过率门控与接触规则 | [MGDP_PASSAGE.md](MGDP_PASSAGE.md) |
+| MGDP 高墙渐进课程、无进展检测、旧策略迁移与原赛道验收 | [MGDP_WALL_TRAINING.md](MGDP_WALL_TRAINING.md) |
+| 高墙基础正奖励进展门控、墙前等待惩罚与真实物理零动作对照 | [MGDP_WALL_PROGRESS_GUARD.md](MGDP_WALL_PROGRESS_GUARD.md) |
+| 所有比赛障碍第6档对齐尺寸、第7/8档强化与完整参数表 | [MGDP_COURSE_V4.md](MGDP_COURSE_V4.md) |
+| 历史 V2 双入口方案（已由 V3 修正） | [MGDP_COURSE_V2.md](MGDP_COURSE_V2.md) |
 | MGDP 深度感知迁移、预训练与训练 | [MGDP_MJLAB.md](MGDP_MJLAB.md) |
+| MGDP 共享静态碰撞 BVH 加速、服务器测速与回退 | [MGDP_SPEED_2026-11-13.md](MGDP_SPEED_2026-11-13.md) |
+| MGDP 二次加速：物理线程裁剪、整批 GRU、CUDA Graph 与 BF16 对照 | [MGDP_SPEED_V2_2026-11-13.md](MGDP_SPEED_V2_2026-11-13.md) |
 | 一个网页看全部：环境 / GPU / 进程 / 轮次 / 日志（总览） | [WEBHUB.md](WEBHUB.md) |
 | 把训练曲线当 K 线看（曲线终端） | [KLINE.md](KLINE.md) |
 | 2027 比赛场地：训练地形 + sim2sim 真场地 | [RACE_COURSE.md](RACE_COURSE.md) |

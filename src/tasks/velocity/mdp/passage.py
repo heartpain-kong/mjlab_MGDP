@@ -102,7 +102,9 @@ def passage_success(env):
 def left_lane(env):
   term = env.command_manager.get_term("twist")
   if hasattr(term,"route_state"):
-    return term.route_state()[2] > term.cfg.lane_half_width
+    width=(term.lane_limits[env.scene.terrain.terrain_types]
+           if hasattr(term,'lane_limits') else term.cfg.lane_half_width)
+    return term.route_state()[2] > width
   xy = term.local_xy()
   return (xy[:, 1].abs() > term.cfg.lane_half_width) | (xy[:, 0] < -.5)
 

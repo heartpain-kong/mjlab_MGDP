@@ -8,6 +8,31 @@ import warnings
 import torch
 
 
+def sensing_contract(env_cfg):
+  """Record actual filters, including None (all groups), by sensor name."""
+  return {sensor.name: (None if sensor.include_geom_groups is None
+                       else list(sensor.include_geom_groups))
+          for sensor in getattr(getattr(env_cfg, "scene", None), "sensors", ()) or ()
+          if hasattr(sensor, "include_geom_groups")}
+
+
+def restore_sensing_contract(env_cfg, contract):
+  filters = contract.get("sensing") if contract else None
+  for sensor in getattr(getattr(env_cfg, "scene", None), "sensors", ()) or ():
+    if not hasattr(sensor, "include_geom_groups"):
+      continue
+    # Pre-refactor defaults were (0,1,2) for terrain_scan and all depth groups.
+    # Preserve that observation even though new runs default to terrain-only.
+    groups = (filters.get(sensor.name) if filters is not None else
+              {"terrain_scan": (0, 1, 2), "depth_rays": None}.get(sensor.name))
+    sensor.include_geom_groups = None if groups is None else tuple(groups)
+  if contract and "perception" in env_cfg.observations:
+    precision = contract.get("inference_precision", "fp32")
+    if precision not in ("fp32", "bf16"):
+      raise ValueError("Invalid MGDP inference precision in checkpoint")
+    env_cfg.observations["perception"].terms["depth_feature"].params["inference_precision"] = precision
+
+
 def file_digest(path):
   digest = hashlib.sha256()
   with Path(path).open("rb") as stream:
@@ -19,6 +44,8 @@ def file_digest(path):
 def encoder_fingerprint(module):
   """Hash tensor values/config, independent of torch.save's zip filename."""
   digest = hashlib.sha256(json.dumps(module.cfg.to_dict(), sort_keys=True).encode())
+  if getattr(module, "sensing", None) is not None:
+    digest.update(json.dumps(module.sensing, sort_keys=True).encode())
   for name, value in sorted(module.state_dict().items()):
     value = value.detach().cpu().contiguous()
     digest.update(json.dumps([name, str(value.dtype), list(value.shape)]).encode())
@@ -41,7 +68,9 @@ def save_encoder_contract(env, directory):
     temporary.replace(path)
   return {"version": 1, "file": path.name, "sha256": file_digest(path),
           "fingerprint": fingerprint, "control_dt": env.step_dt,
-          "history_length": env.cfg.observations["actor"].history_length}
+          "history_length": env.cfg.observations["actor"].history_length,
+          "inference_precision": env.cfg.observations["perception"].terms["depth_feature"].params.get("inference_precision", "fp32"),
+          "sensing": sensing_contract(env.cfg)}
 
 
 def _local_artifact(directory, name):
@@ -108,6 +137,7 @@ def bind_checkpoint_encoder(env_cfg, checkpoint, override=None):
     warnings.warn("旧checkpoint未记录感知指纹，使用显式指定的感知文件；请确认它来自原训练。")
   if not path.is_file():
     raise FileNotFoundError(f"感知权重不存在：{path}")
+  restore_sensing_contract(env_cfg, contract)
   env_cfg.observations["perception"].terms["depth_feature"].params["checkpoint"] = str(path)
   print(f"[INFO] MGDP policy encoder: {path}", flush=True)
   print(f"[INFO] MGDP encoder SHA256: {file_digest(path)}", flush=True)
@@ -126,3 +156,8 @@ def validate_runtime_encoder(env, checkpoint):
     raise ValueError("MGDP policy and current environment control intervals differ")
   if env.cfg.observations["actor"].history_length != contract["history_length"]:
     raise ValueError("MGDP policy and current observation history lengths differ")
+  if "sensing" in contract and sensing_contract(env.cfg) != contract["sensing"]:
+    raise ValueError("MGDP policy and current depth/height sensor filters differ")
+  precision = env.cfg.observations["perception"].terms["depth_feature"].params.get("inference_precision", "fp32")
+  if precision != contract.get("inference_precision", "fp32"):
+    raise ValueError("MGDP policy and current perception precision differ; use a matching checkpoint")

@@ -109,6 +109,47 @@ class StreamingPairTests(unittest.TestCase):
     changed=source.replace("np.triu_indices(mjm.ngeom, k=1)","np.triu_indices(mjm.ngeom, k=0)")
     with self.assertRaisesRegex(ValueError,"source changed"):_replace_pair_block(changed)
 
+  def test_sparse_filtering_never_allocates_dense_lookup_and_preserves_sensor_order(self):
+    with wp.ScopedDevice("cpu"):
+      model = mujoco.MjModel.from_xml_string(XML)
+      native = io.put_model(model)
+      count = model.ngeom * (model.ngeom-1)//2
+      allocate = np.empty
+      def bounded(shape, *args, **kwargs):
+        if shape == (count, 2):
+          raise AssertionError("dense pair lookup allocated")
+        return allocate(shape, *args, **kwargs)
+      fields, opt = NS(), NS()
+      with patch.object(np, "empty", side_effect=bounded):
+        build_collision_pairs(model, fields, opt, types, chunk_size=2, sparse=True)
+      for name in ("nxn_geom_pair_filtered", "nxn_pairid_filtered", "sensor_collision_start_adr"):
+        np.testing.assert_array_equal(getattr(fields, name), getattr(native, name).numpy())
+      self.assertEqual(fields.nxn_pairid.shape, (1,2))
+      self.assertEqual(fields.nsensorcollision, native.nsensorcollision)
+      state = fields._lgdog_sparse_pairs
+      for key, value in zip(state["np_keys"], state["np_vals"]):
+        i, j = divmod(int(key), model.ngeom)
+        index = i * (2*model.ngeom-i-3)//2 + j-1
+        np.testing.assert_array_equal(value, native.nxn_pairid.numpy()[index])
+
+  def test_static_pair_pruning_retains_explicit_and_sensor_only_static_pairs(self):
+    xml = '''<mujoco><worldbody>''' + ''.join(
+      f'<geom name="s{i}" type="sphere" size=".1" pos="{i*.3} 0 0"/>'
+      for i in range(40)) + '''
+      <body pos="0 0 .1"><freejoint/><geom name="robot" size=".1"/></body>
+      </worldbody><contact><pair geom1="s0" geom2="s1"/></contact>
+      <sensor><distance geom1="s2" geom2="s3" cutoff="2"/>
+      <normal geom1="s3" geom2="s2" cutoff="2"/></sensor></mujoco>'''
+    with wp.ScopedDevice("cpu"):
+      model = mujoco.MjModel.from_xml_string(xml)
+      native = io.put_model(model)
+      for chunk in (1, 7, 262144):
+        fields, opt = NS(), NS()
+        build_collision_pairs(model, fields, opt, types, chunk_size=chunk, sparse=True)
+        for name in ("nxn_geom_pair_filtered", "nxn_pairid_filtered", "sensor_collision_start_adr"):
+          np.testing.assert_array_equal(getattr(fields, name), getattr(native, name).numpy())
+        self.assertEqual(fields.nsensorcollision, native.nsensorcollision)
+
   def test_all_broadphase_choices_match_native_pair_construction(self):
     import ast
     function=ast.parse(inspect.getsource(io.put_model)).body[0]

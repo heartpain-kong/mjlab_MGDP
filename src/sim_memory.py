@@ -3,14 +3,14 @@
 MJWarp 3.5.0 builds full int64 geom-pair indices before filtering. Replace only
 that verified source block with chunked construction, retaining its int32 dense
 lookup and all runtime collision fields. Check installed source before enabling.
-Share initial BVH bounds staging and retain contexts for nonvisual DR expansion.
+Share static ray-only terrain BVHs and retain contexts for nonvisual DR expansion.
 """
 
 import ast
 import hashlib
 import inspect
 from contextlib import contextmanager
-from functools import lru_cache
+from functools import lru_cache, partial
 from pathlib import Path
 import threading
 import textwrap
@@ -47,7 +47,12 @@ def _nonvisual_recreate_factory():
       print("[memory] reusing sensor BVH after nonvisual model-field expansion: "
             + ", ".join(sorted(expanded_fields)), flush=True)
       return
-    return original(self, mj_model, expanded_fields)
+    from src._mjwarp_bvh import SHARING_ALLOWED
+    token = SHARING_ALLOWED.set(False)
+    try:
+      return original(self, mj_model, expanded_fields)
+    finally:
+      SHARING_ALLOWED.reset(token)
 
   return recreate
 
@@ -95,13 +100,14 @@ def _replace_pair_block(source):
   return ast.fix_missing_locations(tree)
 
 
-@lru_cache(maxsize=1)
-def _streaming_model_factory():
+@lru_cache(maxsize=2)
+def _streaming_model_factory(sparse=False):
   from mujoco_warp._src import io
   from src._mjwarp_pairs import build_collision_pairs
   try:
     tree = _replace_pair_block(inspect.getsource(io.put_model))
-    namespace = dict(io.put_model.__globals__, _lgdog_build_pairs=build_collision_pairs)
+    namespace = dict(io.put_model.__globals__,
+                     _lgdog_build_pairs=partial(build_collision_pairs, sparse=sparse))
     exec(compile(tree, "<lgdog-streaming-mjwarp-put-model>", "exec"), namespace)
     return namespace["put_model"]
   except (OSError, TypeError, SyntaxError, ValueError):
@@ -139,10 +145,12 @@ def _unused_pair_table_safe():
 
 
 @contextmanager
-def compact_model_allocations(enabled=True):
-  """Scope verified backend adaptations to environment construction only."""
+def compact_model_allocations(enabled=True, collision_mode="auto", active_kinematics=True):
+  """Scope factories to construction; keep model-local runtime dispatch alive."""
   stats = {"unused_pair_bytes_avoided": 0, "streamed_pair_construction": False,
            "bvh_staging_bytes_avoided": 0}
+  if collision_mode not in ("auto", "sap"):
+    raise ValueError("collision_mode must be auto or sap")
   if not enabled:
     yield stats
     return
@@ -153,6 +161,8 @@ def compact_model_allocations(enabled=True):
     pair_safe = _unused_pair_table_safe()
     bvh_factory = _shared_bvh_factory()
     recreate_factory = _nonvisual_recreate_factory()
+    from src._mjwarp_terrain_sensing import context_factory, install_runtime
+    terrain_context_factory = context_factory() if bvh_factory is not None else None
     if not pair_safe:
       try:
         backend = version("mujoco-warp")
@@ -163,13 +173,41 @@ def compact_model_allocations(enabled=True):
     original = mjwarp.put_model
     original_bvh = bvh.build_scene_bvh
     original_recreate = SensorContext.recreate
+    original_context = mjwarp.create_render_context
+    original_put_data, original_make_data = mjwarp.put_data, mjwarp.make_data
+    built_models = {}
 
     def build(*args, **kwargs):
       print("[init] MuJoCo model compiled; building MJWarp model with bounded pair construction...", flush=True)
-      model = _streaming_model_factory()(*args, **kwargs)
+      model = _streaming_model_factory(sparse=sap_installed)(*args, **kwargs)
+      model._lgdog_sap_i64 = sap_installed
+      if active_kinematics:
+        from src._mjwarp_active_kinematics import build as build_active_kinematics
+        host_model = args[0] if args else kwargs.get("mjm")
+        build_active_kinematics(host_model, model)
+      if _mjwarp_sap.sparse_available(model):
+        # Upload outside CUDA graph capture; each model owns its own lookup.
+        _mjwarp_sap._sparse_arrays(model, model.geom_size.device)
+        if collision_mode == "auto":
+          from src._mjwarp_static_collision import build as build_static_collision
+          host_model = args[0] if args else kwargs.get("mjm")
+          build_static_collision(host_model, model)
       stats["streamed_pair_construction"] = True
       stats["unused_pair_bytes_avoided"] += model.ngeom * (model.ngeom-1) * 4
+      host_model = args[0] if args else kwargs.get("mjm")
+      built_models[id(host_model)] = model
       return model
+
+    def prepared_data(factory):
+      def allocate(*args, **kwargs):
+        data = factory(*args, **kwargs)
+        host_model = args[0] if args else kwargs.get("mjm")
+        model = built_models.get(id(host_model))
+        if model is not None and getattr(model, "_lgdog_sap_i64", False):
+          _mjwarp_sap.prepare_workspace(model, data)
+          print("[memory] SAP workspace prepared before CUDA graph capture", flush=True)
+        return data
+      return allocate
 
     def build_bvh(mjm, mjd, rc, nworld):
       result = bvh_factory(mjm, mjd, rc, nworld)
@@ -179,11 +217,20 @@ def compact_model_allocations(enabled=True):
     if pair_safe:
       print("[memory] bounded host pair construction enabled (verified mujoco-warp 3.5.0)", flush=True)
       mjwarp.put_model = build
+      mjwarp.put_data = prepared_data(original_put_data)
+      mjwarp.make_data = prepared_data(original_make_data)
     if bvh_factory is not None:
       print("[memory] shared BVH staging enabled (verified mujoco-warp 3.5.0)", flush=True)
       bvh.build_scene_bvh = build_bvh
     else:
       print("[memory] BVH construction source could not be verified; keeping native BVH staging", flush=True)
+    if terrain_context_factory is not None:
+      install_runtime()
+      mjwarp.create_render_context = terrain_context_factory
+      print("[memory] static terrain ray BVH sharing enabled; cameras/moving geoms keep per-world trees", flush=True)
+    else:
+      print("[memory] static terrain BVH context/ray source could not be verified; "
+            "keeping per-world trees", flush=True)
     if recreate_factory is not None:
       SensorContext.recreate = recreate_factory
     else:
@@ -198,9 +245,10 @@ def compact_model_allocations(enabled=True):
     try:
       yield stats
     finally:
-      # 稀疏 pair 表已经把稠密表换成占位表，补丁必须常驻，否则原生扫掠会越界。
-      if sap_installed and not _mjwarp_sap.sparse_available():
-        _mjwarp_sap.uninstall()
+      # Runtime dispatch must outlive construction and graph recapture. Its
+      # selection is model-owned, so native/disabled models are unaffected.
       mjwarp.put_model = original
       bvh.build_scene_bvh = original_bvh
       SensorContext.recreate = original_recreate
+      mjwarp.create_render_context = original_context
+      mjwarp.put_data, mjwarp.make_data = original_put_data, original_make_data

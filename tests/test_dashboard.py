@@ -48,6 +48,15 @@ class CommandTests(unittest.TestCase):
                             {"mode":"train", "task":"mgdp", "envs":8, "iterations":1})
     self.assertIn("LgDog1-Rough-MGDP", command)
 
+  def test_nan_guard_is_explicit_debug_option(self):
+    for enabled in (False, True):
+      command = build_command(self.root, sys.executable,
+                              {"mode": "train", "enable_nan_guard": enabled})
+      index = command.index("--enable-nan-guard")
+      self.assertEqual(command[index + 1], str(enabled))
+    command = build_command(self.root, sys.executable, {"mode": "train"})
+    self.assertEqual(command[command.index("--enable-nan-guard") + 1], "False")
+
   def test_training_preview_converts_positive_speed_bounds_to_cli_flags(self):
     command = build_command(self.root, sys.executable, {
       "mode": "train", "velocity_min_abs": "0.4", "velocity_max_abs": "0.8",

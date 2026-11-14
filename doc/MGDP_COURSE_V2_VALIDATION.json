@@ -1,0 +1,30 @@
+{
+  "release": "mgdp_course_v2_20261114",
+  "task": "LgDog1-Race-MGDP-WallTraining",
+  "experiment": "lgdog1_velocity_race_mgdp_wall_v2",
+  "default_grid": [8, 22],
+  "minimum_columns": 11,
+  "lessons": 11,
+  "wall_heights_cm": [10, 12, 15, 18, 21, 24, 27, 30],
+  "wall_counts_training": [1, 1, 1, 2, 2, 3, 3, 3],
+  "wall_counts_play": [3, 3, 3, 3, 3, 3, 3, 3],
+  "paired_gap_dimensions_verified_all_8_rows": true,
+  "legacy_ten_lesson_geometry_verified": true,
+  "slalom_route_changed": false,
+  "tests": {"passed": 360, "skipped": 5, "subtests": 127},
+  "test_note": "Initial full run hit an existing PID-file exists-before-write race in a dashboard job test; unchanged full suite rerun passed.",
+  "cpu_ppo": {
+    "envs": 8,
+    "grid": [8, 11],
+    "source_policy_iteration": 18200,
+    "actor_transfer_passed": true,
+    "new_training_iterations": 2,
+    "full_resume_iterations": 1,
+    "onnx_exported": true,
+    "jit_exported": true,
+    "encoder_matched": true
+  },
+  "gpu_training_validated": false,
+  "convergence_validated": false,
+  "validation_logs": [".artifacts/mgdp-course-v2-tests.log", ".artifacts/mgdp-course-v2-full-tests-retry.log", ".artifacts/mgdp-course-v2-ppo.log"]
+}
