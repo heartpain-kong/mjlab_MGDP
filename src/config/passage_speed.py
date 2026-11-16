@@ -38,9 +38,23 @@ def validate_passage_speed_resume(env_cfg,checkpoint):
   if requested!=saved:
     raise ValueError('固定巡航速度或速度模式与检查点不同，不能完整续训；'
                      '请匹配原速度设置，或用--warm-start-checkpoint迁移策略后新建课程')
+  state=(checkpoint.get('infos') or {}).get('mgdp_passage_curriculum') or {}
+  previous=state.get('params') or {}
+  defaults={'terrain_max_error':'speed','level_up_streak':1,'level_down_streak':1}
+  if any(curriculum.params.get(key,default)!=previous.get(key,default)
+         for key,default in defaults.items()):
+    raise ValueError('地形升降档规则与检查点不同，不能完整续训；'
+                     '请用--warm-start-checkpoint迁移策略后新建课程')
 
 
 def restore_fixed_speed_for_play(env_cfg,checkpoint):
   speed=checkpoint_fixed_speed(checkpoint)
   if speed is not None:configure_passage_fixed_speed(env_cfg,speed)
+  else:
+    state=(checkpoint.get('infos') or {}).get('mgdp_passage_curriculum') or {}
+    ranges=state.get('ranges')
+    if ranges is not None:
+      if len(ranges)!=2 or not all(math.isfinite(float(x)) for x in ranges) or not 0<=ranges[0]<=ranges[1]<=3:
+        raise ValueError('检查点速度范围无效')
+      env_cfg.commands['twist'].ranges.lin_vel_x=tuple(float(x) for x in ranges)
   return speed

@@ -5,7 +5,7 @@ from unittest.mock import patch
 import json,shutil,subprocess,sys,tempfile,unittest
 
 from src.wall_reward_settings import (
-  SOURCE_RELATIVE,WALL_REWARD_DEFAULTS,load_wall_reward_settings,read_wall_reward_settings,
+  SOURCE_RELATIVE,WALL_REWARD_DEFAULTS,LEGACY_WALL_REWARD_DEFAULTS,load_wall_reward_settings,read_wall_reward_settings,
   save_wall_reward_settings,validate_wall_reward_settings,wall_reward_contract,
 )
 from src.dashboard import routes,history
@@ -63,7 +63,8 @@ class WallRewardSettingsTests(unittest.TestCase):
     self.assertEqual(result.returncode,0,result.stderr)
 
   def test_default_contract_is_v5_and_modified_settings_change_it(self):
-    self.assertEqual(wall_reward_contract(WALL_REWARD_DEFAULTS),1)
+    self.assertEqual(wall_reward_contract(LEGACY_WALL_REWARD_DEFAULTS),1)
+    self.assertNotEqual(wall_reward_contract(WALL_REWARD_DEFAULTS),1)
     changed=deepcopy(WALL_REWARD_DEFAULTS);changed['wall_waiting']['max_rate']=3.
     self.assertNotEqual(wall_reward_contract(changed),1)
     self.assertEqual(wall_reward_contract(changed),wall_reward_contract(json.loads(json.dumps(changed))))
@@ -108,7 +109,7 @@ class WallSettingsTrainingIntegrationTests(unittest.TestCase):
     self.assertIsNot(cfg.rewards['pose'].func,WallProgressReward)
     self.assertEqual(cfg.rewards['wall_waiting'].weight,0.)
     self.assertNotIn('no_passage_progress',cfg.terminations)
-    self.assertEqual(cfg.rewards['wall_crossing'].weight,2.)
+    self.assertEqual(cfg.rewards['wall_crossing'].weight,5.)
 
 
 if __name__=='__main__':unittest.main()

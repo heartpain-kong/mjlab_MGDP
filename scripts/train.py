@@ -63,6 +63,9 @@ class TrainConfig:
   velocity_min_abs: float | None = None
   velocity_max_abs: float | None = None
   passage_fixed_speed: float | None = None
+  tire_hole_guidance: bool = False
+  mgdp_skill_training: bool = False
+  mgdp_action_scale: float | None = None
   resume_checkpoint: str | None = None
   warm_start_checkpoint: str | None = None
   perception_checkpoint: str | None = None
@@ -100,6 +103,13 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
 
   if cfg.warm_start_checkpoint is not None and cfg.agent.resume:
     raise ValueError("Choose either policy warm-start or full resume, not both")
+  from src.config.mgdp_skill_training import configure_skill_training,configure_action_scale
+  if cfg.mgdp_skill_training:
+    configure_skill_training(cfg.env)
+    print('[skills] experimental lateral slalom, short stones and bounded wall hints enabled',flush=True)
+  if cfg.mgdp_action_scale is not None:
+    configure_action_scale(cfg.env,cfg.mgdp_action_scale)
+    print(f'[skills] joint position action scale={cfg.mgdp_action_scale:g}',flush=True)
   if cfg.depth_profile is not None:
     if 'perception' not in cfg.env.observations:
       raise ValueError('--depth-profile requires an MGDP task')
@@ -115,6 +125,12 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
 
   cfg.agent.seed = seed
   cfg.env.seed = seed
+
+  if cfg.tire_hole_guidance:
+    from src.config.tire_guidance import configure_tire_hole_guidance
+    configure_tire_hole_guidance(cfg.env)
+    print('[INFO] Tire guidance: left/right loaded floor touchdowns inside corresponding holes; '
+          '+0.25 once per foot/hole/episode',flush=True)
 
   if cfg.passage_fixed_speed is not None:
     if cfg.velocity_min_abs is not None or cfg.velocity_max_abs is not None:
@@ -243,6 +259,16 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
     if 'passage' in cfg.env.curriculum:
       from src.config.passage_speed import validate_passage_speed_resume
       validate_passage_speed_resume(cfg.env,torch.load(resume_path,map_location='cpu',weights_only=False))
+      from src.config.tire_guidance import validate_tire_guidance_resume
+      validate_tire_guidance_resume(cfg.env,torch.load(resume_path,map_location='cpu',weights_only=False))
+      from src.config.mgdp_course_contract import validate_resume
+      validate_resume(cfg.env,torch.load(resume_path,map_location='cpu',weights_only=False))
+      from src.config.mgdp_course_contract import validate_obstacle_speed_resume
+      validate_obstacle_speed_resume(cfg.env,torch.load(resume_path,map_location='cpu',weights_only=False))
+      from src.config.mgdp_course_contract import validate_rotation_stall_resume
+      validate_rotation_stall_resume(cfg.env,torch.load(resume_path,map_location='cpu',weights_only=False))
+      from src.config.mgdp_skill_training import validate_skill_resume
+      validate_skill_resume(cfg.env,torch.load(resume_path,map_location='cpu',weights_only=False))
     from src.mgdp_checkpoint import bind_checkpoint_encoder
     bind_checkpoint_encoder(cfg.env, resume_path, cfg.perception_checkpoint)
   elif cfg.warm_start_checkpoint is not None:
@@ -311,9 +337,14 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
   elif cfg.warm_start_checkpoint is not None:
     from src.mgdp_warmstart import warm_start_mgdp_policy
     warm_start_mgdp_policy(runner, cfg.warm_start_checkpoint)
-  if cfg.exploration_std is not None:
+  # Explicit user values win; only actor transfer gets the task default reset.
+  transfer_std=cfg.exploration_std
+  if transfer_std is None and cfg.warm_start_checkpoint is not None:
+    from src.config.mgdp_course_contract import rotation_stall_contract
+    if rotation_stall_contract(cfg.env) is not None:transfer_std=.25
+  if transfer_std is not None:
     from src.mgdp_warmstart import reset_exploration_std
-    reset_exploration_std(runner, cfg.exploration_std)
+    reset_exploration_std(runner, transfer_std)
 
   # Only write config files from rank 0 to avoid race conditions.
   if rank == 0:

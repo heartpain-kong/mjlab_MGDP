@@ -157,7 +157,7 @@ class CourseV3Tests(unittest.TestCase):
     cfg=load_env_cfg(TASK);g=cfg.scene.terrain.terrain_generator;g.num_cols=10
     n=10;robot=NS(data=NS(root_link_pos_w=torch.zeros(n,3),heading_w=torch.zeros(n)))
     class Scene(dict):pass
-    scene=Scene(robot=robot);scene.terrain=NS(cfg=NS(terrain_generator=g),terrain_types=torch.arange(n));scene.env_origins=torch.zeros(n,3)
+    scene=Scene(robot=robot);scene.terrain=NS(cfg=NS(terrain_generator=g),terrain_types=torch.arange(n),terrain_levels=torch.zeros(n,dtype=torch.long));scene.env_origins=torch.zeros(n,3)
     env=NS(scene=scene,num_envs=n,device='cpu',step_dt=.02,cfg=cfg)
     command=BodyAwarePassageCommand(cfg.commands['twist'],env);env.command_manager=NS(get_term=lambda _:command)
     command._resample_command(torch.arange(n));command.speed.fill_(.25)

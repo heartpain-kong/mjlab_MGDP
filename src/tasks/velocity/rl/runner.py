@@ -79,9 +79,21 @@ class PPOHIMRunner(MjlabOnPolicyRunner):
     perception = save_encoder_contract(self.env.unwrapped, Path(path).parent)
     if perception is not None:
       infos["mgdp_perception"] = perception
+      from src.config.mgdp_course_contract import current_contract
+      infos['mgdp_course_contract']=current_contract(self.env.unwrapped.cfg)
+      from src.config.mgdp_course_contract import obstacle_speed_contract
+      infos['mgdp_obstacle_speed']=obstacle_speed_contract(self.env.unwrapped.cfg)
+      from src.config.mgdp_skill_training import skill_contract
+      infos['mgdp_skill_training']=skill_contract(self.env.unwrapped.cfg)
     passage = self._passage_curriculum()
     if passage is not None:
       infos["mgdp_passage_curriculum"] = passage.state_dict()
+      from src.config.mgdp_course_contract import rotation_stall_contract
+      infos['mgdp_rotation_stall']=rotation_stall_contract(self.env.unwrapped.cfg)
+    from src.config.tire_guidance import guidance_contract
+    guidance=guidance_contract(self.env.unwrapped.cfg)
+    if guidance is not None:
+      infos['mgdp_tire_hole_guidance']=guidance
     curriculum = self._velocity_curriculum()
     if curriculum is not None:
       infos["him_velocity_curriculum"] = curriculum.state_dict()
@@ -107,10 +119,20 @@ class PPOHIMRunner(MjlabOnPolicyRunner):
     has_perception = "perception" in getattr(getattr(self.env.unwrapped, "cfg", None), "observations", {})
     if passage is not None or has_perception:
       checkpoint = torch.load(path, map_location="cpu", weights_only=False)
+      from src.config.tire_guidance import validate_tire_guidance_resume
+      validate_tire_guidance_resume(self.env.unwrapped.cfg,checkpoint)
       if has_perception:
+        from src.config.mgdp_skill_training import validate_skill_resume
+        validate_skill_resume(self.env.unwrapped.cfg,checkpoint)
+        from src.config.mgdp_course_contract import validate_resume
+        validate_resume(self.env.unwrapped.cfg,checkpoint)
+        from src.config.mgdp_course_contract import validate_obstacle_speed_resume
+        validate_obstacle_speed_resume(self.env.unwrapped.cfg,checkpoint)
         from src.mgdp_checkpoint import validate_runtime_encoder
         validate_runtime_encoder(self.env.unwrapped, checkpoint)
     if passage is not None:
+      from src.config.mgdp_course_contract import validate_rotation_stall_resume
+      validate_rotation_stall_resume(self.env.unwrapped.cfg,checkpoint)
       state = checkpoint.get("infos", {}).get("mgdp_passage_curriculum")
       if state is None:
         raise ValueError("定向越障 v2 不能完整续训旧 MGDP：缺少通过率课程状态，请创建新训练")
@@ -198,6 +220,9 @@ class PPOHIMRunner(MjlabOnPolicyRunner):
       passage=self._passage_curriculum()
       if passage is not None and passage.params.get('fixed_speed') is not None:
         metadata['mgdp_passage_fixed_speed']=str(passage.params['fixed_speed'])
+      from src.config.tire_guidance import guidance_contract
+      guidance=guidance_contract(self.env.unwrapped.cfg)
+      if guidance is not None:metadata['mgdp_tire_hole_guidance']=json.dumps(guidance,sort_keys=True)
     else:
       run_name = (
         wandb.run.name if self.logger.logger_type == "wandb" and wandb.run else "local"

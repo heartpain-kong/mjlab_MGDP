@@ -49,6 +49,8 @@ ACTION_METRIC_TAGS = {
   "passage_speed_max": "Curriculum/passage/speed_max",
   "passage_speed_min": "Curriculum/passage/speed_min",
   "passage_speed_fixed": "Curriculum/passage/speed_fixed",
+  "wall_speed_limit": "Curriculum/passage/wall_speed_limit",
+  "slalom_speed_limit": "Curriculum/passage/slalom_speed_limit",
   "terrain_promote_fraction": "Curriculum/terrain_levels/promote_fraction",
   "terrain_demote_fraction": "Curriculum/terrain_levels/demote_fraction",
   "terrain_tracking_ratio": ("Curriculum/terrain_levels/tracking_ratio", "Curriculum/terrain_sampling/tracking_ratio"),
@@ -186,6 +188,11 @@ def create_server(root, python, host="127.0.0.1", port=8765):
         counts = accumulator.Scalars(count_tag) if count_tag in available_tags else []
         if rate and counts:
           passage[kind] = {"rate": float(rate[-1].value), "samples": float(counts[-1].value)}
+          for field in ('tracking_error', 'level_mean', 'lowest_fraction'):
+            detail_tag = f'Curriculum/passage/{field}/{kind}'
+            points = accumulator.Scalars(detail_tag) if detail_tag in available_tags else []
+            if points:
+              passage[kind][field] = float(points[-1].value)
       raw_max = metrics.get("raw_action_abs_max", {}).get("value")
       saturation = metrics.get("action_saturation_fraction", {}).get("value")
       policy_std = metrics.get("policy_mean_std", {}).get("value")

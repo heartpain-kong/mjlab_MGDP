@@ -8,6 +8,12 @@
 | 使用浏览器面板、短命令、了解目录迁移 | [WORKBENCH.md](WORKBENCH.md) |
 | D435i下俯20°独立任务、工作台入口与相机参数 | [MGDP_D435I_DOWN20.md](MGDP_D435I_DOWN20.md) |
 | MGDP固定1m/s巡航、显式命令参数与续训 | [MGDP_FIXED_CRUISE.md](MGDP_FIXED_CRUISE.md) |
+| V6奖励默认值、0.30动作映射、0.6～2.0扩速和梅花桩触地判定 | [MGDP_V6_REBASELINE.md](MGDP_V6_REBASELINE.md) |
+| 0.6起步、转向停滞、探索恢复与策略迁移对照 | [MGDP_LEARNING_20261116.md](MGDP_LEARNING_20261116.md) |
+| 地形连续通过升档与扩速解耦 | [MGDP_TERRAIN_MASTERY.md](MGDP_TERRAIN_MASTERY.md) |
+| 横移绕桩、短梅花桩和分阶段越墙实验 | [MGDP_SKILL_EXPERIMENT.md](MGDP_SKILL_EXPERIMENT.md) |
+| 高墙、绕桩局部减速与检查点兼容 | [MGDP_OBSTACLE_SPEED.md](MGDP_OBSTACLE_SPEED.md) |
+| 轮胎阵左右脚落进对应内孔、奖励与工作台开关 | [MGDP_TIRE_HOLE_GUIDANCE.md](MGDP_TIRE_HOLE_GUIDANCE.md) |
 | D435i空间采样、薄墙可见性、探索对照及GPU命令 | [MGDP_D435I.md](MGDP_D435I.md) |
 | MGDP 定向越障、reward、通过率门控与接触规则 | [MGDP_PASSAGE.md](MGDP_PASSAGE.md) |
 | 强化课程预训练退出码2、8行默认与独立感知文件修复 | [MGDP_WALL_PRETRAIN_FIX.md](MGDP_WALL_PRETRAIN_FIX.md) |

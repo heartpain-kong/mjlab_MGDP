@@ -156,13 +156,21 @@ class PassageCurriculum(ManagerTermBase):
     self.success = torch.zeros_like(self.count)
     self.error = torch.zeros_like(self.count)
     self.streak = 0
+    self.level_success_streak = torch.zeros(env.num_envs, device=self.device, dtype=torch.long)
+    self.level_failure_streak = torch.zeros_like(self.level_success_streak)
     self.params = dict(cfg.params)
     self.column_names = list(self.terrain.cfg.terrain_generator.sub_terrains)
     generator = self.terrain.cfg.terrain_generator
     self.grid = (generator.num_rows, generator.num_cols)
+    command_contract = (asdict(self.command.cfg) if hasattr(self.command.cfg,"__dataclass_fields__") else
+                        (self.command.cfg.goal_x,self.command.cfg.lane_half_width))
+    if isinstance(command_contract,dict) and not command_contract.get('skill_training_profile'):
+      command_contract.pop('skill_training_profile',None)
+      command_contract.pop('slalom_use_lateral',None)
+    if isinstance(command_contract,dict) and command_contract.get('obstacle_speed_limits') is None:
+      command_contract.pop('obstacle_speed_limits',None)
     contract = (asdict(generator), env.step_dt, env.cfg.episode_length_s if hasattr(env.cfg,"episode_length_s") else None,
-                asdict(self.command.cfg) if hasattr(self.command.cfg,"__dataclass_fields__") else
-                (self.command.cfg.goal_x,self.command.cfg.lane_half_width))
+                command_contract)
     events = getattr(env.cfg, "events", {})
     if "himloco_pd_motor" in events:
       # Old mastery counts must not carry over to a different physics profile.
@@ -178,7 +186,10 @@ class PassageCurriculum(ManagerTermBase):
       torch.arange(cols, device=self.device)/cols+.001, right=True)
 
   def __call__(self, env, env_ids, min_episodes=32, success_threshold=.7,
-               max_error=.25, speed_limit=DEFAULT_SPEED_LIMIT, fixed_speed=None):
+               max_error=.25, speed_limit=DEFAULT_SPEED_LIMIT, fixed_speed=None, speed_floor=.35,
+               terrain_max_error='speed', level_up_streak=1, level_down_streak=1):
+    if level_up_streak < 1 or level_down_streak < 1:
+      raise ValueError('Terrain streak lengths must be positive')
     if fixed_speed is not None:
       from src.config.passage_speed import validate_fixed_speed
       fixed_speed=validate_fixed_speed(fixed_speed)
@@ -202,9 +213,19 @@ class PassageCurriculum(ManagerTermBase):
       # Reaching the top must stay at the top, not wrap to a random row.
       level = self.terrain.terrain_levels[ids]
       last = self.terrain.max_terrain_level-1
-      up = passed & (error <= max_error) & (level < last)
-      down = ~passed
+      # Obstacle mastery and cruise tracking are separate requirements. A
+      # successful jump may involve deliberate braking; speed expansion below
+      # still requires the original tracking gate across every column.
+      threshold = max_error if terrain_max_error == 'speed' else terrain_max_error
+      mastered = passed if threshold is None else passed & (error <= threshold)
+      self.level_success_streak[ids] = torch.where(mastered, (self.level_success_streak[ids]+1).clamp(max=level_up_streak), 0)
+      self.level_failure_streak[ids] = torch.where(~passed, (self.level_failure_streak[ids]+1).clamp(max=level_down_streak), 0)
+      up = mastered & (self.level_success_streak[ids] >= level_up_streak) & (level < last)
+      down = ~passed & (self.level_failure_streak[ids] >= level_down_streak) & (level > 0)
       self.terrain.update_env_origins(ids, up, down)
+      changed = ids[up | down]
+      self.level_success_streak[changed] = 0
+      self.level_failure_streak[changed] = 0
     rate = self.success / self.count.clamp(min=1)
     errors = self.error / self.count.clamp(min=1)
     represented = torch.bincount(self.kind_of_column, minlength=len(self.column_names)) > 0
@@ -212,6 +233,10 @@ class PassageCurriculum(ManagerTermBase):
             "speed_min": torch.tensor(self.command.cfg.ranges.lin_vel_x[0], device=self.device),
             "speed_fixed": torch.tensor(float(fixed_speed is not None),device=self.device),
             "level_mean": self.terrain.terrain_levels.float().mean()}
+    limits=getattr(self.command.cfg,'obstacle_speed_limits',None)
+    if limits is not None:
+      logs['wall_speed_limit']=torch.tensor(limits[0],device=self.device)
+      logs['slalom_speed_limit']=torch.tensor(limits[1],device=self.device)
     # Allocation is equal for the directed lessons; several columns may map to
     # one kind. Log reset-episode counts, rather than averaging per-step booleans.
     for i, name in enumerate(self.column_names):
@@ -219,6 +244,12 @@ class PassageCurriculum(ManagerTermBase):
       n = self.count[mask].sum()
       logs[f"samples/{name}"] = n.clone()
       logs[f"success_rate/{name}"] = (self.success[mask].sum()/n.clamp(min=1)).clone()
+      logs[f"tracking_error/{name}"] = (self.error[mask].sum()/n.clamp(min=1)).clone()
+      env_mask = mask[self.terrain.terrain_types]
+      total = env_mask.sum().clamp(min=1)
+      levels = self.terrain.terrain_levels
+      logs[f"level_mean/{name}"] = (levels.float()*env_mask).sum()/total
+      logs[f"lowest_fraction/{name}"] = ((levels == 0) & env_mask).sum()/total
     # Missing obstacle kinds/samples never count as passed.
     if represented.all() and (self.count >= min_episodes).all():
       good = (rate >= success_threshold).all() & (errors <= max_error).all()
@@ -231,7 +262,7 @@ class PassageCurriculum(ManagerTermBase):
         high = min(speed_limit, high+.025)
         self.streak = 0
       elif bad:
-        high = max(.35, high-.025)
+        high = max(speed_floor, low, high-.025)
       self.command.cfg.ranges.lin_vel_x = (low, high)
       self.count.zero_(); self.success.zero_(); self.error.zero_()
     return logs
@@ -241,6 +272,7 @@ class PassageCurriculum(ManagerTermBase):
       "ranges": tuple(self.command.cfg.ranges.lin_vel_x), "streak": self.streak,
       "fingerprint": self.fingerprint,
       **{k: getattr(self,k).detach().cpu().clone() for k in ("count","success","error")},
+      **{k: getattr(self,k).detach().cpu().clone() for k in ("level_success_streak","level_failure_streak")},
       "levels": self.terrain.terrain_levels.detach().cpu().clone(),
       "types": self.terrain.terrain_types.detach().cpu().clone()}
 
@@ -274,11 +306,24 @@ class PassageCurriculum(ManagerTermBase):
     if fixed_speed is not None:
       from src.config.passage_speed import validate_fixed_speed
       fixed_speed=validate_fixed_speed(fixed_speed)
+    lower_bound=self.params.get('speed_floor',.25)
     valid_range=((low,high)==(fixed_speed,fixed_speed) if fixed_speed is not None else
-                 .25 <= low <= high <= saved_ceiling)
+                 lower_bound <= low <= high <= saved_ceiling)
     if not valid_range or not 0 <= int(state["streak"]) < 3:
       raise ValueError("Invalid passage speed range")
+    streaks = {}
+    for key, limit in (("level_success_streak", self.params.get('level_up_streak', 1)),
+                       ("level_failure_streak", self.params.get('level_down_streak', 1))):
+      if limit > 1 and key not in state:
+        raise ValueError('Missing terrain mastery streak')
+      value = torch.as_tensor(state.get(key, torch.zeros_like(levels)), device=self.device)
+      if (value.shape != levels.shape or not torch.isfinite(value).all()
+          or (value < 0).any() or (value > limit).any() or (value != value.long()).any()):
+        raise ValueError('Invalid terrain mastery streak')
+      streaks[key] = value.long()
     for key, value in values.items():
+      getattr(self,key).copy_(value)
+    for key, value in streaks.items():
       getattr(self,key).copy_(value)
     self.command.cfg.ranges.lin_vel_x = (low, high)
     self.streak = int(state["streak"])

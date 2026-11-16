@@ -35,6 +35,10 @@ class TaskSpec(Mapping):
     supports_curriculum: bool = True
     directed_passage: bool = False
     passage_fixed_speed_default: float | None = None
+    passage_start_low: float = .25
+    passage_start_high: float = .35
+    passage_speed_limit: float = 1.
+    supports_tire_hole_guidance: bool = False
     shared: bool = False
     resume_sources: tuple[str, ...] = field(default_factory=tuple)
     train_presets: dict[str, dict[str, int]] = field(default_factory=dict)

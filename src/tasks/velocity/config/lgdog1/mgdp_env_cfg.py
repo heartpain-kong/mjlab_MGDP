@@ -248,6 +248,9 @@ def lgdog1_race_mgdp_env_cfg(
 def lgdog1_wall_training_env_cfg(play=False, checkpoint=DEFAULT_WALL_CHECKPOINT, **kwargs):
     """V4: every obstacle reaches competition dimensions at stage six."""
     cfg = lgdog1_race_mgdp_env_cfg(play=play, checkpoint=checkpoint, **kwargs)
+    # New strengthened-course experiments; checkpoint playback restores its own scale.
+    cfg.actions['joint_pos'].scale=.30
+    cfg.rewards=make_mgdp_passage_rewards(base_body=BASE_BODY,foot_sites=FOOT_SITES,profile='mgdp_v6')
     from mjlab.managers.reward_manager import RewardTermCfg
     from mjlab.managers.scene_entity_config import SceneEntityCfg
     from .passage_terrain_cfg import StrictStonesTerrainCfg
@@ -282,6 +285,13 @@ def lgdog1_wall_training_env_cfg(play=False, checkpoint=DEFAULT_WALL_CHECKPOINT,
     generator.sub_terrains = lessons
     old=cfg.commands['twist']
     cfg.commands['twist']=BodyAwarePassageCommandCfg(**{f.name:getattr(old,f.name) for f in fields(old) if f.init})
+    cfg.commands['twist'].ranges.lin_vel_x=(.6,.6)
+    cfg.commands['twist'].obstacle_speed_limits=(.25,.25)
+    if 'passage' in cfg.curriculum:
+        cfg.curriculum['passage'].params['speed_floor']=.6
+        cfg.curriculum['passage'].params['speed_limit']=2.
+        cfg.curriculum['passage'].params.update(terrain_max_error=None,
+            level_up_streak=2,level_down_streak=2)
     cfg.commands['twist'].wall_reward_contract_version=wall_reward_contract(rules)
     cfg.commands["twist"].waypoints = {name:lesson_route(name) for name in lessons}
     cfg.commands['twist'].waypoints['gap_steps']=((0.,0.),(10.4,0.))
@@ -295,7 +305,7 @@ def lgdog1_wall_training_env_cfg(play=False, checkpoint=DEFAULT_WALL_CHECKPOINT,
         fields=('found','force','pos','normal'),reduce='maxforce',num_slots=4,history_length=cfg.decimation),)
     cfg.terminations['stone_ground_contact']=TerminationTermCfg(func=StoneGroundContact,
         params={'sensor_name':'stone_support_contact','entry_end_x':2.2,'exit_start_x':5.9,
-                'floor_tolerance_m':.008,'min_force_n':1.})
+                'floor_tolerance_m':.008,'min_force_n':1.,'min_feet':2})
     cfg.terminations['slalom_body_projection']=TerminationTermCfg(func=SlalomBodyProjection,
         params={'asset_cfg':SceneEntityCfg('robot',geom_names=('trunk_collision',)),
                 'post_radius_m':.05,'margin_m':.03})
@@ -316,7 +326,8 @@ def lgdog1_wall_training_env_cfg(play=False, checkpoint=DEFAULT_WALL_CHECKPOINT,
     stall=rules['no_passage_progress']
     if stall['enabled']:
         cfg.terminations["no_passage_progress"] = TerminationTermCfg(
-            func=NoPassageProgress,time_out=False,params={k:v for k,v in stall.items() if k!='enabled'})
+            func=NoPassageProgress,time_out=False,params={**{k:v for k,v in stall.items() if k!='enabled'},
+              'turn_timeout_s':4.,'turn_progress_rad':.05,'turn_min_command_radps':.05})
     feet = SceneEntityCfg("robot", site_names=FOOT_SITES)
     cfg.rewards["wall_crossing"] = RewardTermCfg(func=WallCrossingBonus,weight=crossing['weight'],
         params={"asset_cfg":feet,**{k:v for k,v in crossing.items() if k!='weight'}})

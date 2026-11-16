@@ -168,8 +168,14 @@ def run_play(task_id: str, cfg: PlayConfig):
     bind_checkpoint_encoder(env_cfg, resume_path, getattr(cfg, "perception_checkpoint", None))
     from src.tasks.velocity.mdp.passage import PassageCommandCfg
     if isinstance(env_cfg.commands.get('twist'),PassageCommandCfg):
+      from src.config.mgdp_skill_training import restore_skill_for_play
+      restore_skill_for_play(env_cfg,torch.load(resume_path,map_location='cpu',weights_only=False))
       from src.config.passage_speed import restore_fixed_speed_for_play
       fixed=restore_fixed_speed_for_play(env_cfg,torch.load(resume_path,map_location='cpu',weights_only=False))
+      from src.config.tire_guidance import restore_tire_guidance_for_play
+      restore_tire_guidance_for_play(env_cfg,torch.load(resume_path,map_location='cpu',weights_only=False))
+      from src.config.mgdp_course_contract import restore_for_play
+      restore_for_play(env_cfg,torch.load(resume_path,map_location='cpu',weights_only=False))
       if fixed is not None:
         print(f'[INFO] Restored passage fixed cruise: {fixed:g} m/s',flush=True)
 

@@ -101,7 +101,7 @@ def build_command(root, python, options):
   mode = options.get("mode", "train")
   task_value = options.get("task", DEFAULT_TASK)
   _, task = resolve_task(task_value)
-  if mode == "train" and task.get("requires_pretrain") and not options.get("resume"):
+  if mode == "train" and task.get("requires_pretrain") and not options.get("resume") and not options.get('warm_start'):
     # Capability-driven prerequisite: fail before launching a doomed run and
     # tell the user the exact command instead of crashing inside env setup.
     checkpoint = root / str(task.get("pretrain_checkpoint") or "")
@@ -142,6 +142,10 @@ def build_command(root, python, options):
     if velocity_min and velocity_max and velocity_min > velocity_max:
       raise ValueError("最低速度绝对值不能大于最高速度绝对值")
     curriculum = options.get("terrain_curriculum", "manual")
+    tire_guidance=options.get('tire_hole_guidance',False)
+    if not isinstance(tire_guidance,bool):raise ValueError('轮胎落脚引导必须为布尔值')
+    if tire_guidance and not task.get('supports_tire_hole_guidance'):
+      raise ValueError('轮胎落脚引导仅适用于比赛尺寸强化课程')
     fixed_speed=str(options.get('passage_fixed_speed') if options.get('passage_fixed_speed') is not None else '').strip()
     passage_mode=options.get('passage_speed_mode') or ''
     if passage_mode not in ('','fixed','curriculum'):
@@ -183,6 +187,14 @@ def build_command(root, python, options):
             "--agent.logger=tensorboard", f"--agent.seed={seed}", "--enable-nan-guard",
             "True" if options.get("enable_nan_guard") is True else "False"]
     argv += curriculum_flags
+    if tire_guidance:argv.append('--tire-hole-guidance=True')
+    if options.get('mgdp_skill_training'):
+      if not task.get('supports_tire_hole_guidance'):raise ValueError('技能引导仅适用于比赛尺寸强化课程')
+      argv.append('--mgdp-skill-training=True')
+    if options.get('mgdp_action_scale') not in (None,''):
+      if not task.get('supports_tire_hole_guidance'):raise ValueError('动作映射实验仅适用于比赛尺寸强化课程')
+      scale=number(options['mgdp_action_scale'],'动作映射',.2,.5)
+      argv.append(f'--mgdp-action-scale={scale}')
     if fixed_speed != '':
       argv.append(f'--passage-fixed-speed={fixed_speed}')
     if options.get("optimize_vram") is False:
@@ -201,6 +213,11 @@ def build_command(root, python, options):
       argv.append(f"--velocity-max-abs={velocity_max}")
     auto_name = next_run_name(root / "logs/rsl_rl" / task["experiment"], seed)
     argv.append(f"--agent.run-name={name or auto_name}")
+    if options.get('warm_start'):
+      if options.get('resume'):raise ValueError('策略迁移和完整续训只能选择一种')
+      if not task.get('supports_tire_hole_guidance'):raise ValueError('策略迁移当前只在强化课程中提供')
+      checkpoint=model_path(root,task_value,options.get('checkpoint'),'checkpoint',include_compatible=True)
+      argv.append(f'--warm-start-checkpoint={checkpoint}')
     if options.get("resume"):
       checkpoint = model_path(root, task_value, options.get("checkpoint"), "checkpoint", include_compatible=True)
       expected = (root / "logs/rsl_rl" / task["experiment"]).resolve()

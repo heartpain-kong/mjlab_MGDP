@@ -61,8 +61,8 @@ class FixedSpeedTests(unittest.TestCase):
   def test_original_course_remains_available_without_fixed_flag(self):
     from scripts.train import TrainConfig
     self.assertIsNone(TrainConfig.from_task(D435I20_TASK).passage_fixed_speed)
-    self.assertEqual(TrainConfig.from_task(D435I20_TASK).env.commands['twist'].ranges.lin_vel_x,(.25,.35))
-    self.assertEqual(TASKS[D435I20_ALIAS].passage_fixed_speed_default,1.)
+    self.assertEqual(TrainConfig.from_task(D435I20_TASK).env.commands['twist'].ranges.lin_vel_x,(.6,.6))
+    self.assertIsNone(TASKS[D435I20_ALIAS].passage_fixed_speed_default)
     self.assertIsNone(TASKS['race_mgdp'].passage_fixed_speed_default)
 
   def test_fixed_speed_keeps_camera_rewards_and_terrain_curriculum(self):
@@ -118,6 +118,9 @@ class FixedSpeedTests(unittest.TestCase):
     from mjlab.tasks.registry import load_env_cfg
     saved={'infos':{'mgdp_passage_curriculum':{'params':{'fixed_speed':1.}}}}
     cfg=TrainConfig.from_task(D435I20_TASK).env
+    saved['infos']['mgdp_passage_curriculum']['params'].update(
+      {key:cfg.curriculum['passage'].params[key]
+       for key in ('terrain_max_error','level_up_streak','level_down_streak')})
     with self.assertRaisesRegex(ValueError,'速度模式'):validate_passage_speed_resume(cfg,saved)
     configure_passage_fixed_speed(cfg,1.);validate_passage_speed_resume(cfg,saved)
     with self.assertRaisesRegex(ValueError,'速度模式'):validate_passage_speed_resume(cfg,{'infos':{}})

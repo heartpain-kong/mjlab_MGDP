@@ -70,6 +70,16 @@ REWARD_PROFILES = {
       "leg_contact_force": {"sensor_name": "legs_ground_contact"},
     },
   },
+  # V6 archived effective values, isolated to the strengthened course.
+  "mgdp_v6": {
+    "weights": {"foot_clearance": 0.0, "feet_air_time": 0.5,
+      "track_linear_velocity": 2.4, "track_angular_velocity": 1.2,
+      "pose": 0.5, "foot_gait": 0.0, "action_rate_l2": -0.05,
+      "feet_stumble": -0.1, "soft_landing": -0.002, "leg_contact_force": -0.25},
+    "params": {"track_linear_velocity": {"relative_weight": 0.5, "relative_std": 0.5,
+      "min_command_speed": 0.2}, "feet_air_time": {"threshold_min": 0.05, "threshold_max": 0.35},
+      "leg_contact_force": {"sensor_name": "legs_ground_contact"}},
+  },
   "flat": {
     "weights": {"feet_stumble": 0.0, "feet_air_time": 0.0, "leg_contact_force": 0.0},
     "params": {"foot_clearance": {"target_height": 0.10}},
@@ -132,7 +142,8 @@ DASHBOARD_REWARD_OVERRIDES = {'flat': {'weights': {}, 'params': {}},
  'rough': {'weights': {}, 'params': {}},
  'terrain_v4': {'weights': {}, 'params': {}},
  'him': {'weights': {}, 'params': {}},
- 'him_standard': {'weights': {}, 'params': {}}}
+ 'him_standard': {'weights': {}, 'params': {}},
+ 'mgdp_v6': {'weights': {}, 'params': {}}}
 # END LGDOG DASHBOARD OVERRIDES
 
 
@@ -262,10 +273,10 @@ def make_lgdog_rewards(profile, *, base_body, foot_sites, terrain_ray_names=()):
   return rewards
 
 
-def make_mgdp_passage_rewards(*, base_body, foot_sites):
+def make_mgdp_passage_rewards(*, base_body, foot_sites, profile='mgdp'):
   """MGDP's editable base profile plus the directed task's terminal objective."""
   from src.tasks.velocity.mdp import passage
-  rewards = make_lgdog_rewards("mgdp", base_body=base_body, foot_sites=foot_sites)
+  rewards = make_lgdog_rewards(profile, base_body=base_body, foot_sites=foot_sites)
   rewards["is_terminated"].func = passage.failure_cost
   rewards["passage_progress"] = RewardTermCfg(func=passage.ForwardProgress, weight=1.0)
   rewards["passage_success"] = RewardTermCfg(func=passage.success_bonus, weight=5.0)

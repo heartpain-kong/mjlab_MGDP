@@ -22,6 +22,11 @@ BEAM_WIDTHS = (.70,.64,.58,.52,.46,.40,.35,.30)
 BEAM_HEIGHTS = (.02,.03,.04,.06,.08,.10,.12,.15)
 FRAME_CLEARANCES = (.44,.41,.38,.35,.32,.29,.27,.25)
 TIRE_HEIGHTS = (.025,.05,.08,.11,.14,.165,.19,.22)
+# Shared by terrain construction and optional foot-hole guidance (cell frame).
+TIRE_CENTER_X = 3.75
+TIRE_SPACING = .55
+TIRE_COLUMNS = 4
+TIRE_INNER_APOTHEM = .164647
 PIT_HEIGHT_SCALES = (.20,.35,.50,.65,.85,1.,1.20,1.40)
 HEIGHTFIELD_SCALES = (1.,1.,1.,1.,1.,1.,1.25,1.50)
 
@@ -96,7 +101,8 @@ class UnifiedObstacleTerrainCfg(PassageTerrainCfg):
     rows=int(np.floor((self.size[1]-.8-2*.275)/.55))+1;rows-=rows%2
     for row in range(rows):
       for col in range(4):
-        center=np.array([3.75+(col-1.5)*.55,cy+(row-(rows-1)/2)*.55,height/2])
+        center=np.array([TIRE_CENTER_X+(col-(TIRE_COLUMNS-1)/2)*TIRE_SPACING,
+                         cy+(row-(rows-1)/2)*TIRE_SPACING,height/2])
         for i,ref in enumerate(sectors):
           g=body.add_geom(name=prefix+f'{row}_{col}_{i}',type=mujoco.mjtGeom.mjGEOM_MESH,
             meshname=mesh.name,pos=center+vector(ref,'pos','0 0 0'),

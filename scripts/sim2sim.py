@@ -572,6 +572,17 @@ def run(args) -> int:
   mgdp = "perception" in meta["env_cfg"].observations
   if mgdp:
     import json
+    # Match the actor's exported mapping, including legacy 0.25 policies.
+    if ACTION_SCALE_OVERRIDE is None:
+      saved_scale=onnx_meta.get('action_scale')
+      if saved_scale is None:
+        saved_scale=.25
+      else:
+        values=[float(x) for x in saved_scale.split(',')]
+        if not values or any(not np.isfinite(x) or x<=0 or abs(x-values[0])>1e-8 for x in values):
+          raise ValueError('MGDP ONNX action_scale must be a finite uniform positive scale')
+        saved_scale=values[0]
+      meta['action_scale']=float(saved_scale)
     from src.mgdp_checkpoint import restore_sensing_contract
     sensing = onnx_meta.get("mgdp_sensing")
     camera=onnx_meta.get('mgdp_camera')

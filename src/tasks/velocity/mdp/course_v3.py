@@ -24,6 +24,11 @@ class BodyAwarePassageCommand(PassageCommand):
   def __init__(self,cfg,env):
     super().__init__(cfg,env)
     self.slalom_columns=kind_columns(env,'slalom_brick')
+    self.wall_columns=kind_columns(env,'high_wall')
+    from ..config.lgdog1.passage_terrain_cfg import WALL_CENTRES,START_X
+    self.wall_centres=torch.tensor(WALL_CENTRES,device=self.device)-START_X
+    wall=env.scene.terrain.cfg.terrain_generator.sub_terrains['high_wall']
+    self.wall_counts=torch.tensor(wall.counts,device=self.device)
     self.lane_limits=torch.where(self.slalom_columns,
       torch.full((len(self.routes),),cfg.slalom_lane_half_width,device=self.device),
       torch.full((len(self.routes),),cfg.lane_half_width,device=self.device))
@@ -44,13 +49,30 @@ class BodyAwarePassageCommand(PassageCommand):
     self.waypoint_index+=(reached & (self.waypoint_index<self.last_waypoint[types])).long()
     target,direction,_,_=self.route_state();offset=target-self.local_xy()
     distance=offset.norm(dim=-1).clamp_min(1e-6)
-    velocity=offset/distance[:,None]*torch.minimum(self.speed,(1.5*distance).clamp_min(.12))[:,None]
+    local_speed=self.speed
+    if self.cfg.obstacle_speed_limits is not None:
+      wall_speed,slalom_speed=self.cfg.obstacle_speed_limits
+      terrain=self._env.scene.terrain
+      dx=self.local_xy()[:,0,None]-self.wall_centres[None,:]
+      active=torch.arange(3,device=self.device)[None,:]<self.wall_counts[terrain.terrain_levels,None]
+      near_wall=self.wall_columns[types]&((dx>=-.6)&(dx<=.6)&active).any(dim=1)
+      cap=torch.where(near_wall,torch.full_like(self.speed,wall_speed),self.speed)
+      cap=torch.where(self.slalom_columns[types],torch.full_like(cap,slalom_speed),cap)
+      local_speed=torch.minimum(self.speed,cap)
+    velocity=offset/distance[:,None]*torch.minimum(local_speed,(1.5*distance).clamp_min(.12))[:,None]
     heading=self.robot.data.heading_w
     self.heading_target=torch.atan2(direction[:,1],direction[:,0])
+    if self.cfg.slalom_use_lateral:
+      lateral=self.slalom_columns[types]
+      # Keep the trunk facing the entry direction: sudden 90-degree switches
+      # sweep its offset rear over poles even when the root follows the route.
+      self.heading_target=torch.where(lateral,torch.zeros_like(self.heading_target),self.heading_target)
+      limit=torch.minimum(local_speed,torch.full_like(self.speed,.35))
+      velocity=torch.where(lateral[:,None],offset/distance[:,None]*torch.minimum(limit,1.5*distance)[:,None],velocity)
     error=self.heading_target-heading;self.heading_error=torch.atan2(error.sin(),error.cos())
     # Stop translation to align in the clear turning zones; this avoids dragging
     # the offset rear half of the trunk across a post when the next segment turns.
-    turning=self.slalom_columns[types] & (self.heading_error.abs()>self.cfg.slalom_heading_tolerance)
+    turning=self.slalom_columns[types] & (self.heading_error.abs()>self.cfg.slalom_heading_tolerance) & (not self.cfg.slalom_use_lateral)
     velocity=torch.where(turning[:,None],torch.zeros_like(velocity),velocity)
     self.vel_command_b[:,0]=velocity[:,0]*heading.cos()+velocity[:,1]*heading.sin()
     self.vel_command_b[:,1]=-velocity[:,0]*heading.sin()+velocity[:,1]*heading.cos()
@@ -63,6 +85,9 @@ class BodyAwarePassageCommandCfg(PassageCommandCfg):
   slalom_waypoint_radius: float=.06
   slalom_heading_tolerance: float=.12
   course_version: int=3
+  slalom_use_lateral: bool=False
+  skill_training_profile: dict=field(default_factory=dict)
+  obstacle_speed_limits: tuple[float,float]|None=None
   # Part of the saved passage fingerprint: old critics/curriculum statistics
   # must not be fully resumed after changing the wall reward objective.
   wall_reward_contract_version: int|str=1
@@ -103,15 +128,25 @@ class StoneGroundContact(ManagerTermBase):
     super().__init__(env);self.columns=kind_columns(env,'stepping_stones')
 
   def __call__(self,env,sensor_name='stone_support_contact',entry_end_x=2.2,exit_start_x=5.9,
-               floor_tolerance_m=.008,min_force_n=1.):
+               floor_tolerance_m=.008,min_force_n=1.,min_feet=1,exit_by_level=None):
     data=env.scene[sensor_name].data
     p=data.pos_history-env.scene.terrain.env_origins[:,None,None,:]
     loaded=(data.found_history>0)&(data.force_history.norm(dim=-1)>=min_force_n)
     floor=(p[:,:,:,2]<=floor_tolerance_m)&(data.normal_history[:,:,:,2].abs()>.7)
     # env_origins is the SPAWN (cell X=1m), not the lower-left cell corner.
     cell_x=p[:,:,:,0]+START_X
-    field=(cell_x>entry_end_x)&(cell_x<exit_start_x)
-    return self.columns[env.scene.terrain.terrain_types] & (loaded&floor&field).any(dim=(1,2))
+    end=exit_start_x if exit_by_level is None else torch.tensor(exit_by_level,device=env.device)[env.scene.terrain.terrain_levels,None,None]
+    field=(cell_x>entry_end_x)&(cell_x<end)
+    touches=loaded&floor&field
+    if min_feet==1:
+      invalid=touches.any(dim=(1,2))
+    elif min_feet==2:
+      # Four slots belong to each of the four separate foot primaries. Count
+      # DISTINCT feet in the SAME physics substep, not multiple contact slots.
+      if touches.shape[1]!=16:raise ValueError('Stone rule needs 4 feet x 4 contact slots')
+      invalid=(touches.reshape(env.num_envs,4,4,-1).any(dim=2).sum(dim=1)>=2).any(dim=1)
+    else:raise ValueError('Unsupported minimum number of feet')
+    return self.columns[env.scene.terrain.terrain_types] & invalid
 
 
 def box_projection_distance(corners,points):

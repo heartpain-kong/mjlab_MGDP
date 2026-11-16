@@ -232,16 +232,17 @@ class WallTrainingTests(unittest.TestCase):
     self.assertNotEqual(play.commands['twist'].waypoints['slalom_brick'],old.commands['twist'].waypoints['slalom_brick'])
     self.assertIn('stone_ground_contact',play.terminations)
     self.assertIn('slalom_body_projection',play.terminations)
-    self.assertEqual({k:v.weight for k,v in play.rewards.items() if k!='wall_waiting'},
-                     {k:v.weight for k,v in old.rewards.items()})
-    self.assertEqual(play.rewards['wall_waiting'].weight,-1.)
+    self.assertEqual(play.rewards['track_linear_velocity'].weight,2.4)
+    self.assertEqual(old.rewards['track_linear_velocity'].weight,2.)
+    self.assertEqual((play.rewards['passage_progress'].weight,play.rewards['passage_success'].weight),(1.5,10.))
+    self.assertEqual(play.rewards['wall_waiting'].weight,-1.5)
     for name in ('track_linear_velocity','track_angular_velocity','pose','foot_gait','feet_air_time'):
       self.assertIs(train.rewards[name].func,WallProgressReward)
       self.assertIsNot(old.rewards[name].func,WallProgressReward)
     self.assertIsInstance(train.scene.terrain.terrain_generator.sub_terrains['high_wall'],WallSkillTerrainCfg)
     self.assertNotIn('no_passage_progress',play.terminations)
     self.assertFalse(train.terminations['no_passage_progress'].time_out)
-    self.assertEqual(train.rewards['wall_crossing'].weight,2.)
+    self.assertEqual(train.rewards['wall_crossing'].weight,5.)
     self.assertEqual(load_rl_cfg(TASK).algorithm.entropy_coef,0.)
 
   def test_curriculum_advances_a_wall_environment_only_on_success(self):

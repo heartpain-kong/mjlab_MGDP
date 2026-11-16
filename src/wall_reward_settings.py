@@ -7,7 +7,7 @@ from pprint import pformat
 import shutil
 
 SOURCE_RELATIVE=Path('src/wall_reward_settings.py')
-WALL_REWARD_DEFAULTS={
+LEGACY_WALL_REWARD_DEFAULTS={
   'progress_gate':{'enabled':True,'progress_reference_mps':.1,'min_command_mps':.1},
   'wall_waiting':{'enabled':True,'weight':-1.,'approach_m':.75,'grace_s':.75,'ramp_s':1.5,
                   'max_rate':2.,'min_progress_m':.02,'min_command_mps':.1},
@@ -15,6 +15,15 @@ WALL_REWARD_DEFAULTS={
   'passage_progress':{'weight':1.},
   'passage_success':{'weight':5.},
   'no_passage_progress':{'enabled':True,'timeout_s':4.,'min_progress_m':.05,'min_command_mps':.1},
+}
+WALL_REWARD_DEFAULTS={
+  'progress_gate':{'enabled':True,'progress_reference_mps':.6,'min_command_mps':.05},
+  'wall_waiting':{'enabled':True,'weight':-1.5,'approach_m':.5,'grace_s':.75,'ramp_s':1.5,
+                  'max_rate':2.,'min_progress_m':.02,'min_command_mps':.05},
+  'wall_crossing':{'weight':5.,'root_clearance_m':.1,'foot_clearance_m':.03},
+  'passage_progress':{'weight':1.5},
+  'passage_success':{'weight':10.},
+  'no_passage_progress':{'enabled':True,'timeout_s':4.,'min_progress_m':.05,'min_command_mps':.05},
 }
 WALL_REWARD_OVERRIDES={}
 
@@ -97,7 +106,7 @@ def load_wall_reward_settings(path=None):
 def wall_reward_contract(settings):
   # Identical defaults retain the V5 checkpoint contract. A changed objective
   # must not inherit the old critic or mastery statistics through full resume.
-  if settings==WALL_REWARD_DEFAULTS:return 1
+  if settings==LEGACY_WALL_REWARD_DEFAULTS:return 1
   return '1:'+hashlib.sha256(json.dumps(settings,sort_keys=True,separators=(',',':')).encode()).hexdigest()
 
 
@@ -105,7 +114,7 @@ def read_wall_reward_settings(root):
   path=Path(root)/SOURCE_RELATIVE;_,_,defaults,settings=_read(path)
   return {'available':True,'settings':settings,'defaults':defaults,'groups':WALL_REWARD_GROUPS,
           'source':str(path),'changed':settings!=defaults,
-          'contract_changed':wall_reward_contract(settings)!=1}
+          'contract_changed':wall_reward_contract(settings)!=wall_reward_contract(defaults)}
 
 
 def save_wall_reward_settings(root,settings):

@@ -25,13 +25,21 @@ class NoPassageProgress(ManagerTermBase):
     self.anchor = torch.zeros_like(self.highwater)
     self.idle = torch.zeros_like(self.highwater)
     self.ready = torch.zeros(env.num_envs, device=env.device, dtype=torch.bool)
+    self.turn_anchor = torch.zeros_like(self.highwater)
+    self.turn_idle = torch.zeros_like(self.highwater)
+    self.turn_ready = torch.zeros_like(self.ready)
+    self.turn_waypoint = torch.full((env.num_envs,),-1,device=env.device,dtype=torch.long)
 
   def reset(self, env_ids=None):
     ids = slice(None) if env_ids is None else env_ids
     self.ready[ids] = False
     self.idle[ids] = 0.
+    self.turn_idle[ids] = 0.
+    self.turn_ready[ids] = False
+    self.turn_waypoint[ids] = -1
 
-  def __call__(self, env, timeout_s=4., min_progress_m=.05, min_command_mps=.1):
+  def __call__(self, env, timeout_s=4., min_progress_m=.05, min_command_mps=.1,
+               turn_timeout_s=0., turn_progress_rad=.05, turn_min_command_radps=.1):
     if timeout_s <= 0 or min_progress_m <= 0:
       raise ValueError("Stagnation window and minimum progress must be positive")
     command = env.command_manager.get_term("twist")
@@ -44,7 +52,22 @@ class NoPassageProgress(ManagerTermBase):
                             self.idle + env.step_dt, torch.zeros_like(self.idle))
     self.anchor = torch.where(advanced | ~moving, self.highwater, self.anchor)
     self.ready[:] = True
-    return (self.idle >= timeout_s - 1e-5) & moving & ~passage.passage_success(env)
+    stalled=(self.idle >= timeout_s - 1e-5) & moving
+    if turn_timeout_s>0:
+      if turn_progress_rad<=0 or turn_min_command_radps<=0:raise ValueError('Invalid rotation stall parameters')
+      if not hasattr(command,'heading_error') or not hasattr(command,'waypoint_index'):
+        raise ValueError('Rotation stall detection requires a directed passage command')
+      turning=(~moving)&(command.command[:,2].abs()>=turn_min_command_radps)
+      angle=command.heading_error.abs()
+      changed=(command.waypoint_index!=self.turn_waypoint)|~self.turn_ready
+      anchor=torch.where(changed,angle,self.turn_anchor)
+      improved=(anchor-angle)>=turn_progress_rad
+      self.turn_idle=torch.where(turning&~changed&~improved,self.turn_idle+env.step_dt,torch.zeros_like(self.turn_idle))
+      self.turn_anchor=torch.where(changed|~turning|improved,angle,anchor)
+      self.turn_waypoint[:]=command.waypoint_index
+      self.turn_ready[:]=turning
+      stalled|=turning&(self.turn_idle>=turn_timeout_s-1e-5)
+    return stalled & ~passage.passage_success(env)
 
 
 class WallGeometry(ManagerTermBase):
@@ -158,7 +181,11 @@ class WallProgressReward(WallGeometry):
     self.highwater=torch.maximum(previous,progress);self.ready[:]=True
     moving=command.command[:,:2].norm(dim=1)>=min_command_mps
     gated=self.wall_columns[env.scene.terrain.terrain_types]&moving
-    factor=(delta/(env.step_dt*progress_reference_mps)).clamp(max=1.)
+    reference=progress_reference_mps
+    if getattr(command.cfg,'obstacle_speed_limits',None) is not None:
+      reference=torch.minimum(torch.full_like(delta,progress_reference_mps),
+          command.command[:,:2].norm(dim=1).clamp_min(.001))
+    factor=(delta/(env.step_dt*reference)).clamp(max=1.)
     factor=torch.where(gated,factor,torch.ones_like(factor))
     return torch.where(value>0,value*factor,value)
 

@@ -106,9 +106,12 @@ function collect() {
     velocity_min_abs:task()?.directed_passage?"":$("velocity-min-abs")?.value || "",
     velocity_max_abs:task()?.directed_passage?"":$("velocity-max-abs")?.value || "",
     passage_speed_mode:task()?.directed_passage?$("passage-speed-mode").value:"",
+    tire_hole_guidance:Boolean(task()?.supports_tire_hole_guidance&&$("tire-hole-guidance")?.checked),
+    mgdp_skill_training:Boolean(task()?.supports_tire_hole_guidance&&$("mgdp-skill-training")?.checked),
+    mgdp_action_scale:task()?.supports_tire_hole_guidance?$("mgdp-action-scale")?.value:"",
     passage_fixed_speed:task()?.directed_passage&&$("passage-speed-mode")?.value==="fixed"?$("passage-fixed-speed").value:"",
     enable_nan_guard:$("enable-nan-guard").checked,
-    resume:$("resume").checked, checkpoint:model, onnx:model, viewer:$("viewer").value,
+    resume:$("resume").checked, warm_start:Boolean(task()?.supports_tire_hole_guidance&&$("warm-start")?.checked), checkpoint:model, onnx:model, viewer:$("viewer").value,
     map:$("map").value, map_file:$("map-file")?.value||"",
     vx:$("vx").value, vy:$("vy").value, wz:$("wz").value,
     spawn_x:$("spawn-x")?.value||"0", spawn_y:$("spawn-y").value, spawn_yaw:$("spawn-yaw")?.value||"0",
@@ -257,6 +260,8 @@ function updateCurriculumOptions(){
     passageSpeedTaskAlias=task()?.alias||null;
   }
   const fixedCruise=directed&&$("passage-speed-mode").value==="fixed";
+  $("tire-hole-options").classList.toggle("hidden",!task()?.supports_tire_hole_guidance);
+  $("tire-hole-guidance").disabled=!task()?.supports_tire_hole_guidance;
   $("signed-velocity-fields").classList.toggle("hidden",directed);
   $("passage-speed-options").classList.toggle("hidden",!directed);
   $("passage-speed-mode").disabled=!directed;
@@ -272,7 +277,7 @@ function updateCurriculumOptions(){
   // 隐藏的输入框仍会参与表单校验并被打包。手工模式下必须真正禁用它们：
   // 否则被隐藏的 LP 字段一旦不合法，浏览器无法聚焦提示，表现成「点启动没反应」。
   $("lp-options").querySelectorAll("input,select,button").forEach(control=>{control.disabled=!automatic;});
-  $("terrain-curriculum-hint").textContent=directed?(fixedCruise?`固定巡航目标 ${$("passage-fixed-speed").value} m/s；关闭自动扩速/降速，保留地形升降、路点减速与绕桩转向。完整续训须匹配原速度模式。`:"定向越障：初始0.25–0.35 m/s，所有障碍通过率和跟踪达标后扩速；1.0仅是扩速上限。旧实验请选择此模式续训。"):unsupported?"平地任务不使用地形采样课程。":automatic?"自动模式固定使用填写的速度包络，关闭原地形升降与扩速；先固定奖励做对照。":"手工模式按已有进度、存活与跟踪质量升降地形和扩速。";
+  $("terrain-curriculum-hint").textContent=directed?(fixedCruise?`固定巡航目标 ${$("passage-fixed-speed").value} m/s；关闭自动扩速/降速，保留地形升降、路点减速与绕桩转向。完整续训须匹配原速度模式。`:`定向越障：初始${task()?.passage_start_low??.25}–${task()?.passage_start_high??.35} m/s；各地形窗口达标后扩速，上限${task()?.passage_speed_limit??1.0} m/s。路点附近和绕桩仍可能减速或转向。`):unsupported?"平地任务不使用地形采样课程。":automatic?"自动模式固定使用填写的速度包络，关闭原地形升降与扩速；先固定奖励做对照。":"手工模式按已有进度、存活与跟踪质量升降地形和扩速。";
 }
 async function updateRunNameHint(){
   const hint=$("run-name-hint"), input=$("run-name");
@@ -319,12 +324,19 @@ function renderPassage(data){
   const low=metricValue(data,"passage_speed_min")??.25;
   const fixed=metricValue(data,"passage_speed_fixed");
   $("passage-speed").textContent=speed==null?"等待越障训练数据…":fixed===1?`当前训练固定巡航目标 ${speed.toFixed(3)} m/s；路点及转向可减速`:`当前训练巡航范围 ${low.toFixed(3)}–${speed.toFixed(3)} m/s；各类达标后扩速`;
+  const wallLimit=metricValue(data,'wall_speed_limit'),slalomLimit=metricValue(data,'slalom_speed_limit');
+  if(wallLimit!=null&&slalomLimit!=null)$("passage-speed").textContent+=`；墙前后上限 ${wallLimit.toFixed(2)}、绕桩上限 ${slalomLimit.toFixed(2)} m/s`;
   const labels={start_flat:"平地",stepping_stones:"梅花桩",balance_beam:"单木桥（净距400mm）",gap_steps:["LgDog1-Race-MGDP-WallTraining","LgDog1-Race-MGDP-WallTraining-D435i20"].includes(task()?.id)?"楼梯过沟下坡→上坡过沟下楼梯":"坡道→过沟→下楼梯",high_wall:"高墙",clearance_frame:"限高笼",tire_array:"轮胎阵",random_hills:"随机高低起伏",mjlab_rough:"mjlab原生随机粗糙",slalom_brick:"绕桩→砖木坑"};
   const list=$("passage-results");list.replaceChildren();
   for(const [key,label] of Object.entries(labels)){
     const item=data?.passage?.[key];const div=document.createElement("div");
     const name=document.createElement("small");name.textContent=label;
     const value=document.createElement("strong");value.textContent=item?.samples>0?`${(100*item.rate).toFixed(1)}% · n=${Math.round(item.samples)}`:"未收集";
+    if(Number.isFinite(item?.level_mean))value.textContent+=` · 平均第${(item.level_mean+1).toFixed(1)}档`;
+    const detail=[];
+    if(Number.isFinite(item?.lowest_fraction))detail.push(`第一档占比 ${(100*item.lowest_fraction).toFixed(1)}%`);
+    if(item?.samples>0&&Number.isFinite(item?.tracking_error))detail.push(`当前窗口XY速度误差 ${item.tracking_error.toFixed(3)} m/s`);
+    div.title=detail.join('；');
     div.append(name,value);list.append(div);
   }
 }
@@ -510,7 +522,10 @@ function showMode() {
     el.querySelectorAll("input,select,button").forEach(control=>{control.disabled=inactive;});
   });
   document.querySelectorAll("[data-mode]").forEach(el=>{const active=el.dataset.mode===mode;el.classList.toggle("selected",active);el.setAttribute("aria-selected",String(active));});
-  $("model-field").classList.toggle("hidden",!(mode==="play"||mode==="sim"||(mode==="train"&&$("resume").checked)));
+  $("warm-start-option").classList.toggle("hidden",!task()?.supports_tire_hole_guidance);
+  $("warm-start").disabled=!task()?.supports_tire_hole_guidance;
+  $("skill-training-options")?.classList.toggle("hidden",!task()?.supports_tire_hole_guidance);
+  $("model-field").classList.toggle("hidden",!(mode==="play"||mode==="sim"||(mode==="train"&&($("resume").checked||(!$("warm-start").disabled&&$("warm-start").checked)))));
   $("mode-tag").textContent=modeNames[mode];
   $("launch").textContent={train:"启动训练 ↗",play:"开始回放 ↗",sim:"开始验证 ↗",rewards:"查看奖励 ↗"}[mode];
   $("launch-hint").textContent={train:"按显存调整环境数；开始后查看下方日志。",play:"使用 checkpoint；不会自动刷新已启动的策略。",sim:"使用 ONNX；开启窗口时会显示在运行服务的电脑上。",rewards:"读取配置，无需 GPU。首次导入依赖可能需要等待。"}[mode];
@@ -571,7 +586,7 @@ function renderWallRules(values=wallRewardData?.settings){
   $("wall-rule-state").textContent=wallRewardData.changed?"已保存覆盖":"默认设置";
   $("wall-rule-note").textContent=wallRewardData.task==="race_mgdp_wall_d435i20"
     ?"本入口需要D435i下俯20°的配套感知与新策略。高墙规则与原相机强化课程共用；修改奖励目标后需用相同相机与感知迁移策略。"
-    :wallRewardData.contract_changed?"已修改奖励目标：旧参数的检查点需策略迁移，不能直接完整续训。":"默认参数兼容原V5检查点；修改奖励目标后需策略迁移。";
+    :wallRewardData.contract_changed?"已修改奖励目标：不同参数的检查点需策略迁移，不能直接完整续训。":"当前默认采用V6归档奖励；不同奖励或动作映射的检查点需策略迁移。";
   for(const [group,schema] of Object.entries(wallRewardData.groups)){
     const card=document.createElement("section");card.className="wall-rule-card";
     const title=document.createElement("h3");title.textContent=schema.label;
@@ -832,7 +847,8 @@ async function start() {
     $("algorithm").addEventListener("change",async()=>{renderModelSceneSelectors($("task").value);await changeTask();});
     $("scene").addEventListener("change",async()=>{renderModelSceneSelectors($("task").value);await changeTask();});
     $("map").addEventListener("change",()=>{renderMapInfo();queuePreview();});
-    $("resume").addEventListener("change",()=>{showMode();preview();});
+    $("resume").addEventListener("change",()=>{if($("resume").checked)$("warm-start").checked=false;showMode();preview();});
+    $("warm-start").addEventListener("change",()=>{if($("warm-start").checked)$("resume").checked=false;showMode();preview();});
     $("terrain-curriculum").addEventListener("change",()=>{updateCurriculumOptions();queuePreview();});
     $("passage-speed-mode").addEventListener("change",()=>{updateCurriculumOptions();queuePreview();});
     $("passage-fixed-speed").addEventListener("input",()=>{updateCurriculumOptions();queuePreview();});

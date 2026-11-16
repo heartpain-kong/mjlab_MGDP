@@ -269,6 +269,9 @@ class HTTPTests(unittest.TestCase):
     run.mkdir(parents=True)
     writer = EventFileWriter(str(run))
     values = {"Curriculum/passage/success_rate/high_wall": .75,
+              "Curriculum/passage/tracking_error/high_wall": .5,
+              "Curriculum/passage/level_mean/high_wall": 2.,
+              "Curriculum/passage/lowest_fraction/high_wall": .25,
               "Curriculum/passage/samples/high_wall": 40.,
               "Curriculum/passage/speed_max": .4,
               "Curriculum/passage/level_mean": 3.2}
@@ -282,7 +285,8 @@ class HTTPTests(unittest.TestCase):
       if result.get("available"):
         break
       time.sleep(.05)
-    self.assertEqual(result["passage"]["high_wall"], {"rate": .75,"samples": 40.})
+    self.assertEqual(result["passage"]["high_wall"], {"rate": .75,"samples": 40.,
+      'tracking_error':.5,'level_mean':2.,'lowest_fraction':.25})
     self.assertAlmostEqual(result["metrics"]["passage_speed_max"]["value"], .4, places=5)
     self.assertAlmostEqual(result["metrics"]["terrain_level"]["value"], 3.2, places=5)
 

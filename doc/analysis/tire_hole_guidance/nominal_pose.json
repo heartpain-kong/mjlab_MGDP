@@ -1,0 +1,50 @@
+{
+  "safe_radius_m": 0.14264699999999997,
+  "pose_type": "nominal_forward_kinematics_not_rollout",
+  "feet": [
+    {
+      "foot": "FR",
+      "sphere_center": [
+        2.475805880618941,
+        -0.162054,
+        0.012576387997974309
+      ],
+      "nearest_column_1_based": 2,
+      "distance_to_hole_center": 0.11294888162222716,
+      "inside_safe_disk": true
+    },
+    {
+      "foot": "FL",
+      "sphere_center": [
+        2.4758058806189407,
+        0.161946,
+        0.012576387997974309
+      ],
+      "nearest_column_1_based": 2,
+      "distance_to_hole_center": 0.11305687887518984,
+      "inside_safe_disk": true
+    },
+    {
+      "foot": "RR",
+      "sphere_center": [
+        1.9688058806189412,
+        -0.162054,
+        0.012576387997974309
+      ],
+      "nearest_column_1_based": 1,
+      "distance_to_hole_center": 0.12114354962968027,
+      "inside_safe_disk": true
+    },
+    {
+      "foot": "RL",
+      "sphere_center": [
+        1.9688058806189412,
+        0.161946,
+        0.012576387997974309
+      ],
+      "nearest_column_1_based": 1,
+      "distance_to_hole_center": 0.12124424777351818,
+      "inside_safe_disk": true
+    }
+  ]
+}

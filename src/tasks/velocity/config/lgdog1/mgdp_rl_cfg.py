@@ -10,7 +10,7 @@ from __future__ import annotations
 from src.tasks.velocity.config.lgdog1.rl_cfg import lgdog1_ppo_runner_cfg
 
 
-def lgdog1_mgdp_runner_cfg(experiment_name: str = "lgdog1_velocity_mgdp_v2"):
+def lgdog1_mgdp_runner_cfg(experiment_name: str = "lgdog1_velocity_mgdp_v2", *, initial_std: float = .5):
     cfg = lgdog1_ppo_runner_cfg(experiment_name)
     # Two actor groups: proprio history (4 x 47) and perception (64).
     cfg.obs_groups = {
@@ -20,6 +20,7 @@ def lgdog1_mgdp_runner_cfg(experiment_name: str = "lgdog1_velocity_mgdp_v2"):
     # actor input = 188 + 64 = 252; the default [512, 256, 128] is fine.
     cfg.actor.hidden_dims = (512, 256, 128)
     cfg.actor.obs_normalization = True
+    cfg.actor.distribution_cfg = {**cfg.actor.distribution_cfg, 'init_std': initial_std}
     cfg.critic.hidden_dims = (512, 256, 128)
     cfg.critic.obs_normalization = True
     cfg.max_iterations = 10001

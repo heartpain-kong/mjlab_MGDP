@@ -1,0 +1,165 @@
+{
+  "root": "E:\\mjlab\\work\\mgdp-tire-guidance-f3lwf9wo",
+  "device": "cpu",
+  "envs": 2,
+  "grid": [
+    8,
+    1
+  ],
+  "tire_only_fixture": true,
+  "lateral_rows_cropped_to_two_for_cpu": true,
+  "guidance_contract": {
+    "version": 1,
+    "weight": 0.25,
+    "params": {
+      "sensor_name": "stone_support_contact",
+      "margin_m": 0.01,
+      "floor_tolerance_m": 0.008,
+      "min_force_n": 1.0
+    }
+  },
+  "frozen_encoder_reused": "E:\\mjlab\\work\\down20-pretrain-button-n_1d_k4k\\logs\\mgdp\\perception\\mgdp_wall_d435i20.pt",
+  "fresh_ppo_iterations": 1,
+  "full_resume_iterations": 1,
+  "adaptive_actor_transfer_iterations": 1,
+  "samples": [
+    {
+      "foot_contact_slots": 16,
+      "cruise": [
+        1.0,
+        1.0
+      ],
+      "initial_command_norm": [
+        0.9999998807907104,
+        0.9999998807907104
+      ]
+    },
+    {
+      "foot_contact_slots": 16,
+      "cruise": [
+        1.0,
+        1.0
+      ],
+      "initial_command_norm": [
+        0.9999998807907104,
+        0.9999998807907104
+      ]
+    },
+    {
+      "foot_contact_slots": 16,
+      "cruise": [
+        1.0,
+        1.0
+      ],
+      "initial_command_norm": [
+        0.9999998807907104,
+        0.9999998807907104
+      ]
+    }
+  ],
+  "tensorboard": {
+    "fresh": {
+      "speed_min": [
+        1.0
+      ],
+      "speed_max": [
+        1.0
+      ],
+      "speed_fixed": [
+        1.0
+      ]
+    },
+    "resume": {
+      "speed_min": [
+        1.0
+      ],
+      "speed_max": [
+        1.0
+      ],
+      "speed_fixed": [
+        1.0
+      ]
+    },
+    "from_adaptive": {
+      "speed_min": [
+        1.0
+      ],
+      "speed_max": [
+        1.0
+      ],
+      "speed_fixed": [
+        1.0
+      ]
+    }
+  },
+  "checkpoint_ranges": [
+    1.0,
+    1.0
+  ],
+  "onnx_fixed_speed": 1.0,
+  "mismatched_resume_rejected_before_physics": true,
+  "gpu_validated": false,
+  "hardware_validated": false,
+  "convergence_validated": false,
+  "regression": {
+    "passed": 99,
+    "subtests_passed": 34,
+    "log": ".artifacts/mgdp-tire-regression.log"
+  },
+  "nominal_fk": {
+    "safe_radius_m": 0.14264699999999997,
+    "pose_type": "nominal_forward_kinematics_not_rollout",
+    "feet": [
+      {
+        "foot": "FR",
+        "sphere_center": [
+          2.475805880618941,
+          -0.162054,
+          0.012576387997974309
+        ],
+        "nearest_column_1_based": 2,
+        "distance_to_hole_center": 0.11294888162222716,
+        "inside_safe_disk": true
+      },
+      {
+        "foot": "FL",
+        "sphere_center": [
+          2.4758058806189407,
+          0.161946,
+          0.012576387997974309
+        ],
+        "nearest_column_1_based": 2,
+        "distance_to_hole_center": 0.11305687887518984,
+        "inside_safe_disk": true
+      },
+      {
+        "foot": "RR",
+        "sphere_center": [
+          1.9688058806189412,
+          -0.162054,
+          0.012576387997974309
+        ],
+        "nearest_column_1_based": 1,
+        "distance_to_hole_center": 0.12114354962968027,
+        "inside_safe_disk": true
+      },
+      {
+        "foot": "RL",
+        "sphere_center": [
+          1.9688058806189412,
+          0.161946,
+          0.012576387997974309
+        ],
+        "nearest_column_1_based": 1,
+        "distance_to_hole_center": 0.12124424777351818,
+        "inside_safe_disk": true
+      }
+    ]
+  },
+  "limits": [
+    "CPU PPO fixture uses two environments and 8x1 tiles with lateral repeated tire rows cropped to the central pair; production terrain is unchanged.",
+    "Full eight-stage mesh geometry was separately ray-tested without cropping.",
+    "PPO integration is not a convergence or trained foot-placement acceptance test.",
+    "No GPU throughput, GPU memory, 1m/s crossing or hardware validation."
+  ]
+}
