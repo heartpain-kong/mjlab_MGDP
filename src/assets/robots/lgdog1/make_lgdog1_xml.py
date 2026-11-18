@@ -72,15 +72,15 @@ HEADER = '''<mujoco model="lgdog1">
                          （★ 序号在 `_collision` 之前，见下面第 3b 步的说明）
       · 足端接触 geom  = {FR,FL,RR,RL}_calf2_collision（球，r=0.012）
       · 关节顺序       = [FR,FL,RR,RL] × [hip,thigh,calf]
-    关节限位 hip ±1.2 / thigh ±1.5 / calf ±0.85，力矩 hip,thigh ±10 Nm、calf ±20 Nm（1:2 减速比）。
-    关节被动参数 armature=0.01 / damping=0.01 / frictionloss=0.2 与 sim2sim 一致
+    关节限位 hip ±1.45 / thigh ±1.75 / calf ±0.85，力矩 hip,thigh ±10 Nm、calf ±20 Nm（1:2 减速比）。
+    关节被动参数 armature=0.0042 / damping=0.01 / frictionloss=0.2 与 sim2sim 一致
     （注意：armature 与 frictionloss 由 lgdog1_constants.py 的 actuator 配置写入，两者取值必须相同）。
   -->
   <compiler angle="radian" meshdir="assets" autolimits="true" />
 
   <default>
     <geom contype="1" conaffinity="1" friction="0.6 0.3 0.3" rgba="0.5 0.6 0.7 1" margin="0.001" group="0" />
-    <joint damping="0.01" armature="0.01" frictionloss="0.2" />
+    <joint damping="0.01" armature="0.0042" frictionloss="0.2" />
   </default>
 
   <asset>

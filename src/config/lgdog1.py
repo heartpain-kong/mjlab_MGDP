@@ -17,9 +17,9 @@ class JointControl:
   frictionloss: float
 
 
-HIP = JointControl((r".*_hip_joint",), 20.0, 1.0, 10.0, 0.01, 0.2)
-THIGH = JointControl((r".*_thigh_joint",), 20.0, 1.0, 10.0, 0.01, 0.2)
-CALF = JointControl((r".*_calf_joint",), 40.0, 2.0, 20.0, 0.02, 0.2)
+HIP = JointControl((r".*_hip_joint",), 20.0, 1.0, 10.0, 0.0042, 0.2)
+THIGH = JointControl((r".*_thigh_joint",), 20.0, 1.0, 10.0, 0.0042, 0.2)
+CALF = JointControl((r".*_calf_joint",), 40.0, 2.0, 20.0, 0.0042, 0.2)
 
 INITIAL_POSITION = (0.0, 0.0, 0.31)
 INITIAL_JOINT_POSITIONS = (

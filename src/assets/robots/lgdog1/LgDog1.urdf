@@ -384,7 +384,7 @@
     <child link="FL_hip"/>
     <axis xyz="1 0 0"/>
     <dynamics damping="0" friction="0"/>
-    <limit effort="10" lower="-1.2" upper="1.2" velocity="18.85"/>
+    <limit effort="10" lower="-1.45" upper="1.45" velocity="18.85"/>
   </joint>
 
   <joint name="FL_thigh_joint" type="revolute">
@@ -393,7 +393,7 @@
     <child link="FL_thigh"/>
     <axis xyz="0 1 0"/>
     <dynamics damping="0" friction="0"/>
-    <limit effort="10" lower="-1.5" upper="1.5" velocity="18.85"/>
+    <limit effort="10" lower="-1.75" upper="1.75" velocity="18.85"/>
   </joint>
 
   <joint name="FL_calf_joint" type="revolute">
@@ -448,7 +448,7 @@
     <child link="FR_hip"/>
     <axis xyz="1 0 0"/>
     <dynamics damping="0" friction="0"/>
-    <limit effort="10" lower="-1.2" upper="1.2" velocity="18.85"/>
+    <limit effort="10" lower="-1.45" upper="1.45" velocity="18.85"/>
   </joint>
 
   <joint name="FR_thigh_joint" type="revolute">
@@ -457,7 +457,7 @@
     <child link="FR_thigh"/>
     <axis xyz="0 1 0"/>
     <dynamics damping="0" friction="0"/>
-    <limit effort="10" lower="-1.5" upper="1.5" velocity="18.85"/>
+    <limit effort="10" lower="-1.75" upper="1.75" velocity="18.85"/>
   </joint>
 
   <joint name="FR_calf_joint" type="revolute">
@@ -500,7 +500,7 @@
     <child link="RL_hip"/>
     <axis xyz="1 0 0"/>
     <dynamics damping="0" friction="0"/>
-    <limit effort="10" lower="-1.2" upper="1.2" velocity="18.85"/>
+    <limit effort="10" lower="-1.45" upper="1.45" velocity="18.85"/>
   </joint>
 
   <joint name="RL_thigh_joint" type="revolute">
@@ -509,7 +509,7 @@
     <child link="RL_thigh"/>
     <axis xyz="0 1 0"/>
     <dynamics damping="0" friction="0"/>
-    <limit effort="10" lower="-1.5" upper="1.5" velocity="18.85"/>
+    <limit effort="10" lower="-1.75" upper="1.75" velocity="18.85"/>
   </joint>
 
   <joint name="RL_calf_joint" type="revolute">
@@ -552,7 +552,7 @@
     <child link="RR_hip"/>
     <axis xyz="1 0 0"/>
     <dynamics damping="0" friction="0"/>
-    <limit effort="10" lower="-1.2" upper="1.2" velocity="18.85"/>
+    <limit effort="10" lower="-1.45" upper="1.45" velocity="18.85"/>
   </joint>
 
   <joint name="RR_thigh_joint" type="revolute">
@@ -561,7 +561,7 @@
     <child link="RR_thigh"/>
     <axis xyz="0 1 0"/>
     <dynamics damping="0" friction="0"/>
-    <limit effort="10" lower="-1.5" upper="1.5" velocity="18.85"/>
+    <limit effort="10" lower="-1.75" upper="1.75" velocity="18.85"/>
   </joint>
 
   <joint name="RR_calf_joint" type="revolute">
