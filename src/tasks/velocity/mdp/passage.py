@@ -13,15 +13,75 @@ from .velocity_command import UniformVelocityCommand, UniformVelocityCommandCfg
 DEFAULT_SPEED_LIMIT = 1.0
 
 
+def terrain_column_kinds(generator, device=None):
+  """Sub-terrain index owned by every terrain column."""
+  proportions = torch.tensor([getattr(c, "proportion", 1.)
+    for c in generator.sub_terrains.values()], device=device, dtype=torch.float32)
+  cumulative = (proportions/proportions.sum()).cumsum(0)
+  positions = (torch.arange(generator.num_cols, device=device, dtype=torch.float32)
+               / generator.num_cols + .001)
+  return torch.searchsorted(cumulative, positions, right=True)
+
+
+def resolve_speed_groups(spec, column_names, kind_of_column):
+  """Map each configured speed group to the terrain columns it owns.
+
+  ``spec`` is the ``speed_groups`` mapping of group name to terrain-column
+  names. ``None`` keeps the legacy single global gate. Terrain kinds left out
+  of the mapping are collected into a ``default`` group so every column keeps
+  a speed band and can still expand without waiting for the others.
+  """
+  if spec is None:
+    return None
+  if not isinstance(spec, dict) or not spec:
+    raise ValueError('speed_groups must be a non-empty mapping of group name to terrains')
+  known = {name: index for index, name in enumerate(column_names)}
+  owner = {}
+  groups = {}
+  for group, members in spec.items():
+    names = (members,) if isinstance(members, str) else tuple(members)
+    if not names:
+      raise ValueError(f'Speed group {group!r} has no terrains')
+    kinds = []
+    for name in names:
+      if name not in known:
+        raise ValueError(f'Speed group {group!r} names unknown terrain {name!r}')
+      if known[name] in owner:
+        raise ValueError(f'Terrain {name!r} is in two speed groups')
+      owner[known[name]] = group
+      kinds.append(known[name])
+    groups[group] = torch.isin(kind_of_column,
+      torch.tensor(kinds, dtype=torch.long, device=kind_of_column.device)).nonzero().flatten()
+  missing = [index for index in range(len(column_names)) if index not in owner]
+  if missing:
+    unclaimed = torch.isin(kind_of_column,
+      torch.tensor(missing, dtype=torch.long, device=kind_of_column.device)).nonzero().flatten()
+    if len(unclaimed):
+      name = 'default'
+      while name in groups:
+        name += '_'
+      groups[name] = unclaimed
+      warnings.warn(f'Terrains {[column_names[index] for index in missing]} are not in any '
+                    f'speed group; expanding them as {name!r}')
+  return groups
+
+
 class PassageCommand(UniformVelocityCommand):
   def __init__(self, cfg, env):
     super().__init__(cfg, env)
     self.speed = torch.zeros(self.num_envs, device=self.device)
     generator = env.scene.terrain.cfg.terrain_generator
     names = list(generator.sub_terrains)
-    proportions = torch.tensor([c.proportion for c in generator.sub_terrains.values()],device=self.device)
-    columns = torch.searchsorted((proportions/proportions.sum()).cumsum(0),
-      torch.arange(generator.num_cols,device=self.device)/generator.num_cols+.001,right=True)
+    columns = terrain_column_kinds(generator, self.device)
+    # Per-environment cruise band. The curriculum may widen or narrow a band
+    # for one terrain group without touching the others.
+    lower, upper = (float(value) for value in cfg.ranges.lin_vel_x)
+    self.speed_floors = torch.full((self.num_envs,), lower, device=self.device)
+    self.speed_limits = torch.full((self.num_envs,), upper, device=self.device)
+    self.column_names = names
+    self.column_kinds = columns
+    self.speed_group_columns = resolve_speed_groups(getattr(cfg, "speed_groups", None),
+      names, columns)
     staged=getattr(cfg,'staged_waypoints',{})
     self.route_levels=generator.num_rows if staged else 1
     routes=[]
@@ -69,9 +129,44 @@ class PassageCommand(UniformVelocityCommand):
   def local_xy(self):
     return self.robot.data.root_link_pos_w[:, :2] - self._env.scene.env_origins[:, :2]
 
+  def column_mask(self, columns):
+    """Environments whose terrain column is one of ``columns``."""
+    columns = torch.as_tensor(columns, device=self.device, dtype=torch.long).flatten()
+    if len(columns) == 0:
+      return torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+    return torch.isin(self._env.scene.terrain.terrain_types, columns)
+
+  def set_speed_limits(self, columns, low, high):
+    """Set the cruise band of every environment on the given terrain columns."""
+    low, high = float(low), float(high)
+    if not low <= high:
+      raise ValueError('Passage speed limits need low <= high')
+    mask = self.column_mask(columns)
+    self.speed_floors[mask] = low
+    self.speed_limits[mask] = high
+    self.speed[mask] = self.speed[mask].clamp(min=low, max=high)
+
+  def set_global_speeds(self, low, high):
+    """Set one cruise band for the whole batch (fixed-speed runs)."""
+    low, high = float(low), float(high)
+    if not low <= high:
+      raise ValueError('Passage speed limits need low <= high')
+    self.speed_floors.fill_(low)
+    self.speed_limits.fill_(high)
+    self.speed.clamp_(min=low, max=high)
+
+  def set_group_speeds(self, group_name, low, high):
+    """Set one configured ``speed_groups`` band by group name."""
+    groups = getattr(self, 'speed_group_columns', None)
+    if groups is None or group_name not in groups:
+      raise KeyError(f'Unknown passage speed group {group_name!r}')
+    self.set_speed_limits(groups[group_name], low, high)
+
   def _resample_command(self, env_ids):
-    self.speed[env_ids] = torch.empty(len(env_ids), device=self.device).uniform_(
-      *self.cfg.ranges.lin_vel_x)
+    floor = self.speed_floors[env_ids]
+    limit = self.speed_limits[env_ids].clamp(min=floor)
+    fraction = torch.rand(len(env_ids), device=self.device)
+    self.speed[env_ids] = floor + fraction*(limit-floor)
     self.is_heading_env[env_ids] = True
     self.is_standing_env[env_ids] = False
     self.heading_target[env_ids] = 0.
@@ -103,6 +198,12 @@ class PassageCommandCfg(UniformVelocityCommandCfg):
   terrain_level_up_streak: dict[str, int] | None = None
   waypoint_radius: float = .15
   waypoints: dict[str, tuple[tuple[float,float],...]] = field(default_factory=dict)
+  # ★ 2026-11-19: terrains of one group share a cruise band and expand together;
+  # a stuck group (e.g. high_wall) no longer freezes every other terrain.
+  # None keeps the old single global gate.
+  speed_groups: dict[str, tuple[str, ...]] | None = None
+  speed_group_floor: float = .35
+  speed_group_ceiling: float = 2.
 
   def build(self, env):
     return PassageCommand(self, env)
@@ -163,7 +264,13 @@ class ForwardProgress(ManagerTermBase):
 
 
 class PassageCurriculum(ManagerTermBase):
-  """Advance terrain only on successful crossings; speed needs every column."""
+  """Advance terrain only on successful crossings.
+
+  With ``speed_groups`` configured, each terrain group owns its own cruise band
+  and expands it on its own successful windows, so one unlearnable lesson (e.g.
+  high_wall) only freezes its own group. Without it the old single global gate
+  is kept unchanged.
+  """
   def __init__(self, cfg, env):
     super().__init__(env)
     self.terrain = env.scene.terrain
@@ -188,6 +295,14 @@ class PassageCurriculum(ManagerTermBase):
       command_contract.pop('obstacle_speed_limits',None)
     if isinstance(command_contract,dict) and not command_contract.get('staged_waypoints'):
       command_contract.pop('staged_waypoints',None)
+    # New per-group defaults must not invalidate existing checkpoints.
+    if isinstance(command_contract,dict):
+      defaults = type(self.command.cfg)
+      if command_contract.get('speed_groups') is None:
+        command_contract.pop('speed_groups',None)
+      for key in ('speed_group_floor','speed_group_ceiling'):
+        if command_contract.get(key) == getattr(defaults,key,None):
+          command_contract.pop(key,None)
     contract = (asdict(generator), env.step_dt, env.cfg.episode_length_s if hasattr(env.cfg,"episode_length_s") else None,
                 command_contract)
     events = getattr(env.cfg, "events", {})
@@ -198,17 +313,71 @@ class PassageCurriculum(ManagerTermBase):
         "reset_robot_joints", "himloco_pd_motor", "himloco_push"))
       contract += (randomization, asdict(env.cfg.actions["joint_pos"]))
     self.fingerprint = hashlib.sha256(repr(contract).encode()).hexdigest()
-    proportions = torch.tensor([getattr(c, "proportion", 1.)
-      for c in generator.sub_terrains.values()], device=self.device)
-    cumulative = (proportions/proportions.sum()).cumsum(0)
-    self.kind_of_column = torch.searchsorted(cumulative,
-      torch.arange(cols, device=self.device)/cols+.001, right=True)
+    self.kind_of_column = terrain_column_kinds(generator, self.device)
     self.status_path = None
     self._status_last = 0.
     self.diagnostics=None
     if getattr(self.command.cfg,'skill_training_profile',{}).get('version')==5:
       from .passage_diagnostics import PassageDiagnostics
       self.diagnostics=PassageDiagnostics(env,self.column_names,self.kind_of_column)
+    self.speed_groups = getattr(self.command.cfg, 'speed_groups', None)
+    self.grouped = self.speed_groups is not None
+    self.groups = self._build_speed_groups()
+    for group in self.groups.values():
+      self._apply_speeds(group['columns'], group['low'], group['high'])
+    if self.grouped:
+      self._sync_command_range()
+
+  def _group_bounds(self):
+    cfg = self.command.cfg
+    floor = float(getattr(cfg, 'speed_group_floor', .35))
+    ceiling = float(getattr(cfg, 'speed_group_ceiling', 2.))
+    if floor > ceiling:
+      raise ValueError('speed_group_floor must not exceed speed_group_ceiling')
+    return floor, ceiling
+
+  def _build_speed_groups(self):
+    """Terrain columns and cruise band of every speed group."""
+    cfg = self.command.cfg
+    low, high = (float(value) for value in cfg.ranges.lin_vel_x)
+    mapping = resolve_speed_groups(self.speed_groups, self.column_names, self.kind_of_column)
+    if mapping is None:
+      return {'all': {'columns': torch.arange(len(self.count), device=self.device),
+                      'low': low, 'high': high, 'streak': 0}}
+    floor, ceiling = self._group_bounds()
+    groups = {}
+    for name, columns in mapping.items():
+      group_low = max(low, floor)
+      group_high = min(max(high, group_low), ceiling)
+      groups[name] = {'columns': columns, 'low': group_low, 'high': group_high, 'streak': 0}
+    return groups
+
+  def _apply_speeds(self, columns, low, high):
+    """Push one cruise band to the command, per environment."""
+    low, high = float(low), float(high)
+    setter = getattr(self.command, 'set_speed_limits', None)
+    if setter is None:
+      self.command.cfg.ranges.lin_vel_x = (low, high)
+    else:
+      setter(columns, low, high)
+
+  def _sync_command_range(self):
+    """Keep the command's public range useful for logs, play and ONNX export."""
+    groups = list(self.groups.values())
+    if not groups:
+      return
+    self.command.cfg.ranges.lin_vel_x = (min(float(g['low']) for g in groups),
+                                         max(float(g['high']) for g in groups))
+
+  def _apply_fixed_speed(self, speed):
+    for group in self.groups.values():
+      group['low'] = group['high'] = float(speed)
+      group['streak'] = 0
+      self._apply_speeds(group['columns'], speed, speed)
+    self.command.cfg.ranges.lin_vel_x = (speed, speed)
+    setter = getattr(self.command, 'set_global_speeds', None)
+    if setter is not None:
+      setter(speed, speed)
 
   def write_distribution(self, force=False):
     """Write a throttled, atomic snapshot of all live environments."""
@@ -242,7 +411,7 @@ class PassageCurriculum(ManagerTermBase):
     if fixed_speed is not None:
       from src.config.passage_speed import validate_fixed_speed
       fixed_speed=validate_fixed_speed(fixed_speed)
-      self.command.cfg.ranges.lin_vel_x=(fixed_speed,fixed_speed)
+      self._apply_fixed_speed(fixed_speed)
     # Initial/randomized reset buffers are not completed episodes.
     ids = env_ids if env_ids is not None else torch.arange(env.num_envs, device=self.device)
     reset_mask = getattr(env, "reset_buf", None)
@@ -307,25 +476,76 @@ class PassageCurriculum(ManagerTermBase):
       logs[f"level_mean/{name}"] = (levels.float()*env_mask).sum()/total
       logs[f"lowest_fraction/{name}"] = ((levels == 0) & env_mask).sum()/total
     # Missing obstacle kinds/samples never count as passed.
-    if represented.all() and (self.count >= min_episodes).all():
-      good = (rate >= success_threshold).all() & (errors <= max_error).all()
-      bad = (rate < .35).any() | (errors > .4).any()
-      self.streak = self.streak + 1 if good else 0
-      low, high = self.command.cfg.ranges.lin_vel_x
-      if fixed_speed is not None:
-        self.streak=0
-      elif self.streak >= 3:
-        high = min(speed_limit, high+.025)
-        self.streak = 0
-      elif bad:
-        high = max(speed_floor, low, high-.025)
-      self.command.cfg.ranges.lin_vel_x = (low, high)
-      self.count.zero_(); self.success.zero_(); self.error.zero_()
+    if self.grouped:
+      logs.update(self._expand_groups(rate, errors, min_episodes, success_threshold,
+                                      max_error, fixed_speed))
+    else:
+      self._expand_global(represented, rate, errors, min_episodes, success_threshold,
+                          max_error, speed_limit, speed_floor, fixed_speed)
     self.write_distribution()
     return logs
 
+  def _expand_global(self, represented, rate, errors, min_episodes, success_threshold,
+                     max_error, speed_limit, speed_floor, fixed_speed):
+    """Legacy single gate: every column must pass before one +0.025 step."""
+    if not (represented.all() and (self.count >= min_episodes).all()):
+      return
+    good = (rate >= success_threshold).all() & (errors <= max_error).all()
+    bad = (rate < .35).any() | (errors > .4).any()
+    self.streak = self.streak + 1 if good else 0
+    low, high = self.command.cfg.ranges.lin_vel_x
+    if fixed_speed is not None:
+      self.streak=0
+    elif self.streak >= 3:
+      high = min(speed_limit, high+.025)
+      self.streak = 0
+    elif bad:
+      high = max(speed_floor, low, high-.025)
+    self.command.cfg.ranges.lin_vel_x = (low, high)
+    self._apply_speeds(self.groups['all']['columns'], low, high)
+    self.count.zero_(); self.success.zero_(); self.error.zero_()
+
+  def _expand_groups(self, rate, errors, min_episodes, success_threshold, max_error, fixed_speed):
+    """Expand each terrain group on its own full window; never retract.
+
+    A group only waits for its own columns, so a lesson that never succeeds
+    (high_wall) freezes that group alone while the others keep speeding up.
+    """
+    ceiling = self._group_bounds()[1]
+    for group in self.groups.values():
+      columns = group['columns']
+      if len(columns) == 0:
+        continue
+      counts = self.count[columns]
+      if not bool((counts >= min_episodes).all()):
+        continue  # this group's window is still filling
+      good = bool(((rate[columns] >= success_threshold) & (errors[columns] <= max_error)).all())
+      group['streak'] = group['streak'] + 1 if good else 0
+      high = group['high']
+      if fixed_speed is not None:
+        group['streak'] = 0
+      elif group['streak'] >= 3:
+        high = min(ceiling, high+.025)
+        group['streak'] = 0
+      if high != group['high']:
+        group['high'] = high
+        self._apply_speeds(columns, group['low'], high)
+      self.count[columns] = 0.
+      self.success[columns] = 0.
+      self.error[columns] = 0.
+    self._sync_command_range()
+    logs = {f'speed_max/{name}': torch.tensor(float(group['high']), device=self.device)
+            for name, group in self.groups.items()}
+    logs.update({f'speed_min/{name}': torch.tensor(float(group['low']), device=self.device)
+                 for name, group in self.groups.items()})
+    logs['speed_max'] = torch.tensor(float(self.command.cfg.ranges.lin_vel_x[1]),
+                                     device=self.device)
+    logs['speed_min'] = torch.tensor(float(self.command.cfg.ranges.lin_vel_x[0]),
+                                     device=self.device)
+    return logs
+
   def state_dict(self):
-    return {"version": 1, "params": self.params, "names": self.column_names, "grid": self.grid,
+    state = {"version": 1, "params": self.params, "names": self.column_names, "grid": self.grid,
       "ranges": tuple(self.command.cfg.ranges.lin_vel_x), "streak": self.streak,
       "fingerprint": self.fingerprint,
       **{k: getattr(self,k).detach().cpu().clone() for k in ("count","success","error")},
@@ -333,6 +553,11 @@ class PassageCurriculum(ManagerTermBase):
       **({'diagnostics':self.diagnostics.state_dict()} if self.diagnostics is not None else {}),
       "levels": self.terrain.terrain_levels.detach().cpu().clone(),
       "types": self.terrain.terrain_types.detach().cpu().clone()}
+    if self.grouped:
+      state['speed_groups'] = {name: {'low': float(group['low']), 'high': float(group['high']),
+                                      'streak': int(group['streak'])}
+                               for name, group in self.groups.items()}
+    return state
 
   def load_state_dict(self, state):
     saved_params = state.get("params")
@@ -365,10 +590,38 @@ class PassageCurriculum(ManagerTermBase):
       from src.config.passage_speed import validate_fixed_speed
       fixed_speed=validate_fixed_speed(fixed_speed)
     lower_bound=self.params.get('speed_floor',.25)
-    valid_range=((low,high)==(fixed_speed,fixed_speed) if fixed_speed is not None else
-                 lower_bound <= low <= high <= saved_ceiling)
+    if fixed_speed is not None:
+      valid_range=(low,high)==(fixed_speed,fixed_speed)
+    elif self.grouped:
+      group_floor, group_ceiling = self._group_bounds()
+      valid_range=(group_floor <= low <= high <= group_ceiling)
+    else:
+      valid_range=lower_bound <= low <= high <= saved_ceiling
     if not valid_range or not 0 <= int(state["streak"]) < 3:
       raise ValueError("Invalid passage speed range")
+    saved_groups = state.get("speed_groups")
+    if self.grouped:
+      group_floor, group_ceiling = self._group_bounds()
+      if fixed_speed is not None:
+        group_floor = min(group_floor, fixed_speed)
+        group_ceiling = max(group_ceiling, fixed_speed)
+      if saved_groups is None:
+        # Old checkpoints only know one global band; start every group there.
+        groups = {name: (low, high, 0) for name in self.groups}
+      else:
+        if set(saved_groups) != set(self.groups):
+          raise ValueError('Incompatible passage speed groups')
+        groups = {}
+        for name, entry in saved_groups.items():
+          group_low, group_high = float(entry['low']), float(entry['high'])
+          streak = int(entry['streak'])
+          if not (group_floor <= group_low <= group_high <= group_ceiling) or not 0 <= streak < 3:
+            raise ValueError('Invalid passage speed range')
+          groups[name] = (group_low, group_high, streak)
+    else:
+      if saved_groups is not None:
+        raise ValueError('Incompatible passage speed groups')
+      groups = {}
     streaks = {}
     for key, limit in (("level_success_streak", self.params.get('level_up_streak', 1)),
                        ("level_failure_streak", self.params.get('level_down_streak', 1))):
@@ -386,7 +639,16 @@ class PassageCurriculum(ManagerTermBase):
       getattr(self,key).copy_(value)
     for key, value in streaks.items():
       getattr(self,key).copy_(value)
-    self.command.cfg.ranges.lin_vel_x = (low, high)
+    if self.grouped:
+      for name, (group_low, group_high, streak) in groups.items():
+        group = self.groups[name]
+        group['low'], group['high'], group['streak'] = group_low, group_high, streak
+        self._apply_speeds(group['columns'], group_low, group_high)
+      self._sync_command_range()
+    else:
+      self.command.cfg.ranges.lin_vel_x = (low, high)
+      self._apply_speeds(self.groups['all']['columns'], low, high)
+      self.groups['all']['low'], self.groups['all']['high'] = low, high
     self.streak = int(state["streak"])
     self.terrain.terrain_levels.copy_(levels); self.terrain.terrain_types.copy_(types)
     self.terrain.env_origins[:] = self.terrain.terrain_origins[levels, types]

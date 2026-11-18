@@ -34,6 +34,8 @@ IMPLEMENTATIONS = {
   "feet_air_time": ("src/tasks/velocity/mdp/rewards.py", "feet_air_time"),
   "leg_contact_force": ("src/tasks/velocity/mdp/rewards.py", "leg_contact_force"),
   "stand_still": ("src/tasks/velocity/mdp/rewards.py", "stand_still"),
+  "smoothness": ("src/tasks/velocity/mdp/rewards.py", "smoothness"),
+  "cheat": ("src/tasks/velocity/mdp/rewards.py", "cheat"),
 }
 INHERITED = {"joint_acc_l2", "joint_pos_limits", "action_rate_l2", "is_terminated"}
 INHERITED_IMPLEMENTATIONS = {
@@ -54,6 +56,10 @@ def _load(root):
   source = path.read_text(encoding="utf-8-sig")
   tree = ast.parse(source, filename=str(path))
   common = _literal_assignment(tree, "COMMON_WEIGHTS")
+  try:
+    optional = _literal_assignment(tree, "OPTIONAL_WEIGHTS")
+  except ValueError:
+    optional = {}
   profiles = _literal_assignment(tree, "REWARD_PROFILES")
   try:
     overrides = _literal_assignment(tree, "DASHBOARD_REWARD_OVERRIDES")
@@ -61,18 +67,21 @@ def _load(root):
     overrides = {name: {"weights": {}, "params": {}} for name in profiles}
   if not isinstance(common, dict) or not all(isinstance(k, str) and isinstance(v, (int, float)) for k, v in common.items()):
     raise ValueError("COMMON_WEIGHTS 格式无效")
-  return path, source, common, profiles, overrides
+  if not isinstance(optional, dict) or not all(isinstance(k, str) and isinstance(v, (int, float)) for k, v in optional.items()):
+    raise ValueError("OPTIONAL_WEIGHTS 格式无效")
+  return path, source, common, optional, profiles, overrides
 
 
 def read_rewards(root, profile):
-  path, _, common, profiles, overrides = _load(root)
+  path, _, common, optional, profiles, overrides = _load(root)
   if profile not in profiles:
     raise ValueError(f"未知 reward profile: {profile}")
   override = overrides.get(profile, {}) if isinstance(overrides, dict) else {}
-  weights = dict(common)
+  defaults = {**common, **optional}
+  weights = dict(defaults)
   weights.update(profiles[profile].get("weights", {}))
   weights.update(override.get("weights", {}))
-  baseline_weights = dict(common)
+  baseline_weights = dict(defaults)
   baseline_weights.update(profiles[profile].get("weights", {}))
   params = dict(profiles[profile].get("params", {}))
   params.update(override.get("params", {}))
@@ -84,7 +93,7 @@ def read_rewards(root, profile):
                  **reward_semantics(name, weights[name]),
                  "changed": weights[name] != baseline_weights[name] or params.get(name, {}) != baseline_params.get(name, {}),
                  "enabled": weights[name] != 0, "params": params.get(name, {}),
-                 "baseline_params": baseline_params.get(name, {})} for name in common],
+                 "baseline_params": baseline_params.get(name, {})} for name in [*common, *optional]],
   }
 
 
@@ -102,8 +111,8 @@ def _find_mjlab_reward(function):
 
 
 def reward_detail(root, profile, name):
-  path, source, common, profiles, _ = _load(root)
-  if name not in common:
+  path, source, common, optional, profiles, _ = _load(root)
+  if name not in {**common, **optional}:
     raise ValueError(f"未知 reward: {name}")
   if profile not in profiles:
     raise ValueError(f"未知 reward profile: {profile}")
@@ -139,10 +148,10 @@ def reward_detail(root, profile, name):
           "binding": f"reward_cfg.py: {function}", "text": text}
 
 
-def _validate_changes(common, profiles, profile, changes):
+def _validate_changes(defaults, profiles, profile, changes):
   if not isinstance(changes, list) or not changes:
     raise ValueError("至少提交一个 reward")
-  names = set(common)
+  names = set(defaults)
   if profile not in profiles:
     raise ValueError(f"未知 reward profile: {profile}")
   result = {}
@@ -172,13 +181,14 @@ def _validate_changes(common, profiles, profile, changes):
 
 
 def save_rewards(root, profile, changes):
-  path, source, common, profiles, overrides = _load(root)
-  validated = _validate_changes(common, profiles, profile, changes)
+  path, source, common, optional, profiles, overrides = _load(root)
+  defaults = {**common, **optional}
+  validated = _validate_changes(defaults, profiles, profile, changes)
   current = overrides.get(profile, {"weights": {}, "params": {}})
   weights = dict(current.get("weights", {}))
   params = dict(current.get("params", {}))
   for name, item in validated.items():
-    baseline = profiles[profile].get("weights", {}).get(name, common[name])
+    baseline = profiles[profile].get("weights", {}).get(name, defaults[name])
     if item["weight"] == baseline:
       weights.pop(name, None)
     else:
@@ -190,7 +200,7 @@ def save_rewards(root, profile, changes):
       params[name] = item["params"]
   overrides = dict(overrides)
   overrides[profile] = {"weights": weights, "params": params}
-  effective_weights = {**common, **profiles[profile].get("weights", {}), **weights}
+  effective_weights = {**defaults, **profiles[profile].get("weights", {}), **weights}
   validate_reward_weights(effective_weights)
   block = f"{BEGIN}\nDASHBOARD_REWARD_OVERRIDES = {pformat(overrides, width=100, sort_dicts=False)}\n{END}"
   pattern = re.compile(re.escape(BEGIN) + r".*?" + re.escape(END), re.S)

@@ -125,6 +125,26 @@ def body_angular_velocity_penalty(
   return torch.sum(torch.square(ang_vel_xy), dim=1)
 
 
+def smoothness(env: ManagerBasedRlEnv) -> torch.Tensor:
+  """罚动作的二阶差分（WMP 的 ``_reward_smoothness``）。
+
+  ``sum((a_{t-2} - 2 a_{t-1} + a_t)^2)``。比 ``action_rate_l2`` 更针对高频
+  抖动：动作匀速变化（``a_t - a_{t-1}`` 恒定）时该项为 0，来回抖才被罚。
+
+  两帧动作历史直接复用 mjlab ``ActionManager`` 的 ``action`` /
+  ``prev_action`` / ``prev_prev_action`` 缓存；``ActionManager.reset`` 在
+  episode reset 时会把这三者一起清零，所以这里不需要另建状态。口径与 mjlab
+  自带的 ``action_acc_l2`` 相同（同样的三帧差分）。
+  """
+  manager = env.action_manager
+  return torch.sum(
+    torch.square(
+      manager.action - 2.0 * manager.prev_action + manager.prev_prev_action
+    ),
+    dim=1,
+  )
+
+
 def angular_momentum_penalty(
   env: ManagerBasedRlEnv,
   sensor_name: str,
@@ -507,4 +527,61 @@ def stand_still(
         if command is not None:
             reward *= 1.0 - ops.command_active(command, command_threshold)
     return reward
+
+
+# 越障/绕桩的地形列种类。cheat 只在这些列里生效；地形生成器里没有的种类自动跳过。
+OBSTACLE_KINDS = (
+  "gap_steps", "high_wall", "clearance_frame", "tire_array", "slalom_brick",
+)
+
+
+def obstacle_columns(env: ManagerBasedRlEnv, kinds=OBSTACLE_KINDS) -> torch.Tensor:
+  """返回长度 ``num_cols`` 的 bool 掩码：哪些地形列属于越障/绕桩。
+
+  和 ``course_v3.kind_columns`` 一样按 ``terrain_generator.sub_terrains`` 的
+  proportion 把列切开；``kinds`` 里当前地形没有的种类直接跳过，所以同一份
+  奖励配置在只含部分障碍的任务（如 rough 地形）上也能安全求值。
+  """
+  terrain = env.scene.terrain
+  generator = getattr(terrain.cfg, "terrain_generator", None)
+  if generator is None:
+    return torch.zeros(0, dtype=torch.bool, device=env.device)
+  cache = getattr(terrain, "_obstacle_columns_cache", None)
+  key = tuple(kinds)
+  if cache is not None and cache[0] == key:
+    return cache[1]
+  from .course_v3 import kind_columns
+  present = set(generator.sub_terrains)
+  columns = torch.zeros(generator.num_cols, dtype=torch.bool, device=env.device)
+  for kind in key:
+    if kind in present:
+      columns = columns | kind_columns(env, kind)
+  # 地形在 env 创建时就固定了，缓存起来避免每个控制步重复切列。
+  setattr(terrain, "_obstacle_columns_cache", (key, columns))
+  return columns
+
+
+def cheat(
+  env: ManagerBasedRlEnv,
+  heading_threshold: float = 1.0,
+  kinds=OBSTACLE_KINDS,
+  asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+) -> torch.Tensor:
+  """罚「绕开障碍物」的作弊行为（WMP 的 ``_reward_cheat``）。
+
+  机器人在越障/绕桩列里、机头相对地形 +X 的偏航 ``|heading| > 1.0 rad`` 时
+  每步返回 1（配负权重即惩罚）；其它列返回 0。WMP 用 ``gap_start_idx`` 到
+  ``crawl_end_idx`` 的连续 env 区间，这里改成按地形列掩码，至少覆盖
+  gap_steps / high_wall / clearance_frame / tire_array / slalom_brick。
+
+  ``heading`` 取 ``robot.data.heading_w``，其定义就是 WMP 里的
+  ``atan2(forward_w.y, forward_w.x)``。
+  """
+  columns = obstacle_columns(env, tuple(kinds))
+  if columns.numel() == 0:
+    return torch.zeros(env.num_envs, device=env.device)
+  asset: Entity = env.scene[asset_cfg.name]
+  obstacle = columns[env.scene.terrain.terrain_types]
+  heading = asset.data.heading_w
+  return (obstacle & (heading.abs() > heading_threshold)).float()
 

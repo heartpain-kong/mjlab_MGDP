@@ -47,6 +47,16 @@ COMMON_WEIGHTS = {
 }
 
 
+# 可选奖励项：默认 0（关闭）。只有 profile 显式给出非零权重（或面板覆盖成非零）
+# 时才真正绑定进 rewards，未启用的 profile 不会多出这些奖励项，行动口径不变。
+#   smoothness：动作二阶差分（WMP），压高频抖动，典型 -0.01。
+#   cheat：越障列里机头偏航 |heading|>1.0 rad 的绕障作弊惩罚（WMP），典型 -1.0。
+OPTIONAL_WEIGHTS = {
+  "smoothness": 0.0,
+  "cheat": 0.0,
+}
+
+
 # 各配置分别覆盖 COMMON_WEIGHTS 和下方公共 params，不相互继承。
 # Rough / Blind / Gentle 共用 rough；TerrainV4 与两类 HIM 使用相对地面高度。
 # 只改 HIM 示例：在 him.weights 中填 "foot_clearance": -0.8。
@@ -60,6 +70,8 @@ REWARD_PROFILES = {
       "pose": 0.5,
       "foot_gait": 0.0,
       "action_rate_l2": -0.1,
+      "smoothness": -0.01,
+      "cheat": -1.0,
       "soft_landing": -0.002,
       "leg_contact_force": -0.25,
     },
@@ -120,6 +132,8 @@ REWARD_PROFILES = {
       "action_rate_l2": -0.05,
       "foot_slip": -0.2,
       "pose": 1.5,
+      # 可选：需要 WMP 二阶动作平滑时取消注释（会改变 V19 基线，默认关闭）。
+      # "smoothness": -0.01,
     },
     "params": {
       # Keep relative shaping available for a separate controlled experiment.
@@ -159,10 +173,11 @@ def make_lgdog_rewards(profile, *, base_body, foot_sites, terrain_ray_names=()):
   dashboard = deepcopy(DASHBOARD_REWARD_OVERRIDES.get(profile, {}))
   settings["weights"].update(dashboard.get("weights", {}))
   settings["params"].update(dashboard.get("params", {}))
-  unknown = (settings["weights"].keys() | settings["params"].keys()) - COMMON_WEIGHTS.keys()
+  known = {**COMMON_WEIGHTS, **OPTIONAL_WEIGHTS}
+  weights = {**known, **settings["weights"]}
+  unknown = (settings["weights"].keys() | settings["params"].keys()) - known.keys()
   if unknown:
     raise ValueError(f"Unknown reward names in {profile!r}: {sorted(unknown)}")
-  weights = {**COMMON_WEIGHTS, **settings["weights"]}
   validate_reward_weights(weights)
 
   def term(name, func, **params):
@@ -254,8 +269,18 @@ def make_lgdog_rewards(profile, *, base_body, foot_sites, terrain_ray_names=()):
     ),
     "is_terminated": term("is_terminated", mdp.is_terminated),
   }
-  if rewards.keys() != COMMON_WEIGHTS.keys():
-    raise ValueError("Every COMMON_WEIGHTS entry must have a reward binding")
+  missing = COMMON_WEIGHTS.keys() - rewards.keys()
+  if missing:
+    raise ValueError(f"Every COMMON_WEIGHTS entry must have a reward binding: {sorted(missing)}")
+
+  # 可选奖励只在 profile 启用（权重非 0）时绑定：没开的任务不会多出奖励项，
+  # 面板把权重从 0 改成非 0 后下次构建也会自动生效。
+  for name, func in (
+    ("smoothness", mdp.smoothness),
+    ("cheat", mdp.cheat),
+  ):
+    if weights[name] != 0.0:
+      rewards[name] = term(name, func)
 
   if profile in {"terrain_v4", "him", "him_standard"}:
     if len(terrain_ray_names) != len(foot_sites):

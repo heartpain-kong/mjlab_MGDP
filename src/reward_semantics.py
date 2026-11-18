@@ -6,9 +6,10 @@ be opened and corrected in the standard-library dashboard.
 
 NONNEGATIVE_COSTS = frozenset({
   "body_orientation_l2", "body_ang_vel", "angular_momentum", "joint_acc_l2",
-  "joint_pos_limits", "action_rate_l2", "foot_clearance", "foot_slip",
+  "joint_pos_limits", "action_rate_l2", "smoothness",
+  "foot_clearance", "foot_slip",
   "soft_landing", "feet_stumble", "leg_contact_force", "stand_still", "is_terminated",
-  "wall_waiting",
+  "cheat", "wall_waiting",
 })
 
 

@@ -11,6 +11,8 @@
 → 下面这些与 mjlab 默认一致或已按用户值设置。
 """
 
+from dataclasses import dataclass
+
 from mjlab.rl import (
   RslRlModelCfg,
   RslRlOnPolicyRunnerCfg,
@@ -18,13 +20,33 @@ from mjlab.rl import (
 )
 
 
-def lgdog1_ppo_runner_cfg(experiment_name: str = "lgdog1_velocity") -> RslRlOnPolicyRunnerCfg:
+@dataclass
+class LgDogPpoRunnerCfg(RslRlOnPolicyRunnerCfg):
+  """LgDog1 PPO runner options on top of mjlab's defaults."""
+
+  symmetry_augment: bool = False
+  """Left-right mirror data augmentation for the PPO policy loss.
+
+  When enabled, every mini-batch is augmented with the mirrored actor
+  observation/action pair (batch x2).  The critic/value loss stays on the
+  original batch.  Off by default; implemented by wrapping the PPO update at
+  runtime (see ``src/tasks/velocity/rl/runner.py``).
+  """
+
+
+def lgdog1_ppo_runner_cfg(
+  experiment_name: str = "lgdog1_velocity", *, symmetry_augment: bool = False
+) -> LgDogPpoRunnerCfg:
   """Create RL runner configuration for LgDog1 velocity task.
 
   ★ 带高度扫描的 `LgDog1-Rough`（234 维观测）和不带的 `LgDog1-Rough-Blind`（47 维）
   用【不同的 experiment_name】—— 两边的 checkpoint 互不兼容，分开存才不会误加载。
+
+  ``symmetry_augment=True`` 打开左右镜像数据增广（默认关闭）；训练日志会打印
+  「symmetry augmentation enabled」。
   """
-  return RslRlOnPolicyRunnerCfg(
+  return LgDogPpoRunnerCfg(
+    symmetry_augment=symmetry_augment,
     actor=RslRlModelCfg(
       hidden_dims=(512, 256, 128),
       activation="elu",
