@@ -99,6 +99,36 @@ class CourseV4Tests(unittest.TestCase):
       self.assertAlmostEqual(ray_height(m,data,2.925,3.725),0.,places=6)
       self.assertAlmostEqual(ray_height(m,data,2.925+.22,3.725),height,places=6)
 
+  def test_competition_tires_are_official_2x4_and_training_field_cannot_be_bypassed(self):
+    """比赛验收=官方 2×4；训练仍铺满整格，机器人无法从阵侧绕过去。"""
+    _,_,m,_=build(UnifiedObstacleTerrainCfg(kind='tire_array',size=(8.,8.),competition_tires=True),.6875)
+    tires=[i for i in range(m.ngeom) if 'v4_tires' in m.geom(i).name]
+    self.assertEqual(len(tires),8*48)
+    centers={}
+    for i in tires:
+      parts=m.geom(i).name.split('_');key=(parts[-3],parts[-2])
+      centers.setdefault(key,[]).append(m.geom_pos[i][:2])
+    self.assertEqual(len(centers),8)
+    xy=np.array([np.mean(v,axis=0) for v in centers.values()])
+    self.assertAlmostEqual(float(xy[:,1].max()-xy[:,1].min()),.55,places=6)  # 短边 1100 mm
+    self.assertAlmostEqual(float(xy[:,0].max()-xy[:,0].min()),1.65,places=6) # 长边 2200 mm
+    for i in tires:
+      self.assertAlmostEqual(float(m.geom_pos[i][2]),.0825,places=6)  # 高 165 mm
+    _,_,training,_=build(UnifiedObstacleTerrainCfg(kind='tire_array',size=(8.,8.)),.6875)
+    ty=[float(training.geom_pos[i][1]) for i in range(training.ngeom) if 'v4_tires' in training.geom(i).name]
+    self.assertGreater(max(ty)-min(ty),6.)  # 铺满整格，无侧向绕行空间
+
+  def test_full_course_eval_switches_tires_to_competition_layout(self):
+    from src.config.mgdp_skill_training import configure_skill_training
+    from src.config.mgdp_stages import configure_full_course_eval
+    import src.tasks as tasks  # noqa: F401
+    from mjlab.tasks.registry import load_env_cfg
+    cfg=load_env_cfg('LgDog1-Race-MGDP-WallTraining-D435i20',play=True)
+    configure_skill_training(cfg)
+    cfg.commands['twist'].skill_training_profile={'version':5}
+    configure_full_course_eval(cfg,6)
+    self.assertTrue(cfg.scene.terrain.terrain_generator.sub_terrains['tire_array'].competition_tires)
+
   def test_pit_stage_six_copies_every_reference_box_and_hardens_vertical_relief(self):
     ref=race_reference().find(".//body[@name='brick_bark_pit']")
     boxes=[g for g in ref.findall('geom') if g.get('contype','1')!='0']

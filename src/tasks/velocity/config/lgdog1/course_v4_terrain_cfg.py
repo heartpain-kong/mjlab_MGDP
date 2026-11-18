@@ -70,6 +70,9 @@ class UnifiedObstacleTerrainCfg(PassageTerrainCfg):
   course_version: int = 4
   post_radii: tuple[float,...] = (.025,.03,.035,.04,.045,.05,.0575,.065)
   post_heights: tuple[float,...] = (.03,.04,.05,.065,.08,.10,.13,.16)
+  # ★ 2026-11-19：比赛验收用官方 2×4 阵（2.2×1.1 m、高 16.5 cm），
+  #   训练保持铺满整格（12×4），避免机器人从阵侧绕过去。
+  competition_tires: bool = False
 
   def _floor(self,spec,rng):
     return list(PassageTerrainCfg(kind='start_flat',size=self.size).function(0.,spec,rng).geometries)
@@ -91,7 +94,7 @@ class UnifiedObstacleTerrainCfg(PassageTerrainCfg):
 
   def _tires(self,s,spec,rng):
     geoms=self._floor(spec,rng);body=spec.body('terrain');cy=self.size[1]/2
-    prefix=f'v4_tires_{len(body.geoms)}_';height=TIRE_HEIGHTS[s]
+    prefix=f'v4_tires_{len(body.geoms)}_';height=.165 if self.competition_tires else TIRE_HEIGHTS[s]
     # Reuse the exact convex sectors from the bundled model, preserving the
     # annular hole. A single convex mesh would incorrectly fill the hole.
     root=race_reference();refmesh=root.find(".//asset/mesh[@name='tire_sector']")
@@ -99,6 +102,10 @@ class UnifiedObstacleTerrainCfg(PassageTerrainCfg):
     mesh=spec.add_mesh(name=prefix+'sector',uservert=vertices.ravel().tolist())
     sectors=root.find(".//body[@name='tire_0_0']").findall('geom')
     rows=int(np.floor((self.size[1]-.8-2*.275)/.55))+1;rows-=rows%2
+    if self.competition_tires:
+      # 官方规则 V2.0 表1：8 个轮胎 2×4，外径 550、内径 330、胎面宽 165，
+      # 两胎侧短边 1100、四胎侧长边 2200，高度固定 165 mm。
+      rows=2
     for row in range(rows):
       for col in range(4):
         center=np.array([TIRE_CENTER_X+(col-(TIRE_COLUMNS-1)/2)*TIRE_SPACING,
