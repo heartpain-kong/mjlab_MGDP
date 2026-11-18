@@ -183,8 +183,8 @@ def _configure_mgdp_training(cfg, play):
     cfg.terminations["illegal_contact"] = TerminationTermCfg(func=mdp.illegal_contact,
       params={"sensor_name": trunk.name, "force_threshold": 10.0})
     cfg.terminations["sustained_leg_contact"] = TerminationTermCfg(func=blind_mdp.sustained_leg_contact,
-      params={"sensor_name": legs.name, "force_threshold": 10.0,
-              "severe_threshold": 80.0, "duration_s": 0.1})
+      params={"sensor_name": legs.name, "force_threshold": 25.0,
+              "severe_threshold": 120.0, "duration_s": 0.2})
     cfg.rewards = make_lgdog_rewards("mgdp", base_body=BASE_BODY, foot_sites=FOOT_SITES)
     cfg.metrics.update({name: MetricsTermCfg(func=func) for name, func in (
       ("velocity_error_xy_mps", blind_mdp.velocity_error_xy),
