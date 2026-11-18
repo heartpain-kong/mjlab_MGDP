@@ -2,6 +2,9 @@
 
 from dataclasses import dataclass, asdict, field
 import hashlib
+import json
+import time
+import warnings
 import torch
 from mjlab.managers.manager_base import ManagerTermBase
 from .velocity_command import UniformVelocityCommand, UniformVelocityCommandCfg
@@ -19,7 +22,14 @@ class PassageCommand(UniformVelocityCommand):
     proportions = torch.tensor([c.proportion for c in generator.sub_terrains.values()],device=self.device)
     columns = torch.searchsorted((proportions/proportions.sum()).cumsum(0),
       torch.arange(generator.num_cols,device=self.device)/generator.num_cols+.001,right=True)
-    routes = [cfg.waypoints.get(names[int(i)],((0.,0.),(cfg.goal_x,0.))) for i in columns]
+    staged=getattr(cfg,'staged_waypoints',{})
+    self.route_levels=generator.num_rows if staged else 1
+    routes=[]
+    for i in columns:
+      name=names[int(i)];full=cfg.waypoints.get(name,((0.,0.),(cfg.goal_x,0.)))
+      bank=staged.get(name,(full,)*self.route_levels)
+      if len(bank)!=self.route_levels:raise ValueError('阶段路线必须覆盖所有地形行')
+      routes.extend(bank)
     self.routes = torch.zeros((len(routes),max(map(len,routes)),2),device=self.device)
     self.last_waypoint = torch.tensor([len(r)-1 for r in routes],device=self.device)
     for i,route in enumerate(routes):
@@ -31,8 +41,13 @@ class PassageCommand(UniformVelocityCommand):
     self.cumulative = torch.cat((torch.zeros((len(routes),1),device=self.device),lengths.cumsum(1)),1)
     self.waypoint_index = torch.ones(self.num_envs,device=self.device,dtype=torch.long)
 
+  def route_keys(self):
+    terrain=self._env.scene.terrain
+    levels=getattr(self,'route_levels',1)
+    return terrain.terrain_types*levels+terrain.terrain_levels if levels>1 else terrain.terrain_types
+
   def route_state(self):
-    types = self._env.scene.terrain.terrain_types
+    types = self.route_keys()
     index = self.waypoint_index
     start, target = self.routes[types,index-1], self.routes[types,index]
     delta = target-start
@@ -46,7 +61,7 @@ class PassageCommand(UniformVelocityCommand):
     return target, direction, lateral, progress
 
   def route_success(self):
-    types = self._env.scene.terrain.terrain_types
+    types = self.route_keys()
     final = self.routes[types,self.last_waypoint[types]]
     return ((self.waypoint_index == self.last_waypoint[types]) &
             (torch.linalg.vector_norm(self.local_xy()-final,dim=-1) <= self.cfg.waypoint_radius))
@@ -64,7 +79,7 @@ class PassageCommand(UniformVelocityCommand):
 
   def _update_command(self):
     target, _, _, _ = self.route_state()
-    types = self._env.scene.terrain.terrain_types
+    types = self.route_keys()
     reached = torch.linalg.vector_norm(self.local_xy()-target,dim=-1) <= self.cfg.waypoint_radius
     self.waypoint_index += (reached & (self.waypoint_index < self.last_waypoint[types])).long()
     target, direction, _, _ = self.route_state()
@@ -84,6 +99,8 @@ class PassageCommand(UniformVelocityCommand):
 class PassageCommandCfg(UniformVelocityCommandCfg):
   goal_x: float = 5.3
   lane_half_width: float = .28
+  # ★ 2026-11-19：按地形单独指定升级所需的连续成功次数（默认用全局 level_up_streak）。
+  terrain_level_up_streak: dict[str, int] | None = None
   waypoint_radius: float = .15
   waypoints: dict[str, tuple[tuple[float,float],...]] = field(default_factory=dict)
 
@@ -169,6 +186,8 @@ class PassageCurriculum(ManagerTermBase):
       command_contract.pop('slalom_use_lateral',None)
     if isinstance(command_contract,dict) and command_contract.get('obstacle_speed_limits') is None:
       command_contract.pop('obstacle_speed_limits',None)
+    if isinstance(command_contract,dict) and not command_contract.get('staged_waypoints'):
+      command_contract.pop('staged_waypoints',None)
     contract = (asdict(generator), env.step_dt, env.cfg.episode_length_s if hasattr(env.cfg,"episode_length_s") else None,
                 command_contract)
     events = getattr(env.cfg, "events", {})
@@ -184,6 +203,36 @@ class PassageCurriculum(ManagerTermBase):
     cumulative = (proportions/proportions.sum()).cumsum(0)
     self.kind_of_column = torch.searchsorted(cumulative,
       torch.arange(cols, device=self.device)/cols+.001, right=True)
+    self.status_path = None
+    self._status_last = 0.
+    self.diagnostics=None
+    if getattr(self.command.cfg,'skill_training_profile',{}).get('version')==5:
+      from .passage_diagnostics import PassageDiagnostics
+      self.diagnostics=PassageDiagnostics(env,self.column_names,self.kind_of_column)
+
+  def write_distribution(self, force=False):
+    """Write a throttled, atomic snapshot of all live environments."""
+    if self.status_path is None or (not force and time.monotonic()-self._status_last<5.):
+      return
+    self._status_last=time.monotonic()
+    rows=self.terrain.max_terrain_level
+    kinds=self.kind_of_column[self.terrain.terrain_types]
+    counts=torch.bincount(kinds*rows+self.terrain.terrain_levels,
+      minlength=len(self.column_names)*rows).reshape(len(self.column_names),rows)
+    counts=counts.detach().cpu().tolist()  # one compact device synchronization per snapshot
+    data={'version':1,'updated':time.time(),'rows':rows,'total':sum(map(sum,counts)),
+      'terrains':[{'name':name,'counts':values} for name,values in zip(self.column_names,counts)]}
+    try:
+      self.status_path.parent.mkdir(parents=True,exist_ok=True)
+      temp=self.status_path.with_suffix('.tmp')
+      temp.write_text(json.dumps(data,ensure_ascii=False),encoding='utf-8')
+      temp.replace(self.status_path)
+      if getattr(self,'diagnostics',None) is not None:
+        self.diagnostics.write(self.status_path.with_name('passage_diagnostics.json'))
+    except OSError as error:
+      if not getattr(self,'_status_warning',False):
+        warnings.warn(f'Cannot write passage distribution: {error}')
+        self._status_warning=True
 
   def __call__(self, env, env_ids, min_episodes=32, success_threshold=.7,
                max_error=.25, speed_limit=DEFAULT_SPEED_LIMIT, fixed_speed=None, speed_floor=.35,
@@ -217,10 +266,17 @@ class PassageCurriculum(ManagerTermBase):
       # successful jump may involve deliberate braking; speed expansion below
       # still requires the original tracking gate across every column.
       threshold = max_error if terrain_max_error == 'speed' else terrain_max_error
+      if self.diagnostics is not None:self.diagnostics.record(env,ids,passed)
       mastered = passed if threshold is None else passed & (error <= threshold)
-      self.level_success_streak[ids] = torch.where(mastered, (self.level_success_streak[ids]+1).clamp(max=level_up_streak), 0)
+      overrides = getattr(self.command.cfg, 'terrain_level_up_streak', None)
+      if overrides:
+        need = torch.tensor([int(overrides.get(self.column_names[int(t)], level_up_streak))
+                             for t in types], device=self.device, dtype=torch.long)
+      else:
+        need = level_up_streak
+      self.level_success_streak[ids] = torch.where(mastered, (self.level_success_streak[ids]+1).clamp(max=need), 0)
       self.level_failure_streak[ids] = torch.where(~passed, (self.level_failure_streak[ids]+1).clamp(max=level_down_streak), 0)
-      up = mastered & (self.level_success_streak[ids] >= level_up_streak) & (level < last)
+      up = mastered & (self.level_success_streak[ids] >= need) & (level < last)
       down = ~passed & (self.level_failure_streak[ids] >= level_down_streak) & (level > 0)
       self.terrain.update_env_origins(ids, up, down)
       changed = ids[up | down]
@@ -265,6 +321,7 @@ class PassageCurriculum(ManagerTermBase):
         high = max(speed_floor, low, high-.025)
       self.command.cfg.ranges.lin_vel_x = (low, high)
       self.count.zero_(); self.success.zero_(); self.error.zero_()
+    self.write_distribution()
     return logs
 
   def state_dict(self):
@@ -273,6 +330,7 @@ class PassageCurriculum(ManagerTermBase):
       "fingerprint": self.fingerprint,
       **{k: getattr(self,k).detach().cpu().clone() for k in ("count","success","error")},
       **{k: getattr(self,k).detach().cpu().clone() for k in ("level_success_streak","level_failure_streak")},
+      **({'diagnostics':self.diagnostics.state_dict()} if self.diagnostics is not None else {}),
       "levels": self.terrain.terrain_levels.detach().cpu().clone(),
       "types": self.terrain.terrain_types.detach().cpu().clone()}
 
@@ -321,6 +379,9 @@ class PassageCurriculum(ManagerTermBase):
           or (value < 0).any() or (value > limit).any() or (value != value.long()).any()):
         raise ValueError('Invalid terrain mastery streak')
       streaks[key] = value.long()
+    if self.diagnostics is not None:
+      if 'diagnostics' not in state:raise ValueError('Missing V5 passage diagnostics state')
+      self.diagnostics.load_state_dict(state['diagnostics'])
     for key, value in values.items():
       getattr(self,key).copy_(value)
     for key, value in streaks.items():

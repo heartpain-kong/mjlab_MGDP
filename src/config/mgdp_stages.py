@@ -4,7 +4,7 @@
 def staged_routes(command, generator):
   full=command.waypoints
   slalom=full['slalom_brick']
-  routes={'slalom_brick':tuple(slalom[:n] for n in (4,6,8,11,15,len(slalom),len(slalom),len(slalom))),
+  routes={'slalom_brick':tuple(slalom[:n] for n in (6,8,10,12,14,len(slalom),len(slalom),len(slalom))),
           'high_wall':tuple(((0.,0.),(2.1,0.)) if row<2 else full['high_wall'] for row in range(8))}
   gap=generator.sub_terrains['gap_steps'];bank=[]
   for row in range(8):

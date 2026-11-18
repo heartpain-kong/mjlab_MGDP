@@ -143,7 +143,7 @@ class CourseV4Tests(unittest.TestCase):
 
   def test_posts_keep_reference_centers_and_increase_radius_and_height_after_six(self):
     reference=race_reference().find(".//body[@name='slalom']").findall('geom')[:6]
-    for row,radius,height in ((5,.05,.10),(6,.0575,.13),(7,.065,.16)):
+    for row,radius,height in ((5,.05,.34),(6,.0575,.37),(7,.065,.40)):
       _,_,m,_=build(UnifiedObstacleTerrainCfg(kind='slalom_brick',size=(12.,8.)),(row+.5)/8)
       posts=[m.geom(i) for i in range(m.ngeom) if 'slalom_pole_' in m.geom(i).name]
       self.assertEqual(len(posts),6)

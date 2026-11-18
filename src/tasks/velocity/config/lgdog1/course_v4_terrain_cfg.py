@@ -69,7 +69,7 @@ class UnifiedGapTerrainCfg(CombinedGapTerrainCfg):
 class UnifiedObstacleTerrainCfg(PassageTerrainCfg):
   course_version: int = 4
   post_radii: tuple[float,...] = (.025,.03,.035,.04,.045,.05,.0575,.065)
-  post_heights: tuple[float,...] = (.03,.04,.05,.065,.08,.10,.13,.16)
+  post_heights: tuple[float,...] = (.20,.23,.26,.29,.31,.34,.37,.40)
   # ★ 2026-11-19：比赛验收用官方 2×4 阵（2.2×1.1 m、高 16.5 cm），
   #   训练保持铺满整格（12×4），避免机器人从阵侧绕过去。
   competition_tires: bool = False

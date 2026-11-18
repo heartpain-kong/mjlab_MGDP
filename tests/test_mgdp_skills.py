@@ -38,7 +38,8 @@ class SkillTests(unittest.TestCase):
     self.assertEqual(c.rewards['wall_waiting'].weight,-.5)
     self.assertEqual(c.terminations['no_passage_progress'].params['timeout_s'],6.)
     p=load_env_cfg(D435I20_TASK,play=True);restore_skill_for_play(p,{'infos':{'mgdp_skill_training':skill_contract(c)}})
-    self.assertTrue(p.commands['twist'].slalom_use_lateral)
+    self.assertFalse(p.commands['twist'].slalom_use_lateral)  # 2026-11-19 起改为转弯模式
+    self.assertEqual(p.commands['twist'].terrain_level_up_streak,{'slalom_brick':1})
     self.assertEqual(p.scene.terrain.terrain_generator.sub_terrains['stepping_stones'].counts,(2,3,4,5,6,6,6,6))
     for scale in (.51,float('nan'),True):
       with self.assertRaises(ValueError):configure_action_scale(c,scale)
@@ -95,6 +96,7 @@ class SkillTests(unittest.TestCase):
     from src.tasks.velocity.mdp.course_v3 import box_corners,box_projection_distance
     from src.tasks.velocity.mdp.course_v3 import BodyAwarePassageCommand
     env,cmd,robot=CourseV3Tests().command_env();configure_skill_training(env.cfg)
+    env.cfg.commands['twist'].slalom_use_lateral=True  # 本测试专门覆盖横移模式
     cmd=BodyAwarePassageCommand(env.cfg.commands['twist'],env)
     env.command_manager=NS(get_term=lambda _:cmd)
     cmd._resample_command(torch.arange(10));cmd.speed.fill_(.6)
