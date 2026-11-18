@@ -132,3 +132,39 @@ WMP 用 AMP（`amp_reward_coef=0.5*0.02`、`task_reward_lerp=0.3`、判别器 [1
   比 WMP 的"块惩罚 + AMP"更依赖人工设计；WMP 用 AMP 替代了大部分步态塑形。
 - 可直接借用的三项：**二阶平滑 `smoothness`**、**`cheat` 偏航惩罚**（防绕行，正好对应我们绕桩/越障的绕路问题）、
   **奖励权重课程**（例如把 `feet_air_time` 或 `passage_progress` 前 3000 轮降到 0.2 再升满）。
+
+## 六、SSR（浙大朱秋国，人形）与 robot_lab symmetry（狗）
+
+### SSR（arXiv 2605.30770，未开源）
+
+- **Imagined foothold guidance**：训练时预测摆动脚"下一次触地点与支撑面"，在触地**之前**修正落点，形成密集的落点引导。
+- **Equivariant latent-space symmetry augmentation**：镜像变换施加在**紧凑潜变量**上，而不是高维深度图；
+  比输入层增广 / 对称正则 / 严格等变网络更省算力，同时保留探索自由度。
+- **Terrain-specific multi-discriminator AMP**：按地形分判别器的风格先验。
+- 配置：36×36 深度、4096 并行、约 2 万轮 PPO、Jetson Orin 50 Hz。
+
+### robot_lab symmetry（Apache-2.0，可直接抄）
+
+`robot_lab/.../mdp/symmetry/anymal.py`：对 obs/action 做 4 种变换（原始、左右、前后、对角），batch ×4，
+PPO 侧用 `SymmetricDataAugmentation`（cusrl）或 `RslRlSymmetryCfg`（rsl_rl）挂载。
+
+- 左右：角速度 `[-1,1,-1]`、重力 `[1,-1,1]`、指令 `[1,-1,-1]`；关节 L↔R 交换，**髋外展符号取反**。
+- 前后：角速度 `[1,-1,-1]`、重力 `[-1,1,1]`、指令 `[-1,1,-1]`；关节 F↔H 交换，**HFE/KFE 符号取反**。
+
+对我们的用法：LgDog1 关节序 `FR,FL,RR,RL × (hip,thigh,calf)`，左右镜像 = FL↔FR、RL↔RR、hip 取反，
+thigh/calf 不变；先只做左右（前后腿几何可能不同，前后镜像需先核对）。
+
+## 七、`E:\足式机器人` 里其它值得借鉴的工作
+
+| 论文 | 可借鉴点 | 对应我们哪个问题 |
+|---|---|---|
+| TransCurriculum（2603.14156） | **多维课程**：地形 × 速度 × 指令联合调度，而不是单一门槛 | 我们的速度课程被高墙 0% 锁死 |
+| Trajectory-Level Automatic Curriculum（2608.16164） | 按**轨迹级**表现自动调难度，替代手写 70%/32 回合门槛 | 同上 |
+| Scaling Rough Terrain with Automatic Curriculum（2601.17428） | 自动课程 + 地形再采样，避免某些地形永远 0 样本 | 高墙/轮胎阵低档位 |
+| Predictive Safety Curricula（2609.37070） | 用"预测的安全裕度"决定是否升级，而非事后成功率 | 越障地形的终止太敏感 |
+| Actuator Reality Shaping（2607.02205） | 执行器建模（惯量/摩擦/延迟）系统化整形，零样本 sim2real | 我们刚把 armature 改到 4.2e-3 |
+| DreamWaQ（2301.10602） | 用本体历史做**隐式地形想象**（VAE 潜变量），不依赖深度 | 深度噪声大/帧率低时的备选感知 |
+| DELTA（2608.22033） | 可变形高程注意力编码器，专治**稀疏地形** | 我们 187 射线 height scan 的编码 |
+| RMA（2107.04034） | 环境因子 + 在线适应模块 | 实机地面/负载变化 |
+| Barrier-based style rewards（2409.15780） | 用障碍函数做风格约束，替代手工姿态惩罚 | 我们的 pose/foot_gait 手工项 |
+| MoE-Loco（2503.08564） | 多任务专家混合 | 10 类 lesson 各管各的 |
