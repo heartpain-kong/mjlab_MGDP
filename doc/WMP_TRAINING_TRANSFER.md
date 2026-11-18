@@ -89,3 +89,46 @@ WMP 用 AMP（`amp_reward_coef=0.5*0.02`、`task_reward_lerp=0.3`、判别器 [1
   我们已经有 HIM 历史编码器和非对称 critic，差的是**分组课程**和**感知降频**。
 - 我们 V1_seed42 的两大症结（高墙 0% 锁死全局、感知每步全算）正好对应 P0 和 P1。
 - 先做 P0+P1，再重训一版，预期能看到：速度上限从 0.6 抬到 1.0+、每轮采集时间下降。
+
+## 五、WMP 的 reward 与引导设计（`legged_gym/envs/base/legged_robot.py` + `a1_amp_config.py`）
+
+### 奖励项与权重（`a1_amp`）
+
+| 类别 | 项 | 权重 | 说明 |
+|---|---|---:|---|
+| 任务 | `tracking_lin_vel` | +1.0 | `exp(-err²/0.25)`；仅 gap/bream/continuous_gap/climb 地形做速度裁剪（`lin_vel_clip=0.1`，允许略低不罚） |
+| 任务 | `tracking_ang_vel` | +0.5 | 角速度跟踪 |
+| 安全 | `torques` | -0.0001 | 力矩平方 |
+| 安全 | `dof_acc` | -2.5e-7 | 关节加速度 |
+| 安全 | `action_rate` | -0.03 | 一阶动作差分 |
+| 安全 | `smoothness` | -0.01 | **二阶动作差分**（我们只有 action_rate） |
+| 安全 | `collision` | -1.0 | 大腿/小腿接触力 >0.1 N 就罚 |
+| 安全 | `dof_pos_limits` / `dof_vel_limits` | -10.0 | 超出关节限制 |
+| 姿态 | `lin_vel_z` | -1.0 | 机体竖直速度 |
+| 足端 | `feet_air_time` | +1.0 | 只在**首次触地**给奖，目标 0.5 s，指令 <0.1 m/s 不给 |
+| 足端 | `feet_stumble` | -1.0 | 水平接触力 > 4×垂直力（撞竖面） |
+| 足端 | `feet_edge` | -1.0（课程） | 只在 gap/climb 地形启用，权重 0.1→1.0（第 4000–10000 轮线性） |
+| 其他 | `cheat` | -1.0 | 只对 gap~crawl 地形：机头偏航 >1.0 rad 就罚（防止绕开障碍） |
+| 其他 | `stuck` | -1.0 | `\|vx\|<0.1` 且 `\|cmd_x\|>0.1` |
+| 其他 | `stool_base_height` | -1.0 | 只在 stool 地形，机高 >0.45 m 罚 |
+| AMP | `amp_reward_coef` | 0.01（0.5×0.02） | 风格奖励与任务奖励按 `task_reward_lerp=0.3` 混合，判别器 [1024,512] |
+
+### 引导（curriculum）设计
+
+1. **按地形块施加奖励**：环境按地形块连续排列（`gap_start_idx..gap_end_idx` 等），
+   `cheat`、`stool_base_height`、`feet_edge`、速度裁剪都只作用于对应索引区间——
+   同一套 reward 对 16 种地形各管各的，不需要为每地形写一份配置。
+2. **奖励课程**：`reward_curriculum=True`，`feet_edge` 从 0.1 线性升到 1.0（4000→10000 轮），
+   先学走、再学"踩边缘"。
+3. **5 组速度课程**：见 `doc/TERRAIN_COMMANDS.md`，每组独立按 `linear_score>0.8` 升级 +0.2 m/s，只升不降。
+4. **命令采样**：5% 零速；全方向组可选极限采样；**只向前组固定 heading=0、vy=0**，XY 合速度 <0.2 m/s 清零；
+   偏航 >1.0 rad 触发 `cheat` 惩罚。
+
+### 与我们现有奖励的对照
+
+- 我们有 `tracking_lin_vel/ang_vel`、`action_rate`、`feet_stumble`、`feet_air_time`、`dof_pos_limits`，
+  但没有**二阶动作平滑**、没有**按地形块施加的 `cheat` 惩罚**、没有**奖励权重随时间爬升的课程**。
+- 我们的 `wall_waiting/wall_crossing`、`stone_touchdown`、`slalom_heading_progress` 是更细的显式引导，
+  比 WMP 的"块惩罚 + AMP"更依赖人工设计；WMP 用 AMP 替代了大部分步态塑形。
+- 可直接借用的三项：**二阶平滑 `smoothness`**、**`cheat` 偏航惩罚**（防绕行，正好对应我们绕桩/越障的绕路问题）、
+  **奖励权重课程**（例如把 `feet_air_time` 或 `passage_progress` 前 3000 轮降到 0.2 再升满）。
