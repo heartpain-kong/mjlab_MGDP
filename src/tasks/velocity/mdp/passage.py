@@ -3,14 +3,22 @@
 from dataclasses import dataclass, asdict, field
 import hashlib
 import json
+import math
 import time
 import warnings
 import torch
 from mjlab.managers.manager_base import ManagerTermBase
+from .auto_curriculum import (
+  TrajectoryDifficultyScheduler,
+  interpolate_bandwidth,
+  trajectory_quality_score,
+)
 from .velocity_command import UniformVelocityCommand, UniformVelocityCommandCfg
 
 
 DEFAULT_SPEED_LIMIT = 1.0
+# Legacy heading controller always clamped the yaw command to this magnitude.
+LEGACY_YAW_LIMIT = .8
 
 
 def terrain_column_kinds(generator, device=None):
@@ -78,6 +86,15 @@ class PassageCommand(UniformVelocityCommand):
     lower, upper = (float(value) for value in cfg.ranges.lin_vel_x)
     self.speed_floors = torch.full((self.num_envs,), lower, device=self.device)
     self.speed_limits = torch.full((self.num_envs,), upper, device=self.device)
+    # ★ 2026-11-19 指令维课程：偏航与横向速度也各自拥有 per-env 带宽。默认
+    # （cfg 字段为 None）完全保持旧行为：偏航仍按 ±0.8 裁剪，横向不额外裁剪。
+    self.yaw_limits = torch.full((self.num_envs,), LEGACY_YAW_LIMIT, device=self.device)
+    self.lateral_limits = None
+    if getattr(cfg, 'yaw_max', None) is not None:
+      self.yaw_limits.fill_(float(cfg.yaw_max))
+    if getattr(cfg, 'vy_max', None) is not None:
+      self.lateral_limits = torch.full((self.num_envs,), float(cfg.vy_max),
+                                       device=self.device)
     self.column_names = names
     self.column_kinds = columns
     self.speed_group_columns = resolve_speed_groups(getattr(cfg, "speed_groups", None),
@@ -162,6 +179,37 @@ class PassageCommand(UniformVelocityCommand):
       raise KeyError(f'Unknown passage speed group {group_name!r}')
     self.set_speed_limits(groups[group_name], low, high)
 
+  def set_command_limits(self, columns, yaw_max=None, vy_max=None):
+    """Set per-environment yaw/lateral command bandwidth on terrain columns.
+
+    ``yaw_max`` is a symmetric |yaw rate| cap and ``vy_max`` a symmetric body
+    lateral speed cap.  ``None`` leaves that axis untouched.  The curriculum
+    calls this whenever a terrain group finishes a successful speed window.
+    """
+    mask = self.column_mask(columns)
+    if yaw_max is not None:
+      yaw_max = float(yaw_max)
+      if not yaw_max >= 0.:
+        raise ValueError('Passage yaw bandwidth must be non-negative')
+      self.yaw_limits[mask] = yaw_max
+      self.vel_command_b[mask, 2] = self.vel_command_b[mask, 2].clamp(
+        min=-yaw_max, max=yaw_max)
+    if vy_max is not None:
+      vy_max = float(vy_max)
+      if not vy_max >= 0.:
+        raise ValueError('Passage lateral bandwidth must be non-negative')
+      if self.lateral_limits is None:
+        self.lateral_limits = torch.full((self.num_envs,), torch.inf,
+                                         device=self.device)
+      self.lateral_limits[mask] = vy_max
+      self.vel_command_b[mask, 1] = self.vel_command_b[mask, 1].clamp(
+        min=-vy_max, max=vy_max)
+
+  def set_global_command_limits(self, yaw_max=None, vy_max=None):
+    """Set one yaw/lateral bandwidth for the whole batch."""
+    self.set_command_limits(torch.arange(len(self.column_kinds), device=self.device),
+                            yaw_max, vy_max)
+
   def _resample_command(self, env_ids):
     floor = self.speed_floors[env_ids]
     limit = self.speed_limits[env_ids].clamp(min=floor)
@@ -187,7 +235,15 @@ class PassageCommand(UniformVelocityCommand):
     self.heading_target = torch.atan2(direction[:,1],direction[:,0])
     error = self.heading_target-heading
     self.heading_error = torch.atan2(error.sin(),error.cos())
-    self.vel_command_b[:,2] = (.8*self.heading_error).clamp(-.8,.8)
+    yaw = (.8*self.heading_error).clamp(-LEGACY_YAW_LIMIT, LEGACY_YAW_LIMIT)
+    # Per-environment bandwidth caps only matter when the command curriculum
+    # has widened/narrowed them; the defaults reproduce the legacy clamp.
+    self.vel_command_b[:,2] = torch.maximum(torch.minimum(yaw, self.yaw_limits),
+                                            -self.yaw_limits)
+    if self.lateral_limits is not None:
+      self.vel_command_b[:,1] = torch.maximum(
+        torch.minimum(self.vel_command_b[:,1], self.lateral_limits),
+        -self.lateral_limits)
 
 
 @dataclass(kw_only=True)
@@ -204,6 +260,13 @@ class PassageCommandCfg(UniformVelocityCommandCfg):
   speed_groups: dict[str, tuple[str, ...]] | None = None
   speed_group_floor: float = .35
   speed_group_ceiling: float = 2.
+  # ★ 2026-11-19 指令维课程（TransCurriculum）：每一组在前向速度成功推进时，
+  # 按推进比例把偏航/横向速度带宽从初始值提升到上限值。四个字段全部默认
+  # None = 关闭：偏航沿用旧 ±0.8 裁剪，横向不做额外裁剪。
+  yaw_max: float | None = None
+  yaw_max_limit: float | None = None
+  vy_max: float | None = None
+  vy_max_limit: float | None = None
 
   def build(self, env):
     return PassageCommand(self, env)
@@ -303,6 +366,11 @@ class PassageCurriculum(ManagerTermBase):
       for key in ('speed_group_floor','speed_group_ceiling'):
         if command_contract.get(key) == getattr(defaults,key,None):
           command_contract.pop(key,None)
+      # ★ 2026-11-19 指令维课程字段同理：None = 关闭，旧 checkpoint 的指纹
+      # 必须保持不变；只有真正配置了带宽才改变课程契约。
+      for key in ('yaw_max','yaw_max_limit','vy_max','vy_max_limit'):
+        if command_contract.get(key) is None:
+          command_contract.pop(key,None)
     contract = (asdict(generator), env.step_dt, env.cfg.episode_length_s if hasattr(env.cfg,"episode_length_s") else None,
                 command_contract)
     events = getattr(env.cfg, "events", {})
@@ -322,11 +390,113 @@ class PassageCurriculum(ManagerTermBase):
       self.diagnostics=PassageDiagnostics(env,self.column_names,self.kind_of_column)
     self.speed_groups = getattr(self.command.cfg, 'speed_groups', None)
     self.grouped = self.speed_groups is not None
+    # ★ 2026-11-19 四项可开关的课程改进。解析只读 params（唯一例外：把不可跨
+    # 进程比较的 safety_margin_fn 从 params 中移除），因此未启用时 state_dict、
+    # params 与 fingerprint 都和旧 checkpoint 完全一致。
+    self._configure_optional_curricula()
     self.groups = self._build_speed_groups()
     for group in self.groups.values():
       self._apply_speeds(group['columns'], group['low'], group['high'])
     if self.grouped:
       self._sync_command_range()
+    self._configure_command_curriculum()
+    self._build_trajectory_scheduler()
+    self._apply_all_command_limits()
+
+  # ------------------------------------------------------------------
+  # Optional curriculum plumbing (all defaults reproduce the legacy task).
+  # ------------------------------------------------------------------
+
+  def _configure_optional_curricula(self):
+    """Read the opt-in switches and validate their parameters."""
+    params = self.params
+    num_columns = len(self.count)
+    # Feature 2: trajectory-level automatic curriculum.
+    self.trajectory_curriculum = bool(params.get('trajectory_curriculum', False))
+    self.trajectory_quality_kwargs = {
+      'progress_weight': float(params.get('trajectory_progress_weight', .5)),
+      'error_weight': float(params.get('trajectory_error_weight', .3)),
+      'failure_weight': float(params.get('trajectory_failure_weight', .2)),
+      'error_ref': float(params.get('trajectory_error_ref', .5)),
+    }
+    if self.trajectory_curriculum:
+      # Probe once so an invalid weight/error_ref fails at construction time.
+      trajectory_quality_score(0., 0., failed=0., **self.trajectory_quality_kwargs)
+    self.trajectory_scheduler = None
+    self.last_trajectory_decisions = {}
+    # Feature 3: zero-success terrain column resampling.
+    self.resample_windows = int(params.get('resample_zero_success_windows', 0))
+    if self.resample_windows < 0:
+      raise ValueError('resample_zero_success_windows must be non-negative')
+    self.zero_success_windows = torch.zeros(num_columns, dtype=torch.long,
+                                            device=self.device)
+    self.resampled_counts = torch.zeros(num_columns, dtype=torch.long,
+                                        device=self.device)
+    self._resample_samples = torch.zeros(num_columns, device=self.device)
+    self._resample_success = torch.zeros(num_columns, device=self.device)
+    self._resample_last = {}
+    # Environments demoted mid-episode keep their current tile until the next
+    # reset; the origin is then refreshed before the reset event places them.
+    self._resample_origin_pending = torch.zeros(self.num_envs, dtype=torch.bool,
+                                                device=self.device)
+    self._resetting_ids = None
+    # Feature 4: predictive safety margin gate for every promotion.
+    self.safety_margin_fn = params.get('safety_margin_fn')
+    if self.safety_margin_fn is not None and not callable(self.safety_margin_fn):
+      raise ValueError('safety_margin_fn must be callable')
+    # Callables are not comparable across resume runs and cannot be meaningfully
+    # checkpointed; the task config re-supplies the function on resume.
+    params.pop('safety_margin_fn', None)
+    self.safety_margin_threshold = float(params.get('safety_margin_threshold', .5))
+    if not 0. <= self.safety_margin_threshold <= 1.:
+      raise ValueError('safety_margin_threshold must be between 0 and 1')
+    self.safety_sum = {}
+    self.safety_count = {}
+
+  def _configure_command_curriculum(self):
+    """Validate the optional yaw/lateral bandwidth bands from the command cfg."""
+    cfg = self.command.cfg
+    yaw = getattr(cfg, 'yaw_max', None)
+    yaw_limit = getattr(cfg, 'yaw_max_limit', None)
+    vy = getattr(cfg, 'vy_max', None)
+    vy_limit = getattr(cfg, 'vy_max_limit', None)
+    self.yaw_band = None
+    self.vy_band = None
+    if yaw is not None:
+      yaw = float(yaw)
+      yaw_limit = float(yaw if yaw_limit is None else yaw_limit)
+      if not (torch.isfinite(torch.tensor(yaw)) and torch.isfinite(torch.tensor(yaw_limit))
+              and 0. <= yaw <= yaw_limit):
+        raise ValueError('Passage yaw_max/yaw_max_limit need 0 <= yaw_max <= yaw_max_limit')
+      self.yaw_band = (yaw, yaw_limit)
+    elif yaw_limit is not None:
+      raise ValueError('Passage yaw_max_limit requires yaw_max')
+    if vy is not None:
+      vy = float(vy)
+      vy_limit = float(vy if vy_limit is None else vy_limit)
+      if not (torch.isfinite(torch.tensor(vy)) and torch.isfinite(torch.tensor(vy_limit))
+              and 0. <= vy <= vy_limit):
+        raise ValueError('Passage vy_max/vy_max_limit need 0 <= vy_max <= vy_max_limit')
+      self.vy_band = (vy, vy_limit)
+    elif vy_limit is not None:
+      raise ValueError('Passage vy_max_limit requires vy_max')
+    self.command_curriculum = self.yaw_band is not None or self.vy_band is not None
+
+  def _build_trajectory_scheduler(self):
+    """Create the trajectory-quality scheduler when the feature is enabled."""
+    if not self.trajectory_curriculum:
+      return
+    params = self.params
+    min_samples = int(params.get('trajectory_min_samples',
+                                 max(1, int(params.get('min_episodes', 1)))))
+    self.trajectory_scheduler = TrajectoryDifficultyScheduler(
+      list(self.groups),
+      up_threshold=float(params.get('trajectory_up_threshold', .65)),
+      down_threshold=float(params.get('trajectory_down_threshold', .35)),
+      patience=int(params.get('trajectory_patience', 3)),
+      down_patience=(int(params['trajectory_down_patience'])
+                     if params.get('trajectory_down_patience') is not None else None),
+      min_samples=min_samples)
 
   def _group_bounds(self):
     cfg = self.command.cfg
@@ -343,13 +513,14 @@ class PassageCurriculum(ManagerTermBase):
     mapping = resolve_speed_groups(self.speed_groups, self.column_names, self.kind_of_column)
     if mapping is None:
       return {'all': {'columns': torch.arange(len(self.count), device=self.device),
-                      'low': low, 'high': high, 'streak': 0}}
+                      'low': low, 'high': high, 'initial_high': high, 'streak': 0}}
     floor, ceiling = self._group_bounds()
     groups = {}
     for name, columns in mapping.items():
       group_low = max(low, floor)
       group_high = min(max(high, group_low), ceiling)
-      groups[name] = {'columns': columns, 'low': group_low, 'high': group_high, 'streak': 0}
+      groups[name] = {'columns': columns, 'low': group_low, 'high': group_high,
+                      'initial_high': group_high, 'streak': 0}
     return groups
 
   def _apply_speeds(self, columns, low, high):
@@ -368,6 +539,74 @@ class PassageCurriculum(ManagerTermBase):
       return
     self.command.cfg.ranges.lin_vel_x = (min(float(g['low']) for g in groups),
                                          max(float(g['high']) for g in groups))
+    if not getattr(self, 'command_curriculum', False):
+      return
+    yaws, vys = [], []
+    for group in groups:
+      yaw, vy = self._group_command_bands(group)
+      if yaw is not None:
+        yaws.append(float(yaw))
+      if vy is not None:
+        vys.append(float(vy))
+    if yaws:
+      self.command.cfg.ranges.ang_vel_z = (-max(yaws), max(yaws))
+    if vys:
+      self.command.cfg.ranges.lin_vel_y = (-max(vys), max(vys))
+
+  def _command_ceiling(self, group):
+    """Forward-speed level at which a group's command bandwidth is fully open."""
+    if self.grouped:
+      return self._group_bounds()[1]
+    return max(float(self.params.get('speed_limit', DEFAULT_SPEED_LIMIT)),
+               float(group['high']))
+
+  def _command_progress(self, group):
+    """Fraction of the forward-speed expansion a group has finished."""
+    ceiling = self._command_ceiling(group)
+    span = ceiling - float(group.get('initial_high', group['high']))
+    if span <= 0.:
+      return 0.
+    return min(max((float(group['high'])-float(group.get('initial_high', group['high'])))
+                   / span, 0.), 1.)
+
+  def _group_command_bands(self, group):
+    """Current yaw/lateral bandwidth of one group (``None`` axis = disabled)."""
+    if not getattr(self, 'command_curriculum', False):
+      return None, None
+    progress = self._command_progress(group)
+    yaw = (interpolate_bandwidth(self.yaw_band[0], self.yaw_band[1], progress)
+           if self.yaw_band is not None else None)
+    vy = (interpolate_bandwidth(self.vy_band[0], self.vy_band[1], progress)
+          if self.vy_band is not None else None)
+    return yaw, vy
+
+  def _apply_command_bands(self, columns, yaw, vy):
+    """Push one group's yaw/lateral bandwidth to the command term."""
+    if yaw is None and vy is None:
+      return
+    setter = getattr(self.command, 'set_command_limits', None)
+    if setter is not None:
+      setter(columns, yaw, vy)
+    else:
+      # Without per-environment support the public range still mirrors the
+      # widest band, which is enough for logs and policy playback.
+      if yaw is not None:
+        self.command.cfg.ranges.ang_vel_z = (-float(yaw), float(yaw))
+      if vy is not None:
+        self.command.cfg.ranges.lin_vel_y = (-float(vy), float(vy))
+
+  def _apply_group_command_bands(self, name):
+    group = self.groups[name]
+    yaw, vy = self._group_command_bands(group)
+    self._apply_command_bands(group['columns'], yaw, vy)
+
+  def _apply_all_command_limits(self):
+    """Re-derive every group's yaw/lateral bandwidth from its speed progress."""
+    if not getattr(self, 'command_curriculum', False):
+      return
+    for name in self.groups:
+      self._apply_group_command_bands(name)
+    self._sync_command_range()
 
   def _apply_fixed_speed(self, speed):
     for group in self.groups.values():
@@ -378,6 +617,7 @@ class PassageCurriculum(ManagerTermBase):
     setter = getattr(self.command, 'set_global_speeds', None)
     if setter is not None:
       setter(speed, speed)
+    self._apply_all_command_limits()
 
   def write_distribution(self, force=False):
     """Write a throttled, atomic snapshot of all live environments."""
@@ -414,12 +654,22 @@ class PassageCurriculum(ManagerTermBase):
       self._apply_fixed_speed(fixed_speed)
     # Initial/randomized reset buffers are not completed episodes.
     ids = env_ids if env_ids is not None else torch.arange(env.num_envs, device=self.device)
+    self._resetting_ids = ids.clone()
+    if self.resample_windows > 0 and len(ids):
+      pending = ids[self._resample_origin_pending[ids]]
+      if len(pending):
+        self.terrain.update_env_origins(
+          pending, torch.zeros(len(pending), dtype=torch.bool, device=self.device),
+          torch.zeros(len(pending), dtype=torch.bool, device=self.device))
+        self._resample_origin_pending[pending] = False
     reset_mask = getattr(env, "reset_buf", None)
     ids = ids[:0] if reset_mask is None else ids[(env.episode_length_buf[ids] > 0) & reset_mask[ids]]
     # RSL-RL can randomize the first episode's length counter. Its artificial
     # timeout is not evidence that the robot failed a full passage attempt.
     actual_steps = env.metrics_manager._step_count
     ids = ids[actual_steps[ids] >= env.episode_length_buf[ids]]
+    self._resample_last = {}
+    self.last_trajectory_decisions = {}
     if len(ids):
       types = self.terrain.terrain_types[ids]
       passed = (passage_success(env) & ~failed(env))[ids]
@@ -428,6 +678,9 @@ class PassageCurriculum(ManagerTermBase):
       self.count.scatter_add_(0, types, torch.ones_like(error))
       self.success.scatter_add_(0, types, passed.float())
       self.error.scatter_add_(0, types, error)
+      # Feature 4: accumulate the sensor-free safety proxy for this window.
+      if self.safety_margin_fn is not None:
+        self._observe_safety_margin(env, ids)
       # Reaching the top must stay at the top, not wrap to a random row.
       level = self.terrain.terrain_levels[ids]
       last = self.terrain.max_terrain_level-1
@@ -436,21 +689,35 @@ class PassageCurriculum(ManagerTermBase):
       # still requires the original tracking gate across every column.
       threshold = max_error if terrain_max_error == 'speed' else terrain_max_error
       if self.diagnostics is not None:self.diagnostics.record(env,ids,passed)
-      mastered = passed if threshold is None else passed & (error <= threshold)
-      overrides = getattr(self.command.cfg, 'terrain_level_up_streak', None)
-      if overrides:
-        need = torch.tensor([int(overrides.get(self.column_names[int(t)], level_up_streak))
-                             for t in types], device=self.device, dtype=torch.long)
+      if self.trajectory_curriculum:
+        # Feature 2: replace the per-env success streak with a trajectory-level
+        # quality schedule. The scheduler applies its decision to this batch.
+        changed = self._apply_trajectory_levels(env, ids, passed)
+        self.level_success_streak[changed] = 0
+        self.level_failure_streak[changed] = 0
       else:
-        need = level_up_streak
-      self.level_success_streak[ids] = torch.where(mastered, (self.level_success_streak[ids]+1).clamp(max=need), 0)
-      self.level_failure_streak[ids] = torch.where(~passed, (self.level_failure_streak[ids]+1).clamp(max=level_down_streak), 0)
-      up = mastered & (self.level_success_streak[ids] >= need) & (level < last)
-      down = ~passed & (self.level_failure_streak[ids] >= level_down_streak) & (level > 0)
-      self.terrain.update_env_origins(ids, up, down)
-      changed = ids[up | down]
-      self.level_success_streak[changed] = 0
-      self.level_failure_streak[changed] = 0
+        mastered = passed if threshold is None else passed & (error <= threshold)
+        overrides = getattr(self.command.cfg, 'terrain_level_up_streak', None)
+        if overrides:
+          need = torch.tensor([int(overrides.get(self.column_names[int(t)], level_up_streak))
+                               for t in types], device=self.device, dtype=torch.long)
+        else:
+          need = level_up_streak
+        self.level_success_streak[ids] = torch.where(mastered, (self.level_success_streak[ids]+1).clamp(max=need), 0)
+        self.level_failure_streak[ids] = torch.where(~passed, (self.level_failure_streak[ids]+1).clamp(max=level_down_streak), 0)
+        up = mastered & (self.level_success_streak[ids] >= need) & (level < last)
+        down = ~passed & (self.level_failure_streak[ids] >= level_down_streak) & (level > 0)
+        # A small safety margin may veto promotions but never regressions:
+        # pushing the lesson down is the recovery action of last resort.
+        if self.safety_margin_fn is not None:
+          up = up & self._safety_upgrade_mask(types)
+        self.terrain.update_env_origins(ids, up, down)
+        changed = ids[up | down]
+        self.level_success_streak[changed] = 0
+        self.level_failure_streak[changed] = 0
+      # Feature 3: a column with M zero-success windows is re-sampled downwards.
+      if self.resample_windows > 0:
+        self._observe_zero_success_columns(types, passed)
     rate = self.success / self.count.clamp(min=1)
     errors = self.error / self.count.clamp(min=1)
     represented = torch.bincount(self.kind_of_column, minlength=len(self.column_names)) > 0
@@ -475,6 +742,25 @@ class PassageCurriculum(ManagerTermBase):
       levels = self.terrain.terrain_levels
       logs[f"level_mean/{name}"] = (levels.float()*env_mask).sum()/total
       logs[f"lowest_fraction/{name}"] = ((levels == 0) & env_mask).sum()/total
+    if self.command_curriculum:
+      for name, group in self.groups.items():
+        yaw, vy = self._group_command_bands(group)
+        if yaw is not None:
+          logs[f'yaw_max/{name}'] = torch.tensor(float(yaw), device=self.device)
+        if vy is not None:
+          logs[f'vy_max/{name}'] = torch.tensor(float(vy), device=self.device)
+    if self.trajectory_curriculum:
+      for name in self.groups:
+        quality = self.trajectory_scheduler.last_window_quality.get(name)
+        if quality is not None:
+          logs[f'quality/{name}'] = torch.tensor(float(quality), device=self.device)
+        decision = self.last_trajectory_decisions.get(name, 0)
+        logs[f'trajectory_up/{name}'] = torch.tensor(float(decision > 0), device=self.device)
+        logs[f'trajectory_down/{name}'] = torch.tensor(float(decision < 0), device=self.device)
+    if self.resample_windows > 0:
+      for name in self.column_names:
+        logs[f'resampled/{name}'] = torch.tensor(
+          float(self._resample_last.get(name, False)), device=self.device)
     # Missing obstacle kinds/samples never count as passed.
     if self.grouped:
       logs.update(self._expand_groups(rate, errors, min_episodes, success_threshold,
@@ -497,13 +783,18 @@ class PassageCurriculum(ManagerTermBase):
     if fixed_speed is not None:
       self.streak=0
     elif self.streak >= 3:
-      high = min(speed_limit, high+.025)
-      self.streak = 0
+      # Feature 4: only a safe window may consume the accumulated promotion.
+      if self._safety_allows('all'):
+        high = min(speed_limit, high+.025)
+        self.streak = 0
     elif bad:
       high = max(speed_floor, low, high-.025)
     self.command.cfg.ranges.lin_vel_x = (low, high)
     self._apply_speeds(self.groups['all']['columns'], low, high)
+    self.groups['all']['high'] = high
+    self._apply_group_command_bands('all')
     self.count.zero_(); self.success.zero_(); self.error.zero_()
+    self._reset_safety('all')
 
   def _expand_groups(self, rate, errors, min_episodes, success_threshold, max_error, fixed_speed):
     """Expand each terrain group on its own full window; never retract.
@@ -512,7 +803,7 @@ class PassageCurriculum(ManagerTermBase):
     (high_wall) freezes that group alone while the others keep speeding up.
     """
     ceiling = self._group_bounds()[1]
-    for group in self.groups.values():
+    for name, group in self.groups.items():
       columns = group['columns']
       if len(columns) == 0:
         continue
@@ -525,14 +816,22 @@ class PassageCurriculum(ManagerTermBase):
       if fixed_speed is not None:
         group['streak'] = 0
       elif group['streak'] >= 3:
-        high = min(ceiling, high+.025)
-        group['streak'] = 0
+        # Feature 4: a safe window is required before the promotion is spent.
+        # When blocked the streak is kept, so a later safe window promotes
+        # immediately instead of waiting another three windows.
+        if self._safety_allows(name):
+          high = min(ceiling, high+.025)
+          group['streak'] = 0
       if high != group['high']:
         group['high'] = high
         self._apply_speeds(columns, group['low'], high)
+        # Feature 1: expand this group's yaw/lateral bandwidth in proportion
+        # to the forward-speed progress it just unlocked.
+        self._apply_group_command_bands(name)
       self.count[columns] = 0.
       self.success[columns] = 0.
       self.error[columns] = 0.
+      self._reset_safety(name)
     self._sync_command_range()
     logs = {f'speed_max/{name}': torch.tensor(float(group['high']), device=self.device)
             for name, group in self.groups.items()}
@@ -543,6 +842,218 @@ class PassageCurriculum(ManagerTermBase):
     logs['speed_min'] = torch.tensor(float(self.command.cfg.ranges.lin_vel_x[0]),
                                      device=self.device)
     return logs
+
+  # ------------------------------------------------------------------
+  # Feature 4: predictive safety margin (optional gate on every promotion).
+  # ------------------------------------------------------------------
+
+  def _observe_safety_margin(self, env, ids):
+    """Accumulate per-group safety margins for the completed batch."""
+    values = self.safety_margin_fn(env, ids)
+    values = torch.as_tensor(values, device=self.device, dtype=torch.float32).flatten()
+    if (values.numel() != len(ids) or not torch.isfinite(values).all()
+        or (values < 0.).any() or (values > 1.).any()):
+      raise ValueError('safety_margin_fn must return one finite margin in [0, 1] per env')
+    types = self.terrain.terrain_types[ids]
+    for name, group in self.groups.items():
+      mask = torch.isin(types, group['columns'])
+      if bool(mask.any()):
+        self.safety_sum[name] = self.safety_sum.get(name, 0.) + float(values[mask].sum())
+        self.safety_count[name] = self.safety_count.get(name, 0) + int(mask.sum())
+
+  def _safety_allows(self, name):
+    """Whether the accumulated window margin clears the promotion threshold."""
+    if self.safety_margin_fn is None:
+      return True
+    count = self.safety_count.get(name, 0)
+    if count <= 0:
+      return False  # no evidence of safety yet; never promote blindly
+    return self.safety_sum.get(name, 0.)/count >= self.safety_margin_threshold
+
+  def _safety_upgrade_mask(self, column_types):
+    """Per-environment promotion mask derived from each group's margin."""
+    mask = torch.zeros(len(column_types), dtype=torch.bool, device=self.device)
+    for name, group in self.groups.items():
+      if self._safety_allows(name):
+        mask |= torch.isin(column_types, group['columns'])
+    return mask
+
+  def _reset_safety(self, name):
+    self.safety_sum[name] = 0.
+    self.safety_count[name] = 0
+
+  # ------------------------------------------------------------------
+  # Feature 2: trajectory-level automatic curriculum.
+  # ------------------------------------------------------------------
+
+  def _trajectory_progress_ratio(self, ids):
+    """Fraction of the route a finished episode covered (0 start, 1 goal)."""
+    command = self.command
+    if hasattr(command, 'route_state') and hasattr(command, 'cumulative'):
+      types = command.route_keys()[ids]
+      final = command.last_waypoint[types]
+      total = command.cumulative[types, final].clamp(min=1e-6)
+      progress = command.route_state()[3][ids]
+      return (progress/total).clamp(0., 1.)
+    xy = command.local_xy()[ids]
+    goal_x = float(getattr(command.cfg, 'goal_x', 5.3))
+    if goal_x <= 0.:
+      return torch.zeros(len(ids), device=self.device)
+    return (xy[:, 0]/goal_x).clamp(0., 1.)
+
+  def _trajectory_qualities(self, env, ids, passed):
+    """Trajectory-quality score of every completed episode in ``ids``."""
+    error = (env.metrics_manager._episode_sums['velocity_error_xy_mps'][ids]
+             / env.episode_length_buf[ids].clamp(min=1))
+    # A failed termination that still reports success is not a clean passage;
+    # the penalty only applies to actual failures.
+    failure = failed(env)[ids] & ~passed
+    return trajectory_quality_score(
+      self._trajectory_progress_ratio(ids), error,
+      failed=failure.float(), **self.trajectory_quality_kwargs)
+
+  def _apply_trajectory_levels(self, env, ids, passed):
+    """Feature 2: replace the per-env success streak with quality windows."""
+    quality = self._trajectory_qualities(env, ids, passed)
+    types = self.terrain.terrain_types[ids]
+    for name, group in self.groups.items():
+      mask = torch.isin(types, group['columns'])
+      if bool(mask.any()):
+        self.trajectory_scheduler.observe(name, quality[mask])
+    decisions = self.trajectory_scheduler.update()
+    self.last_trajectory_decisions = dict(decisions)
+    levels = self.terrain.terrain_levels[ids]
+    last = self.terrain.max_terrain_level-1
+    up = torch.zeros(len(ids), dtype=torch.bool, device=self.device)
+    down = torch.zeros(len(ids), dtype=torch.bool, device=self.device)
+    for name, decision in decisions.items():
+      mask = torch.isin(types, self.groups[name]['columns'])
+      if decision > 0:
+        # Feature 4 also vetoes a quality-driven promotion.
+        if self._safety_allows(name):
+          up |= mask & (levels < last)
+      elif decision < 0:
+        down |= mask & (levels > 0)
+    changed = up | down
+    if bool(changed.any()):
+      self.terrain.update_env_origins(ids[changed], up[changed], down[changed])
+    return ids[changed]
+
+  # ------------------------------------------------------------------
+  # Feature 3: zero-success terrain column resampling.
+  # ------------------------------------------------------------------
+
+  def _observe_zero_success_columns(self, types, passed):
+    """Accumulate one reset batch and evaluate it as one resampling window."""
+    samples = torch.bincount(types, minlength=len(self.count)).to(self.device)
+    success = torch.bincount(types, weights=passed.float(), minlength=len(self.count))
+    self._resample_samples += samples.float()
+    self._resample_success += success.float()
+    self.resample_zero_success_columns()
+
+  def resample_zero_success_columns(self, window_samples=None, window_success=None):
+    """Demote whole terrain columns after M consecutive zero-success windows.
+
+    Called without arguments it consumes the batch accumulated by the last
+    ``__call__``; passing explicit per-column sample/success vectors evaluates
+    one window directly (monitoring code and unit tests use this).  A window
+    with no samples on a column also counts as a zero-success window, as
+    required for columns that receive no environments for a while.  Returns
+    ``{terrain name: True}`` for every column demoted in this call.
+    """
+    if self.resample_windows <= 0:
+      return {}
+    if window_samples is None or window_success is None:
+      samples, success = self._resample_samples, self._resample_success
+      self._resample_samples = torch.zeros_like(self._resample_samples)
+      self._resample_success = torch.zeros_like(self._resample_success)
+    else:
+      samples = torch.as_tensor(window_samples, device=self.device, dtype=torch.float32).flatten()
+      success = torch.as_tensor(window_success, device=self.device, dtype=torch.float32).flatten()
+      if (samples.shape != self.count.shape or success.shape != self.count.shape
+          or not torch.isfinite(samples).all() or not torch.isfinite(success).all()
+          or (samples < 0.).any() or (success < 0.).any()):
+        raise ValueError('Invalid resampling window statistics')
+    zero = (samples <= 0.) | (success <= 0.)
+    self.zero_success_windows = torch.where(
+      zero, self.zero_success_windows+1, torch.zeros_like(self.zero_success_windows))
+    result = {}
+    due = (self.zero_success_windows >= self.resample_windows).nonzero(as_tuple=False)
+    for column in due.flatten().tolist():
+      name = self.column_names[int(self.kind_of_column[column])]
+      mask = (self.terrain.terrain_types == column) & (self.terrain.terrain_levels > 0)
+      env_ids = mask.nonzero(as_tuple=False).flatten()
+      if len(env_ids):
+        # Book-keeping for the whole column, but only refresh the reset origin
+        # of environments that are resetting this step; the rest keep the tile
+        # they are standing on and get the new origin on their next reset.
+        self.terrain.terrain_levels[env_ids] -= 1
+        resetting = self._resetting_ids
+        if resetting is not None and len(resetting):
+          in_reset = torch.isin(env_ids, resetting)
+        else:
+          in_reset = torch.ones(len(env_ids), dtype=torch.bool, device=self.device)
+        refresh = env_ids[in_reset]
+        deferred = env_ids[~in_reset]
+        if len(refresh):
+          self.terrain.update_env_origins(
+            refresh, torch.zeros(len(refresh), dtype=torch.bool, device=self.device),
+            torch.zeros(len(refresh), dtype=torch.bool, device=self.device))
+        self._resample_origin_pending[deferred] = True
+      self.resampled_counts[column] += 1
+      self.zero_success_windows[column] = 0
+      result[name] = True
+    self._resample_last = result
+    return result
+
+  def _load_optional_curricula_state(self, state):
+    """Restore the opt-in curriculum state; a missing key means \"start fresh\".
+
+    Old checkpoints never stored these keys, so they load unchanged; the new
+    features only add state when they are themselves enabled.
+    """
+    if self.trajectory_curriculum and self.trajectory_scheduler is not None:
+      saved = state.get('trajectory_scheduler')
+      if saved is not None:
+        self.trajectory_scheduler.load_state_dict(saved)
+    if self.resample_windows > 0:
+      saved = state.get('resample')
+      if saved is not None:
+        restored = {}
+        for key, target in (('windows', self.zero_success_windows),
+                            ('counts', self.resampled_counts)):
+          if saved.get(key) is None:
+            raise ValueError('Invalid passage resampling state')
+          value = torch.as_tensor(saved.get(key), device=self.device, dtype=torch.long).flatten()
+          if value.shape != target.shape or (value < 0).any():
+            raise ValueError('Invalid passage resampling state')
+          restored[key] = value
+        self.zero_success_windows.copy_(restored['windows'])
+        self.resampled_counts.copy_(restored['counts'])
+        pending = saved.get('pending')
+        if pending is not None:
+          pending = torch.as_tensor(pending, device=self.device).flatten().bool()
+          if pending.shape != self._resample_origin_pending.shape:
+            raise ValueError('Invalid passage resampling state')
+          self._resample_origin_pending.copy_(pending)
+    if self.safety_margin_fn is not None:
+      saved = state.get('safety')
+      if saved is not None:
+        sums, counts = saved.get('sum', {}), saved.get('count', {})
+        if set(sums) != set(self.groups) or set(counts) != set(self.groups):
+          raise ValueError('Incompatible passage safety state')
+        restored_sum, restored_count = {}, {}
+        for name in self.groups:
+          value, count = float(sums[name]), counts[name]
+          if (not math.isfinite(value) or value < 0.
+              or not isinstance(count, int) or count < 0):
+            raise ValueError('Invalid passage safety state')
+          restored_sum[name] = value
+          restored_count[name] = count
+        self.safety_sum = restored_sum
+        self.safety_count = restored_count
+    if self.command_curriculum:
+      self._apply_all_command_limits()
 
   def state_dict(self):
     state = {"version": 1, "params": self.params, "names": self.column_names, "grid": self.grid,
@@ -557,6 +1068,22 @@ class PassageCurriculum(ManagerTermBase):
       state['speed_groups'] = {name: {'low': float(group['low']), 'high': float(group['high']),
                                       'streak': int(group['streak'])}
                                for name, group in self.groups.items()}
+    # ★ 2026-11-19 新课程状态以可选键保存：旧 checkpoint 没有这些键也能加载，
+    # 新 checkpoint 在对应功能关闭时也不会多写任何键。
+    if self.command_curriculum:
+      state['command_bands'] = {}
+      for name, group in self.groups.items():
+        yaw, vy = self._group_command_bands(group)
+        state['command_bands'][name] = {'yaw': yaw, 'vy': vy}
+    if self.trajectory_curriculum and self.trajectory_scheduler is not None:
+      state['trajectory_scheduler'] = self.trajectory_scheduler.state_dict()
+    if self.resample_windows > 0:
+      state['resample'] = {
+        'windows': self.zero_success_windows.detach().cpu().clone(),
+        'counts': self.resampled_counts.detach().cpu().clone(),
+        'pending': self._resample_origin_pending.detach().cpu().clone()}
+    if self.safety_margin_fn is not None:
+      state['safety'] = {'sum': dict(self.safety_sum), 'count': dict(self.safety_count)}
     return state
 
   def load_state_dict(self, state):
@@ -650,5 +1177,6 @@ class PassageCurriculum(ManagerTermBase):
       self._apply_speeds(self.groups['all']['columns'], low, high)
       self.groups['all']['low'], self.groups['all']['high'] = low, high
     self.streak = int(state["streak"])
+    self._load_optional_curricula_state(state)
     self.terrain.terrain_levels.copy_(levels); self.terrain.terrain_types.copy_(types)
     self.terrain.env_origins[:] = self.terrain.terrain_origins[levels, types]

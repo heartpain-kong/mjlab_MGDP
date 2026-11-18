@@ -77,6 +77,48 @@ def initial_joint_positions(env, env_ids, position_range, asset_cfg):
     positions, torch.zeros_like(positions), env_ids=ids, joint_ids=joints)
 
 
+def _scale_dof_field(env, ids, dofs, field, factors):
+  """Write ``default[field][dofs] * factors`` back into a (possibly expanded) field.
+
+  Expanded 1-D DOF fields have shape ``(num_envs, nv)``; a single-world sim skips
+  ``expand_model_fields`` and keeps the bare ``(nv,)`` shape.
+  """
+  default = env.sim.get_default_field(field)[dofs]
+  values = default[None, :] * factors
+  model_field = getattr(env.sim.model, field)
+  if model_field.dim() == 2:
+    model_field[ids[:, None], dofs] = values
+  elif model_field.dim() == 1:
+    if len(ids) != 1:
+      raise ValueError(
+        f"'{field}' is not expanded per world but {len(ids)} env ids were given; "
+        "register the actuator_reality event so expand_model_fields allocates it")
+    model_field[dofs] = values[0]
+  else:
+    raise ValueError(f"Unexpected '{field}' shape {tuple(model_field.shape)}")
+
+
+@requires_model_fields("dof_frictionloss", "dof_damping")
+def joint_friction_damping_strength(
+    env, env_ids, frictionloss_scale_range, damping_scale_range, asset_cfg):
+  """Multiplicatively randomize joint friction loss and viscous damping.
+
+  Independent factors are sampled per environment and joint, then applied to the
+  compile-time joint defaults (never to the current values), so repeated calls do
+  not compound.  The sampled factors are recorded for diagnostics.
+  """
+  ids = _ids(env, env_ids)
+  asset = env.scene[asset_cfg.name]
+  dofs = asset.indexing.joint_v_adr[asset_cfg.joint_ids]
+  shape = (len(ids), len(dofs))
+  friction = torch.empty(shape, device=env.device).uniform_(*frictionloss_scale_range)
+  damping = torch.empty(shape, device=env.device).uniform_(*damping_scale_range)
+  _scale_dof_field(env, ids, dofs, "dof_frictionloss", friction)
+  _scale_dof_field(env, ids, dofs, "dof_damping", damping)
+  _record(env, "frictionloss_scale", ids, friction)
+  _record(env, "damping_scale", ids, damping)
+
+
 def push_xy_velocity(env, env_ids, interval_s, max_velocity, asset_cfg):
   """Match HIMLoco's global periodic absolute XY velocity replacement."""
   period = max(1, math.ceil(interval_s / env.step_dt))
