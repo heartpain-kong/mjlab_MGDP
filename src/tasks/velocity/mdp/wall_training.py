@@ -201,39 +201,93 @@ class WallProgressReward(WallGeometry):
 
 
 class WallApproachReward(WallGeometry):
-  """★ 2026-11-19：高墙阶段性引导——朝"下一面未越过的墙"的密集进展奖励。
+  """★ 2026-11-20：世界系路点进展奖励（CMU Extreme Parkour 式速度投影）。
 
-  原策略在第一墙前 1.25 m 处停住（诊断：91% 无进展）。这里按"到下一面墙的距离"
-  给前进奖励，只在墙前 max_distance_m 内生效，越过后自动切换到下一面墙，
-  墙面越过后不再给分，避免在墙前来回刷分。
+  旧实现按"到下一面墙的局部 x 距离"给正位移奖励：机器人横着走、甚至倒着走
+  也能拿到分，训练诊断显示 91% 的回合在第一面墙前 1.25 m 停住。这里改为对
+  "指向下一面未越过墙面中点"的速度投影做跟踪（墙面在世界 x 上固定，y 取车道
+  中心 0）：
+
+      d̂ = normalize((centre_x, 0) - local_xy)
+      r = clamp(⟨v_world, d̂⟩, 0, v_cmd)          # m/s，奖励管理器再乘 dt
+
+  只在下一面墙前方 ``max_distance_m`` 内生效；越过一面墙后自动改瞄下一面，三面
+  全部越过（或当前地形等级没有剩余墙面 / 不在高墙列）返回 0。``v_cmd`` 是跟踪
+  速度的上限，避免策略用超速冲刺刷分。
   """
+
+  # 墙面中心仍在机器人"前方"的容差；越过 5 cm 后切换到下一面墙。
+  CROSSED_TOLERANCE_M = .05
 
   def __init__(self, cfg, env):
     super().__init__(cfg, env)
-    self.prev_x = torch.zeros(env.num_envs, device=env.device)
+    # 位置差分回退（速度接口不可用时）的上一帧局部 xy 与有效标志。
+    self.previous_xy = torch.zeros((env.num_envs, 2), device=env.device)
     self.ready = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
 
   def reset(self, env_ids=None):
     ids = slice(None) if env_ids is None else env_ids
+    self.previous_xy[ids] = self._env.command_manager.get_term("twist").local_xy()[ids]
     self.ready[ids] = False
 
-  def __call__(self, env, max_distance_m=1.6, min_command_mps=.1):
+  def _world_velocity(self, env, command, xy):
+    """世界系平面速度；没有速度接口时用根位置（局部 xy）差分。"""
+    entity = getattr(env.scene, 'robot', None)
+    if entity is None:
+      try:
+        entity = env.scene['robot']
+      except (KeyError, IndexError, TypeError):
+        entity = None
+    data = getattr(entity, 'data', None)
+    velocity = getattr(data, 'root_link_lin_vel_w', None)
+    if (torch.is_tensor(velocity) and velocity.dim() >= 2
+        and velocity.shape[0] == xy.shape[0] and velocity.shape[1] >= 2):
+      result = velocity[:, :2].to(device=xy.device, dtype=xy.dtype)
+    else:
+      # 局部 xy = 根世界位置 - env_origins；同一回合内平移量即世界系位移。
+      step_dt = max(float(getattr(env, 'step_dt', 0.)), 1e-6)
+      delta = xy - self.previous_xy.to(device=xy.device, dtype=xy.dtype)
+      result = torch.where(self.ready.to(xy.device)[:, None], delta/step_dt,
+                           torch.zeros_like(delta))
+    self.previous_xy[:] = xy
+    self.ready[:] = True
+    return result
+
+  def __call__(self, env, v_cmd=.6, max_distance_m=1.6, min_command_mps=.1):
+    if not v_cmd > 0.:
+      raise ValueError('v_cmd must be positive')
+    if not max_distance_m > 0.:
+      raise ValueError('max_distance_m must be positive')
+    # 旧 reward 配置仍会传这个参数；新的速度投影不需要它。
+    del min_command_mps
     command = env.command_manager.get_term("twist")
-    x = command.local_xy()[:, 0]
+    xy = command.local_xy()
+    zero = torch.zeros(xy.shape[0], device=xy.device, dtype=xy.dtype)
     centres = getattr(command, 'wall_centres', None)
     if centres is None or len(centres) == 0:
-      return torch.zeros_like(x)
-    centres = centres.to(x.device)
-    # 下一面墙：第一个"还在前方"的墙面；全部越过则不给分。
-    gap = centres[None, :] - x[:, None]
-    ahead = gap > -0.05
-    gap = torch.where(ahead, gap, torch.full_like(gap, 1e6)).min(dim=1).values
-    near = (gap > 0.) & (gap <= max_distance_m)
-    delta = x - self.prev_x
-    reward = torch.where(self.ready & near, delta.clamp(min=0.), torch.zeros_like(x))
-    self.prev_x[:] = x
-    self.ready[:] = True
-    return reward
+      centres = self.centres
+    if centres is None or len(centres) == 0:
+      return zero
+    centres = torch.as_tensor(centres, device=xy.device, dtype=xy.dtype).flatten()
+    # 只考虑当前地形等级真正存在的墙面（非高墙列 active_walls 全 False）。
+    active = self.active_walls(env)
+    gaps = centres[None, :] - xy[:, 0:1]
+    # 下一面未越过的墙：墙面中心还在机器人前方（含 5cm 容差）。
+    candidates = active & (gaps > -self.CROSSED_TOLERANCE_M)
+    # 指向墙面中点（车道中心 y=0）的单位向量。
+    dx = gaps
+    dy = -xy[:, 1:2]
+    distance = (dx.square() + dy.square()).sqrt().clamp(min=1e-6)
+    aimed = torch.where(candidates, distance, torch.full_like(distance, torch.inf))
+    nearest = aimed.argmin(dim=1)
+    nearest_distance = aimed.gather(1, nearest[:, None])[:, 0]
+    direction = torch.stack((dx/distance, dy/distance), dim=-1)
+    target_direction = torch.gather(
+      direction, 1, nearest[:, None, None].expand(-1, 1, 2))[:, 0]
+    world_velocity = self._world_velocity(env, command, xy)
+    projection = (world_velocity*target_direction).sum(dim=-1)
+    valid = candidates.any(dim=1) & (nearest_distance <= max_distance_m)
+    return torch.where(valid, projection.clamp(min=0., max=float(v_cmd)), zero)
 
 
 class WallWaitingPenalty(WallGeometry):

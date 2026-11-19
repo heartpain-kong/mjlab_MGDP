@@ -306,12 +306,18 @@ def lgdog1_wall_training_env_cfg(play=False, checkpoint=DEFAULT_WALL_CHECKPOINT,
         cfg.curriculum['passage'].params.update(terrain_max_error=None,
             level_up_streak=2,level_down_streak=2,
             # 2026-11-20：最高档只留 15% 智能体，其余回流到低一档，避免算力全压在满级地形。
-            level_quota_from=7, level_quota_fraction=.15)
+            level_quota_from=7, level_quota_fraction=.15,
+            # Extreme Parkour 式相对进展课程：进展 >60% 升档、<25% 连降，替代成功率门控。
+            progress_curriculum=True)
     cfg.commands['twist'].wall_reward_contract_version=wall_reward_contract(rules)
     # 阶段性引导：墙前 1.6 m 内朝下一面墙前进的密集奖励（与 wall_crossing 互补）。
     from mjlab.managers.reward_manager import RewardTermCfg as _RewardTermCfg
     cfg.rewards['wall_approach'] = _RewardTermCfg(func=WallApproachReward, weight=2.0,
         params={'max_distance_m': 1.6, 'min_command_mps': .1})
+    # 2026-11-20（Extreme Parkour）：脚踩在地形棱/边缘 5 cm 内扣分，防止贴边省力。
+    from src.tasks.velocity.mdp.rewards import edge_place_penalty as _edge_place_penalty
+    cfg.rewards['edge_place_penalty'] = _RewardTermCfg(func=_edge_place_penalty, weight=-.5,
+        params={'margin_m': .05, 'height_jump_threshold_m': .03})
     # ★ 2026-11-19：默认启用分组速度课程（高墙 0% 时只冻结本组）与按组指令带宽。
     twist = cfg.commands['twist']
     twist.speed_groups = {

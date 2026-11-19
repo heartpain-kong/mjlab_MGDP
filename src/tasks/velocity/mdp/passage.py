@@ -19,6 +19,9 @@ from .velocity_command import UniformVelocityCommand, UniformVelocityCommandCfg
 DEFAULT_SPEED_LIMIT = 1.0
 # Legacy heading controller always clamped the yaw command to this magnitude.
 LEGACY_YAW_LIMIT = .8
+# ★ 2026-11-20：相对进展课程的升降级阈值（平均 route_progress_m / route_length_m）。
+PROGRESS_UP_RATIO = .6
+PROGRESS_DOWN_RATIO = .25
 
 
 def terrain_column_kinds(generator, device=None):
@@ -432,6 +435,17 @@ class PassageCurriculum(ManagerTermBase):
     """Read the opt-in switches and validate their parameters."""
     params = self.params
     num_columns = len(self.count)
+    # Feature 5: relative route-progress curriculum. When enabled it replaces the
+    # per-episode success/quality gate for TERRAIN LEVELS only; speed groups,
+    # quotas, resampling and command bandwidth keep running unchanged.
+    self.progress_curriculum = bool(params.get('progress_curriculum', False))
+    self.progress_count = torch.zeros(num_columns, device=self.device)
+    self.progress_sum = torch.zeros(num_columns, device=self.device)
+    self.progress_low_streak = torch.zeros(num_columns, dtype=torch.long,
+                                           device=self.device)
+    self.last_progress_ratio = {}
+    self.last_progress_up = {}
+    self.last_progress_down = {}
     # Feature 2: trajectory-level automatic curriculum.
     self.trajectory_curriculum = bool(params.get('trajectory_curriculum', False))
     self.trajectory_quality_kwargs = {
@@ -711,7 +725,16 @@ class PassageCurriculum(ManagerTermBase):
       # still requires the original tracking gate across every column.
       threshold = max_error if terrain_max_error == 'speed' else terrain_max_error
       if self.diagnostics is not None:self.diagnostics.record(env,ids,passed)
-      if self.trajectory_curriculum:
+      if self.progress_curriculum:
+        # Feature 5: relative route progress decides terrain levels. The
+        # trajectory scheduler, when also enabled, still observes its quality
+        # windows (so its logs stay meaningful) but no longer moves levels.
+        if self.trajectory_curriculum:
+          self._observe_trajectory_windows(env, ids, passed)
+        changed = self._apply_progress_levels(env, ids, min_episodes, level_down_streak)
+        self.level_success_streak[changed] = 0
+        self.level_failure_streak[changed] = 0
+      elif self.trajectory_curriculum:
         # Feature 2: replace the per-env success streak with a trajectory-level
         # quality schedule. The scheduler applies its decision to this batch.
         changed = self._apply_trajectory_levels(env, ids, passed)
@@ -785,6 +808,14 @@ class PassageCurriculum(ManagerTermBase):
         decision = self.last_trajectory_decisions.get(name, 0)
         logs[f'trajectory_up/{name}'] = torch.tensor(float(decision > 0), device=self.device)
         logs[f'trajectory_down/{name}'] = torch.tensor(float(decision < 0), device=self.device)
+    if self.progress_curriculum:
+      for name in self.column_names:
+        logs[f'progress_ratio/{name}'] = torch.tensor(
+          float(self.last_progress_ratio.get(name, 0.)), device=self.device)
+        logs[f'progress_up/{name}'] = torch.tensor(
+          float(self.last_progress_up.get(name, False)), device=self.device)
+        logs[f'progress_down/{name}'] = torch.tensor(
+          float(self.last_progress_down.get(name, False)), device=self.device)
     if self.resample_windows > 0:
       for name in self.column_names:
         logs[f'resampled/{name}'] = torch.tensor(
@@ -940,8 +971,8 @@ class PassageCurriculum(ManagerTermBase):
       self._trajectory_progress_ratio(ids), error,
       failed=failure.float(), **self.trajectory_quality_kwargs)
 
-  def _apply_trajectory_levels(self, env, ids, passed):
-    """Feature 2: replace the per-env success streak with quality windows."""
+  def _observe_trajectory_windows(self, env, ids, passed):
+    """Feature 2: feed one batch of completed-episode qualities to the scheduler."""
     quality = self._trajectory_qualities(env, ids, passed)
     types = self.terrain.terrain_types[ids]
     for name, group in self.groups.items():
@@ -950,6 +981,12 @@ class PassageCurriculum(ManagerTermBase):
         self.trajectory_scheduler.observe(name, quality[mask])
     decisions = self.trajectory_scheduler.update()
     self.last_trajectory_decisions = dict(decisions)
+    return decisions
+
+  def _apply_trajectory_levels(self, env, ids, passed):
+    """Feature 2: replace the per-env success streak with quality windows."""
+    decisions = self._observe_trajectory_windows(env, ids, passed)
+    types = self.terrain.terrain_types[ids]
     levels = self.terrain.terrain_levels[ids]
     last = self.terrain.max_terrain_level-1
     up = torch.zeros(len(ids), dtype=torch.bool, device=self.device)
@@ -965,6 +1002,65 @@ class PassageCurriculum(ManagerTermBase):
     changed = up | down
     if bool(changed.any()):
       self.terrain.update_env_origins(ids[changed], up[changed], down[changed])
+    return ids[changed]
+
+  # ------------------------------------------------------------------
+  # Feature 5: relative route-progress terrain curriculum.
+  # ------------------------------------------------------------------
+
+  def _apply_progress_levels(self, env, ids, min_episodes, level_down_streak):
+    """Move every terrain column by its mean relative route progress.
+
+    One window per column holds ``min_episodes`` completed episodes; its mean
+    ``route_progress_m / route_length_m`` promotes the column above
+    ``PROGRESS_UP_RATIO`` or demotes it after ``level_down_streak`` consecutive
+    windows below ``PROGRESS_DOWN_RATIO``.  Only the environments resetting in
+    this batch change tiles, exactly like the legacy success-rate gate, and a
+    finished window always starts from zero.
+    """
+    min_episodes = max(int(min_episodes), 1)
+    down_patience = max(int(level_down_streak), 1)
+    types = self.terrain.terrain_types[ids]
+    ratio = self._trajectory_progress_ratio(ids)
+    self.progress_count.scatter_add_(0, types, torch.ones_like(ratio))
+    self.progress_sum.scatter_add_(0, types, ratio)
+    ready = self.progress_count >= min_episodes
+    mean_ratio = self.progress_sum/self.progress_count.clamp(min=1)
+    up_column = ready & (mean_ratio > PROGRESS_UP_RATIO)
+    low_column = ready & (mean_ratio < PROGRESS_DOWN_RATIO)
+    self.progress_low_streak = torch.where(
+      low_column, self.progress_low_streak+1, self.progress_low_streak)
+    self.progress_low_streak = torch.where(
+      ready & ~low_column, torch.zeros_like(self.progress_low_streak),
+      self.progress_low_streak)
+    down_column = low_column & (self.progress_low_streak >= down_patience)
+    # Log this call's windows before they are consumed.
+    self.last_progress_ratio = {}
+    self.last_progress_up = {}
+    self.last_progress_down = {}
+    for index, name in enumerate(self.column_names):
+      mask = self.kind_of_column == index
+      count = self.progress_count[mask].sum()
+      if bool(count > 0.):
+        self.last_progress_ratio[name] = float(
+          self.progress_sum[mask].sum()/count)
+      else:
+        self.last_progress_ratio[name] = 0.
+      self.last_progress_up[name] = bool(up_column[mask].any())
+      self.last_progress_down[name] = bool(down_column[mask].any())
+    levels = self.terrain.terrain_levels[ids]
+    last = self.terrain.max_terrain_level-1
+    up = up_column[types] & (levels < last)
+    down = down_column[types] & (levels > 0)
+    if self.safety_margin_fn is not None:
+      # Feature 4 may veto a progress-driven promotion, never a regression.
+      up = up & self._safety_upgrade_mask(types)
+    changed = up | down
+    if bool(changed.any()):
+      self.terrain.update_env_origins(ids[changed], up[changed], down[changed])
+    self.progress_count[ready] = 0.
+    self.progress_sum[ready] = 0.
+    self.progress_low_streak[up_column | down_column] = 0
     return ids[changed]
 
   # ------------------------------------------------------------------
@@ -1064,6 +1160,27 @@ class PassageCurriculum(ManagerTermBase):
           if pending.shape != self._resample_origin_pending.shape:
             raise ValueError('Invalid passage resampling state')
           self._resample_origin_pending.copy_(pending)
+    if self.progress_curriculum:
+      saved = state.get('progress')
+      if saved is not None:
+        restored = {}
+        for key, dtype in (('count', torch.float32), ('sum', torch.float32),
+                           ('low_streak', torch.long)):
+          if saved.get(key) is None:
+            raise ValueError('Invalid passage progress state')
+          restored[key] = torch.as_tensor(saved.get(key), device=self.device,
+                                          dtype=dtype).flatten()
+        count, total = restored['count'], restored['sum']
+        if (count.shape != self.progress_count.shape
+            or total.shape != count.shape
+            or restored['low_streak'].shape != count.shape
+            or not torch.isfinite(count).all() or not torch.isfinite(total).all()
+            or (count < 0.).any() or (total < 0.).any()
+            or (total > count+1e-6).any() or (restored['low_streak'] < 0).any()):
+          raise ValueError('Invalid passage progress state')
+        self.progress_count.copy_(count)
+        self.progress_sum.copy_(total)
+        self.progress_low_streak.copy_(restored['low_streak'])
     if self.safety_margin_fn is not None:
       saved = state.get('safety')
       if saved is not None:
@@ -1110,6 +1227,11 @@ class PassageCurriculum(ManagerTermBase):
         'windows': self.zero_success_windows.detach().cpu().clone(),
         'counts': self.resampled_counts.detach().cpu().clone(),
         'pending': self._resample_origin_pending.detach().cpu().clone()}
+    if self.progress_curriculum:
+      state['progress'] = {
+        'count': self.progress_count.detach().cpu().clone(),
+        'sum': self.progress_sum.detach().cpu().clone(),
+        'low_streak': self.progress_low_streak.detach().cpu().clone()}
     if self.safety_margin_fn is not None:
       state['safety'] = {'sum': dict(self.safety_sum), 'count': dict(self.safety_count)}
     return state

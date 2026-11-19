@@ -16,6 +16,8 @@ from mjlab.utils.lab_api.string import (
 from . import ops
 
 if TYPE_CHECKING:
+  from collections.abc import Sequence
+
   from mjlab.envs import ManagerBasedRlEnv
 
 
@@ -584,4 +586,266 @@ def cheat(
   obstacle = columns[env.scene.terrain.terrain_types]
   heading = asset.data.heading_w
   return (obstacle & (heading.abs() > heading_threshold)).float()
+
+
+# ★ 贴边惩罚（CMU Extreme Parkour 的 edge placement penalty）。
+#   目的：脚落在距地形边缘/台阶棱 ``margin_m``（默认 5 cm）以内就扣分，
+#   既防"贴着墙/沟沿走省力"，也对应真机"脚踩一半悬空→踩空"的风险。
+_DEFAULT_FOOT_SITES = ("FR_foot", "FL_foot", "RR_foot", "RL_foot")
+# 与 terrain_scan 的 GridPatternCfg 默认值一致：1.6 m x 1.0 m、0.1 m 分辨率
+# ⇒ (1.6/0.1+1) x (1.0/0.1+1) = 17 x 11 = 187 个采样点。
+_DEFAULT_SCAN_GRID_SIZE = (1.6, 1.0)
+_DEFAULT_SCAN_RESOLUTION = 0.1
+
+
+def _scene_element(env: ManagerBasedRlEnv, name: str | None):
+  """``env.scene[name]``，不存在时返回 None（不抛错）。
+
+  mjlab 的 ``Scene`` 没有 ``__contains__``（用 ``in`` 会 TypeError），缺失项只在
+  ``__getitem__`` 里抛 ``KeyError``；奖励项必须在"没这个传感器"的环境里安全求值，
+  例如 blind 任务（无 terrain_scan）或只用 height_scan 张量做离线的调用方。
+  """
+  if not name:
+    return None
+  try:
+    return env.scene[name]
+  except (KeyError, TypeError):
+    return None
+
+
+def _log_reward_metric(env: ManagerBasedRlEnv, name: str, value: torch.Tensor) -> None:
+  extras = getattr(env, "extras", None)
+  if extras is None:
+    return
+  extras.setdefault("log", {})[name] = value
+
+
+def _fallback_scan_xy(
+  env: ManagerBasedRlEnv,
+  count: int,
+  grid_size: tuple[float, float],
+  resolution: float,
+  device,
+  dtype: torch.dtype,
+) -> torch.Tensor | None:
+  """无射线传感器时，按 grid 形状参数重建网格点的世界 XY。
+
+  仅在传感器缺失、但调用方直接给了 ``height_scan`` 时使用；假设网格与世界
+  轴对齐、中心在环境原点（训练中的真实调用都走 ``hit_pos_w``，不受此限制）。
+  布局与 ``mjlab.sensor.GridPatternCfg`` 的 ``meshgrid(x, y, indexing="xy")``
+  展平顺序一致。
+  """
+  size_x, size_y = grid_size
+  nx = int(round(size_x / resolution)) + 1
+  ny = int(round(size_y / resolution)) + 1
+  if nx < 2 or ny < 2 or nx * ny != count:
+    return None
+  xs = torch.linspace(
+    -0.5 * size_x, 0.5 * size_x, nx, device=device, dtype=dtype
+  )
+  ys = torch.linspace(
+    -0.5 * size_y, 0.5 * size_y, ny, device=device, dtype=dtype
+  )
+  grid_x, grid_y = torch.meshgrid(xs, ys, indexing="xy")
+  xy = torch.stack((grid_x.reshape(-1), grid_y.reshape(-1)), dim=-1)  # [N, 2]
+  origins = getattr(env.scene, "env_origins", None)
+  if origins is not None:
+    xy = xy + origins[:, :2].to(device=device, dtype=dtype).unsqueeze(1)
+  return xy.unsqueeze(0).expand(int(env.num_envs), -1, -1)
+
+
+def edge_place_penalty(
+  env: ManagerBasedRlEnv,
+  sensor_name: str = "terrain_scan",
+  foot_site_names: Sequence[str] = _DEFAULT_FOOT_SITES,
+  margin_m: float = 0.05,
+  height_jump_threshold_m: float = 0.03,
+  contact_sensor_name: str | None = "feet_ground_contact",
+  min_force_n: float = 1.0,
+  asset_cfg: SceneEntityCfg | None = None,
+  height_scan: torch.Tensor | None = None,
+  grid_size: tuple[float, float] | None = None,
+  resolution: float | None = None,
+  log_metric: bool = True,
+) -> torch.Tensor:
+  """罚「脚踩在地形边缘/台阶棱上」—— 返回每步落在边缘上的脚数（0~4）。
+
+  ★ 为什么需要它（CMU Extreme Parkour 的 edge placement penalty）
+    贴边省力：墙根、沟沿、台阶棱常常是策略"蹭着过去"的捷径，但真机上脚掌
+    一半悬空就是踩空。CMU 的做法是**脚落在距边缘 5 cm 以内就扣分**，我们照搬。
+
+  判据（每只脚独立，满足则计 1，最后对 4 只脚求和 → ``[B]``，取值 0~4）：
+    1. **触地**：``feet_ground_contact`` 的 ``found > 0`` 或接触力范数
+       ``> min_force_n``（默认 1 N）—— 悬空脚本来就不该被罚；
+    2. **脚下地形有高度跃变**：在高度网格上取脚周围半径
+       ``margin_m + 0.5*分辨率`` 的局部窗口（0.1 m 分辨率下约 ±1 格），
+       窗口内采样高度的极差 ``max(h) - min(h) > height_jump_threshold_m``
+       （默认 3 cm）。平地极差为 0；脚踩在 10 cm 台阶棱上极差约 10 cm。
+
+  数据来源两种，都支持：
+    · 默认：从 ``env.scene[sensor_name]``（``RayCastSensor``，如 terrain_scan）
+      现算高度 —— ``pos_w.z - hit_pos_w.z``，并用 ``distances >= 0`` 丢掉没打中
+      的射线，采样点 XY 取 ``hit_pos_w``（已含传感器 yaw，天然是真实世界坐标）；
+    · 直接传入扁平的 ``height_scan`` ``[B, N]``（单位米，**未缩放**），此时
+      若没有传感器就用 ``grid_size`` / ``resolution`` 重建采样点（默认
+      ``(1.6, 1.0)`` / ``0.1``，即 187 点）。这条路径方便离线/单测。
+
+  ⚠️ 使用前提
+    · 扫描要**只打地形**：mgdp/wall 任务里 terrain_scan 配了
+      ``include_geom_groups=(0,)``，不会打到机器人自己的脚；如果射线会命中
+      机器人小腿，脚边会出现假的"高度跃变"，此时请改扫描过滤或调大阈值。
+    · 0.1 m 网格的边缘定位精度就是 0.1 m，5 cm 的 margin 实际被量化到约一格；
+      想要更细请提高扫描分辨率。
+    · 斜坡是连续梯度，不算"棱"；但 *rough / wave* 地形的局部起伏也可能超过
+      3 cm，需要按任务把阈值抬到台阶高度的一半左右（如 0.04~0.05 m）。
+
+  Args:
+    sensor_name: 高度扫描的 ``RayCastSensor`` 名，默认 ``terrain_scan``。
+    foot_site_names: 四个足端 site 名（顺序要与接触传感器的 slot 顺序一致，
+      本工程都是 FR/FL/RR/RL）。传了 ``asset_cfg`` 时以它的 ``site_ids`` 为准。
+    margin_m: 允许的离边距离（米），默认 0.05。
+    height_jump_threshold_m: 局部窗口内触发惩罚的高度跃变（米），默认 0.03。
+    contact_sensor_name: 足端接触传感器名；为 None / 不存在时返回全 0。
+    min_force_n: 触地判定的接触力阈值（牛顿），默认 1.0；``found > 0`` 也算触地。
+    asset_cfg: 可选，机器人实体 + site_ids（默认 ``robot`` + ``foot_site_names``）。
+    height_scan: 可选，直接给 ``[B, N]`` 高度（米，未缩放），优先于传感器。
+    grid_size / resolution: 无传感器时的网格形状参数（默认 1.6x1.0 / 0.1）。
+    log_metric: 是否写 ``env.extras["log"]`` 诊断指标。
+
+  Returns:
+    ``[B]`` float 张量：每步落在边缘上的脚数（0~4）。没有 height_scan 传感器 /
+    没有接触传感器 / 没有机器人时返回全 0，**不抛错**。
+
+  权重换算：mjlab 会乘 ``dt``（0.02 s），本项原始值 0~4。weight=-0.5 时每只
+  踩边脚每控制步约 -0.01，四脚同时踩边约 -0.04/步。mgdp_v6 这类已有
+  ``feet_stumble=-0.1``、``leg_contact_force=-0.25`` 的档位，建议从 -0.5 起步。
+  """
+  num_envs = int(env.num_envs)
+  device = env.device
+  zeros = torch.zeros(num_envs, device=device)
+
+  sensor = _scene_element(env, sensor_name)
+  data = getattr(sensor, "data", None)
+  pattern = getattr(getattr(sensor, "cfg", None), "pattern", None)
+
+  # ── 1) 高度 [B, N]（米）。没有传感器也没显式给 height_scan ⇒ 全 0。 ──
+  if height_scan is None:
+    hit_pos_w = getattr(data, "hit_pos_w", None)
+    pos_w = getattr(data, "pos_w", None)
+    if hit_pos_w is None or pos_w is None or hit_pos_w.dim() != 3:
+      return zeros
+    heights = pos_w[:, 2].unsqueeze(1) - hit_pos_w[..., 2]  # [B, N]
+    distances = getattr(data, "distances", None)
+    if distances is not None and distances.shape == heights.shape:
+      valid = distances >= 0
+    else:
+      valid = torch.isfinite(heights)
+  else:
+    heights = height_scan.to(device=device, dtype=torch.float32)
+    if heights.dim() == 1:
+      heights = heights.unsqueeze(0)
+    if heights.dim() != 2 or heights.shape[0] != num_envs:
+      return zeros
+    valid = torch.isfinite(heights)
+
+  heights = heights.to(device=device, dtype=torch.float32)
+  valid = valid.to(device=device)
+  count = int(heights.shape[1])
+  if count == 0:
+    return zeros
+
+  # ── 2) 采样点的世界 XY [B, N, 2]。 ──
+  hit_pos_w = getattr(data, "hit_pos_w", None)
+  if hit_pos_w is not None and hit_pos_w.dim() == 3 and hit_pos_w.shape[1] == count:
+    scan_xy = hit_pos_w[..., :2].to(device=device, dtype=torch.float32)
+  else:
+    res = resolution
+    if res is None:
+      res = getattr(pattern, "resolution", None)
+    if not isinstance(res, (int, float)) or res <= 0:
+      res = _DEFAULT_SCAN_RESOLUTION
+    size = grid_size
+    if size is None:
+      size = getattr(pattern, "size", None)
+    if not (isinstance(size, (tuple, list)) and len(size) == 2):
+      size = _DEFAULT_SCAN_GRID_SIZE
+    scan_xy = _fallback_scan_xy(
+      env, count, (float(size[0]), float(size[1])), float(res), device,
+      torch.float32,
+    )
+    if scan_xy is None:
+      return zeros
+
+  # ── 3) 足端世界 XY [B, F, 2]。 ──
+  asset_name = asset_cfg.name if asset_cfg is not None else "robot"
+  asset = _scene_element(env, asset_name)
+  if asset is None:
+    return zeros
+  site_ids = list(getattr(asset_cfg, "site_ids", None) or ()) if asset_cfg else []
+  if not site_ids:
+    find_sites = getattr(asset, "find_sites", None)
+    if find_sites is None:
+      return zeros
+    site_ids, _ = find_sites(foot_site_names)
+  if not site_ids:
+    return zeros
+  site_pos_w = getattr(getattr(asset, "data", None), "site_pos_w", None)
+  if site_pos_w is None:
+    return zeros
+  foot_xy = site_pos_w[:, site_ids, :2].to(device=device, dtype=torch.float32)
+
+  # ── 4) 触地掩码 [B, F]。 ──
+  contact_sensor = _scene_element(env, contact_sensor_name)
+  contact = None
+  if contact_sensor is not None:
+    cdata = getattr(contact_sensor, "data", None)
+    found = getattr(cdata, "found", None)
+    if found is not None:
+      found = found.to(device=device)
+      while found.dim() > 2 and found.shape[-1] == 1:
+        found = found.squeeze(-1)
+      contact = found > 0
+    force = getattr(cdata, "force", None)
+    if force is not None:
+      force_mag = torch.norm(force.to(device=device), dim=-1)  # [B, F]
+      is_contact = force_mag > float(min_force_n)
+      contact = is_contact if contact is None else (contact | is_contact)
+  if contact is None:
+    return zeros
+  if contact.shape[0] != num_envs or contact.shape[1] != len(site_ids):
+    # slot 数对不上时无法把力正确的映射到脚上，宁可不罚也不乱扣。
+    return zeros
+  contact = contact.bool()
+
+  # ── 5) 每只脚的局部高度极差 [B, F]。 ──
+  if resolution is not None and resolution > 0:
+    res = float(resolution)
+  else:
+    res = getattr(pattern, "resolution", None)
+    if not isinstance(res, (int, float)) or res <= 0:
+      res = _DEFAULT_SCAN_RESOLUTION
+  # 窗口 = margin + 半格：脚正好在两格之间时也能同时看到棱两侧的采样点。
+  window = float(margin_m) + 0.5 * float(res)
+  window2 = (window + 1e-6) ** 2
+  dist2 = torch.sum(
+    (foot_xy.unsqueeze(2) - scan_xy.unsqueeze(1)) ** 2, dim=-1
+  )  # [B, F, N]
+  in_window = (dist2 <= window2) & valid.unsqueeze(1)
+
+  neg_fill = torch.finfo(torch.float32).min
+  pos_fill = torch.finfo(torch.float32).max
+  local_max = torch.where(in_window, heights.unsqueeze(1), neg_fill).amax(dim=-1)
+  local_min = torch.where(in_window, heights.unsqueeze(1), pos_fill).amin(dim=-1)
+  has_points = in_window.any(dim=-1)
+  jump = torch.where(
+    has_points, local_max - local_min, torch.zeros_like(local_max)
+  )  # [B, F]
+  on_edge = has_points & (jump > float(height_jump_threshold_m)) & contact
+
+  # ── 6) 计数 + 诊断日志。 ──
+  count_edges = on_edge.to(torch.float32).sum(dim=-1)  # [B]，0~4
+  if log_metric:
+    _log_reward_metric(env, "Metrics/edge_place_penalty_mean", count_edges.mean())
+    _log_reward_metric(env, "Metrics/edge_place_penalty_fraction", on_edge.float().mean())
+  return count_edges
 

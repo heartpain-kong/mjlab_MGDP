@@ -54,6 +54,8 @@ COMMON_WEIGHTS = {
 OPTIONAL_WEIGHTS = {
   "smoothness": 0.0,
   "cheat": 0.0,
+  # Extreme Parkour 式边缘落脚惩罚：脚踩在 5 cm 内的地形棱上时扣分（默认关闭，wall 任务单独开）。
+  "edge_place_penalty": 0.0,
 }
 
 
@@ -279,6 +281,7 @@ def make_lgdog_rewards(profile, *, base_body, foot_sites, terrain_ray_names=()):
   for name, func in (
     ("smoothness", mdp.smoothness),
     ("cheat", mdp.cheat),
+    ("edge_place_penalty", mdp.edge_place_penalty),
   ):
     if weights[name] != 0.0:
       rewards[name] = term(name, func)
