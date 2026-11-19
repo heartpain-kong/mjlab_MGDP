@@ -67,15 +67,26 @@ class UpFuseBlock(nn.Module):
 class ImageEncoder(nn.Module):
     """Depth encoder: (B, 2, H, W) -> (B, out_channels)."""
 
-    def __init__(self, input_channels=2, hidden=(32, 64, 96), output_channels=64, pool=4):
+    def __init__(self, input_channels=2, hidden=(32, 64, 96), output_channels=64, pool=4,
+                 downsample="stride"):
         super().__init__()
         self.pool = pool
+        self.downsample = downsample
         self.conv1 = DoubleConv(input_channels, hidden[0])
-        self.pool1 = nn.MaxPool2d(2, 2)
         self.conv2 = DoubleConv(hidden[0], hidden[1])
-        self.pool2 = nn.MaxPool2d(2, 2)
         self.conv3 = DoubleConv(hidden[1], hidden[2])
         self.bottleneck = DoubleConv(hidden[2], hidden[2])
+        # ★ 2026-11-19：默认用 stride 卷积做下采样（纯 CNN），替代 MaxPool。
+        # 相比 max pooling，学习式下采样保留细障碍（桩、墙沿）的位置信息；
+        # 空间尺寸与 2×2 池化一致（32→16→8），解码器 skip 尺寸不变。
+        if downsample == "stride":
+            self.down1 = nn.Conv2d(hidden[0], hidden[0], 3, stride=2, padding=1)
+            self.down2 = nn.Conv2d(hidden[1], hidden[1], 3, stride=2, padding=1)
+        elif downsample == "maxpool":
+            self.down1 = nn.MaxPool2d(2, 2)
+            self.down2 = nn.MaxPool2d(2, 2)
+        else:
+            raise ValueError(f"unknown downsample mode {downsample!r}")
         self.global_pool = nn.AdaptiveAvgPool2d((pool, pool))
         proj = hidden[2] * 2
         self.fc = nn.Sequential(
@@ -91,9 +102,9 @@ class ImageEncoder(nn.Module):
         b = x.size(0)
         x1 = self.conv1(x)
         self.skip_connections.append(x1)
-        x2 = self.conv2(self.pool1(x1))
+        x2 = self.conv2(self.down1(x1))
         self.skip_connections.append(x2)
-        x3 = self.bottleneck(self.conv3(self.pool2(x2)))
+        x3 = self.bottleneck(self.conv3(self.down2(x2)))
         self.skip_connections.append(x3)
         pooled = self.global_pool(x3).reshape(b, -1)
         return self.fc(pooled)
