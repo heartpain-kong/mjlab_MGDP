@@ -18,7 +18,7 @@ LEGACY_WALL_REWARD_DEFAULTS={
 }
 WALL_REWARD_DEFAULTS={
   'progress_gate':{'enabled':True,'progress_reference_mps':.6,'min_command_mps':.05},
-  'wall_waiting':{'enabled':True,'weight':-1.5,'approach_m':.5,'grace_s':.75,'ramp_s':1.5,
+  'wall_waiting':{'enabled':True,'weight':-.6,'approach_m':.5,'grace_s':.75,'ramp_s':1.5,
                   'max_rate':2.,'min_progress_m':.02,'min_command_mps':.05},
   'wall_crossing':{'weight':5.,'root_clearance_m':.1,'foot_clearance_m':.03},
   'passage_progress':{'weight':1.5},

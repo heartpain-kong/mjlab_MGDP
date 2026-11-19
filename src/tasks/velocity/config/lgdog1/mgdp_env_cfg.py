@@ -290,7 +290,7 @@ def lgdog1_wall_training_env_cfg(play=False, checkpoint=DEFAULT_WALL_CHECKPOINT,
     old=cfg.commands['twist']
     cfg.commands['twist']=BodyAwarePassageCommandCfg(**{f.name:getattr(old,f.name) for f in fields(old) if f.init})
     cfg.commands['twist'].ranges.lin_vel_x=(.6,.6)
-    cfg.commands['twist'].obstacle_speed_limits=(.25,.25)
+    cfg.commands['twist'].obstacle_speed_limits=(.65,.25)  # 墙前限速 .25->.65：爬 36 cm 墙需要冲量
     if 'passage' in cfg.curriculum:
         cfg.curriculum['passage'].params['speed_floor']=.6
         cfg.curriculum['passage'].params['speed_limit']=2.

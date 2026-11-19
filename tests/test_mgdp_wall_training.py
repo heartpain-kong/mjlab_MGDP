@@ -235,7 +235,7 @@ class WallTrainingTests(unittest.TestCase):
     self.assertEqual(play.rewards['track_linear_velocity'].weight,2.4)
     self.assertEqual(old.rewards['track_linear_velocity'].weight,2.)
     self.assertEqual((play.rewards['passage_progress'].weight,play.rewards['passage_success'].weight),(1.5,10.))
-    self.assertEqual(play.rewards['wall_waiting'].weight,-1.5)
+    self.assertEqual(play.rewards['wall_waiting'].weight,-.6)
     for name in ('track_linear_velocity','track_angular_velocity','pose','foot_gait','feet_air_time'):
       self.assertIs(train.rewards[name].func,WallProgressReward)
       self.assertIsNot(old.rewards[name].func,WallProgressReward)
