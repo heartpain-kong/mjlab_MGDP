@@ -39,7 +39,8 @@ class NoPassageProgress(ManagerTermBase):
     self.turn_waypoint[ids] = -1
 
   def __call__(self, env, timeout_s=4., min_progress_m=.05, min_command_mps=.1,
-               turn_timeout_s=0., turn_progress_rad=.05, turn_min_command_radps=.1):
+               turn_timeout_s=0., turn_progress_rad=.05, turn_min_command_radps=.1,
+               wall_grace_m=.9, wall_timeout_s=12.):
     if timeout_s <= 0 or min_progress_m <= 0:
       raise ValueError("Stagnation window and minimum progress must be positive")
     command = env.command_manager.get_term("twist")
@@ -52,7 +53,16 @@ class NoPassageProgress(ManagerTermBase):
                             self.idle + env.step_dt, torch.zeros_like(self.idle))
     self.anchor = torch.where(advanced | ~moving, self.highwater, self.anchor)
     self.ready[:] = True
-    stalled=(self.idle >= timeout_s - 1e-5) & moving
+    # ★ 2026-11-19：墙前允许更长的停滞窗口（依次翻三墙时原地调整不算失败）。
+    wall_timeout = torch.full_like(self.idle, float(timeout_s))
+    if wall_timeout_s > 0 and wall_grace_m > 0:
+      centres = getattr(command, 'wall_centres', None)
+      local_xy = getattr(command, 'local_xy', None)
+      if centres is not None and local_xy is not None and len(centres) > 0:
+        x = local_xy()[:, 0]
+        near = (x[:, None] - centres.to(x.device)[None, :]).abs().min(dim=1).values <= wall_grace_m
+        wall_timeout = torch.where(near, torch.full_like(wall_timeout, float(wall_timeout_s)), wall_timeout)
+    stalled=(self.idle >= wall_timeout - 1e-5) & moving
     if turn_timeout_s>0:
       if turn_progress_rad<=0 or turn_min_command_radps<=0:raise ValueError('Invalid rotation stall parameters')
       if not hasattr(command,'heading_error') or not hasattr(command,'waypoint_index'):
@@ -85,7 +95,7 @@ class WallGeometry(ManagerTermBase):
     columns = torch.searchsorted((proportions/proportions.sum()).cumsum(0),
       torch.arange(generator.num_cols, device=env.device)/generator.num_cols+.001, right=True)
     self.wall_columns = columns == names.index("high_wall")
-    self.centres = torch.tensor(WALL_CENTRES, device=env.device) - START_X
+    self.centres = torch.tensor(getattr(wall,'wall_centres',WALL_CENTRES), device=env.device) - START_X
     self.counts = torch.tensor(wall.counts, device=env.device)
     self.heights = torch.tensor(wall.heights, device=env.device)
     self.indices = torch.arange(3, device=env.device)
