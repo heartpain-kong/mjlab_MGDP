@@ -82,10 +82,9 @@ def lgdog1_ppo_runner_cfg(
     ),
     experiment_name=experiment_name,
     save_interval=100,
-    # 50 control steps at 50 Hz gives a clean 1.0 s rollout.  It stays much
-    # shorter than the original 100-step Unitree rollout while giving HIM a
-    # little more temporal context than the previous 48-step setting.
-    num_steps_per_env=50,
+    # ★ 2026-11-19：50 → 32，单轮采样步数降 36%，配合地形列数减半把 8 s/轮压到约 3 s。
+    # 32 步 = 0.64 s rollout，仍覆盖约 1.5 个 trot 周期，HIM 历史（4 帧）足够。
+    num_steps_per_env=32,
     max_iterations=10001,
     # The previous runs had unbounded policy outputs.  Clip normalized actions
     # before they are converted to joint targets; the value is still exposed in
