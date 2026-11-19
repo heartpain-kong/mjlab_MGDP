@@ -275,7 +275,9 @@ class StrictStonesTerrainCfg(PassageTerrainCfg):
   kind: str = "stepping_stones"
   skill_version: int = 4
   widths: tuple[float, ...] = (.36, .32, .28, .25, .22, .20, .18, .16)
-  heights: tuple[float, ...] = (.02, .03, .04, .06, .08, .10, .12, .15)
+  # ★ 2026-11-19：按比赛规则统一为 100 mm（石头 200×200×100、平台 800×800×100），
+  #   难度只由石面尺寸（.36→.16）和错位决定。
+  heights: tuple[float, ...] = (.10,)*8
 
   def stone_parameters(self, difficulty):
     if len(self.widths) != 8 or len(self.heights) != 8:

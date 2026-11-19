@@ -260,7 +260,7 @@ def lgdog1_wall_training_env_cfg(play=False, checkpoint=DEFAULT_WALL_CHECKPOINT,
         StoneGroundContact,SlalomBodyProjection,
     )
     from src.tasks.velocity.mdp.wall_training import (
-        NoPassageProgress, WallCrossingBonus, WallSwingClearance,
+        NoPassageProgress, WallApproachReward, WallCrossingBonus, WallSwingClearance,
         WallWaitingPenalty,guard_wall_shaping_rewards,
     )
     from src.wall_reward_settings import load_wall_reward_settings,wall_reward_contract
@@ -293,6 +293,10 @@ def lgdog1_wall_training_env_cfg(play=False, checkpoint=DEFAULT_WALL_CHECKPOINT,
         cfg.curriculum['passage'].params.update(terrain_max_error=None,
             level_up_streak=2,level_down_streak=2)
     cfg.commands['twist'].wall_reward_contract_version=wall_reward_contract(rules)
+    # 阶段性引导：墙前 1.6 m 内朝下一面墙前进的密集奖励（与 wall_crossing 互补）。
+    from mjlab.managers.reward_manager import RewardTermCfg as _RewardTermCfg
+    cfg.rewards['wall_approach'] = _RewardTermCfg(func=WallApproachReward, weight=2.0,
+        params={'max_distance_m': 1.6, 'min_command_mps': .1})
     # ★ 2026-11-19：默认启用分组速度课程（高墙 0% 时只冻结本组）与按组指令带宽。
     twist = cfg.commands['twist']
     twist.speed_groups = {

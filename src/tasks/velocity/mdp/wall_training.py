@@ -200,6 +200,42 @@ class WallProgressReward(WallGeometry):
     return torch.where(value>0,value*factor,value)
 
 
+class WallApproachReward(WallGeometry):
+  """★ 2026-11-19：高墙阶段性引导——朝"下一面未越过的墙"的密集进展奖励。
+
+  原策略在第一墙前 1.25 m 处停住（诊断：91% 无进展）。这里按"到下一面墙的距离"
+  给前进奖励，只在墙前 max_distance_m 内生效，越过后自动切换到下一面墙，
+  墙面越过后不再给分，避免在墙前来回刷分。
+  """
+
+  def __init__(self, cfg, env):
+    super().__init__(env)
+    self.prev_x = torch.zeros(env.num_envs, device=env.device)
+    self.ready = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
+
+  def reset(self, env_ids=None):
+    ids = slice(None) if env_ids is None else env_ids
+    self.ready[ids] = False
+
+  def __call__(self, env, max_distance_m=1.6, min_command_mps=.1):
+    command = env.command_manager.get_term("twist")
+    x = command.local_xy()[:, 0]
+    centres = getattr(command, 'wall_centres', None)
+    if centres is None or len(centres) == 0:
+      return torch.zeros_like(x)
+    centres = centres.to(x.device)
+    # 下一面墙：第一个"还在前方"的墙面；全部越过则不给分。
+    gap = centres[None, :] - x[:, None]
+    ahead = gap > -0.05
+    gap = torch.where(ahead, gap, torch.full_like(gap, 1e6)).min(dim=1).values
+    near = (gap > 0.) & (gap <= max_distance_m)
+    delta = x - self.prev_x
+    reward = torch.where(self.ready & near, delta.clamp(min=0.), torch.zeros_like(x))
+    self.prev_x[:] = x
+    self.ready[:] = True
+    return reward
+
+
 class WallWaitingPenalty(WallGeometry):
   """Bounded time cost near the next uncleared wall, using record progress."""
   def __init__(self,cfg,env):
