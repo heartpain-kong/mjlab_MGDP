@@ -246,6 +246,27 @@ class PassageCommand(UniformVelocityCommand):
         -self.lateral_limits)
 
 
+def apply_level_quota(levels, start, fraction, generator=None):
+  """★ 2026-11-20：满级地形只保留少量智能体，其余回落到低一级。
+
+  ``levels`` 是每环境的地形等级（原地修改），从 ``start`` 起的等级视为"满级"。
+  当满级环境数超过 ``fraction × 总数`` 时，随机把多出来的部分降到 ``start-1``，
+  让样本回流到更平缓的等级，而不是把算力全压在最高难度上。返回被降级的数量。
+  """
+  if fraction >= 1. or start <= 0 or levels.numel() == 0:
+    return 0
+  elite = levels >= start
+  n_elite = int(elite.sum())
+  cap = int(float(fraction) * levels.numel())
+  if n_elite <= cap:
+    return 0
+  idx = elite.nonzero(as_tuple=False).squeeze(-1)
+  perm = torch.randperm(idx.numel(), device=levels.device)
+  drop = idx[perm[:n_elite - cap]]
+  levels[drop] = max(start - 1, 0)
+  return int(drop.numel())
+
+
 @dataclass(kw_only=True)
 class PassageCommandCfg(UniformVelocityCommandCfg):
   goal_x: float = 5.3
@@ -645,7 +666,8 @@ class PassageCurriculum(ManagerTermBase):
 
   def __call__(self, env, env_ids, min_episodes=32, success_threshold=.7,
                max_error=.25, speed_limit=DEFAULT_SPEED_LIMIT, fixed_speed=None, speed_floor=.35,
-               terrain_max_error='speed', level_up_streak=1, level_down_streak=1):
+               terrain_max_error='speed', level_up_streak=1, level_down_streak=1,
+               level_quota_from=8, level_quota_fraction=1.0):
     if level_up_streak < 1 or level_down_streak < 1:
       raise ValueError('Terrain streak lengths must be positive')
     if fixed_speed is not None:
@@ -715,6 +737,10 @@ class PassageCurriculum(ManagerTermBase):
         changed = ids[up | down]
         self.level_success_streak[changed] = 0
         self.level_failure_streak[changed] = 0
+      # ★ 2026-11-20：满级（默认 ≥8，即 8 档课程的第 8 档）只保留少量智能体，
+      # 其余回落到低一级，把样本回流到更平缓的等级。
+      self._last_quota_demoted = apply_level_quota(
+          self.terrain.terrain_levels, level_quota_from, level_quota_fraction)
       # Feature 3: a column with M zero-success windows is re-sampled downwards.
       if self.resample_windows > 0:
         self._observe_zero_success_columns(types, passed)
@@ -724,6 +750,8 @@ class PassageCurriculum(ManagerTermBase):
     logs = {"speed_max": torch.tensor(self.command.cfg.ranges.lin_vel_x[1], device=self.device),
             "speed_min": torch.tensor(self.command.cfg.ranges.lin_vel_x[0], device=self.device),
             "speed_fixed": torch.tensor(float(fixed_speed is not None),device=self.device),
+            "level_quota_demoted": torch.tensor(float(getattr(self, '_last_quota_demoted', 0)),
+                                                 device=self.device),
             "level_mean": self.terrain.terrain_levels.float().mean()}
     limits=getattr(self.command.cfg,'obstacle_speed_limits',None)
     if limits is not None:

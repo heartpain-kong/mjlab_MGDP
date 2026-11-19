@@ -288,7 +288,7 @@ def lgdog1_wall_training_env_cfg(play=False, checkpoint=DEFAULT_WALL_CHECKPOINT,
         terrain.proportion = 1./len(lessons)
     # ★ 2026-11-20：地形去重（可选）。默认保持 10 个课目，避免打乱既有测试与 checkpoint 契约；
     #   设 LGDOG_WALL_LESSONS 即可只保留指定课目，例如 8 课目（6 个比赛障碍 + 平地 + 粗糙）：
-    #   export LGDOG_WALL_LESSONS=start_flat,stepping_stones,gap_steps,high_wall,clearance_frame,tire_array,mjlab_rough,slalom_brick
+    #   export LGDOG_WALL_LESSONS=start_flat,stepping_stones,balance_beam,gap_steps,high_wall,clearance_frame,tire_array,mjlab_rough,slalom_brick
     _lessons_env = __import__('os').environ.get('LGDOG_WALL_LESSONS', '').strip()
     if _lessons_env:
         keep = {name.strip() for name in _lessons_env.split(',') if name.strip()}
@@ -304,7 +304,9 @@ def lgdog1_wall_training_env_cfg(play=False, checkpoint=DEFAULT_WALL_CHECKPOINT,
         cfg.curriculum['passage'].params['speed_floor']=.6
         cfg.curriculum['passage'].params['speed_limit']=2.
         cfg.curriculum['passage'].params.update(terrain_max_error=None,
-            level_up_streak=2,level_down_streak=2)
+            level_up_streak=2,level_down_streak=2,
+            # 2026-11-20：最高档只留 15% 智能体，其余回流到低一档，避免算力全压在满级地形。
+            level_quota_from=7, level_quota_fraction=.15)
     cfg.commands['twist'].wall_reward_contract_version=wall_reward_contract(rules)
     # 阶段性引导：墙前 1.6 m 内朝下一面墙前进的密集奖励（与 wall_crossing 互补）。
     from mjlab.managers.reward_manager import RewardTermCfg as _RewardTermCfg
