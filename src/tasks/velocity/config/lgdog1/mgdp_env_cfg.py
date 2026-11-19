@@ -49,8 +49,8 @@ DEPTH_SITE = "mgdp_depth"
 #   绕桩杆(10 cm)、轮胎胎面(16.5 cm)几乎不可见；改为 32x32/70°/3 m，2 m 处约 7.5 cm。
 #   注意：这会改变感知输入契约，旧感知权重与旧 checkpoint 不兼容，需要重新预训练。
 DEPTH_HW = (32, 32)
-DEPTH_FOVY = 70.0
-DEPTH_MAX = 3.0
+DEPTH_FOVY = 60.0
+DEPTH_MAX = 2.0
 PROPRIO_HISTORY = 4
 
 # 前头顶安装，站立不动时光轴水平朝前（+X），与地面平行。

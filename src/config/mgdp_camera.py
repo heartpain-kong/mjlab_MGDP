@@ -6,7 +6,9 @@ D435I20_ALIAS = 'race_mgdp_wall_d435i20'
 D435I20_PROFILE = 'd435i_edge16_down20'
 D435I20_CHECKPOINT = 'logs/mgdp/perception/mgdp_wall_d435i20.pt'
 D435I20_EXPERIMENT = 'lgdog1_velocity_race_mgdp_wall_d435i20_v6'
-DEPTH_MOUNT_POS = (.02, 0., .075)
+# ★ 2026-11-19：按 WMP 的安装思路（Go1 在 x=0.28 m、z=0.12 m，约占体长 47%）缩放到 LgDog1：
+#   机身前上方 x=0.16 m、z=0.10 m，避免前腿遮挡、看得更远。
+DEPTH_MOUNT_POS = (.16, 0., .10)
 LEGACY_DEPTH_QUAT = (.7071067812, 0., -.7071067812, 0.)
 
 

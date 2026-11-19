@@ -13,7 +13,8 @@ PROFILES = {
     'd435i_edge16': {'rays': (32, 32), 'output': (16, 16), 'pool': 2},
     'd435i_native32': {'rays': (32, 48), 'output': (32, 48), 'pool': 1},
     # ★ 2026-11-19：与 env 的 32x32 编码输入对齐（射线 64x64，池化到 32x32）。
-   D435I20_PROFILE: {'rays': (64, 64), 'output': (32, 32), 'pool': 2, 'pitch_down_deg': 20.},
+   # ★ 2026-11-19：俯角取 WMP 随机区间 15~25° 的中值 22°；识别距离对齐 WMP 的 2 m。
+   D435I20_PROFILE: {'rays': (64, 64), 'output': (32, 32), 'pool': 2, 'pitch_down_deg': 22.},
 }
 
 
