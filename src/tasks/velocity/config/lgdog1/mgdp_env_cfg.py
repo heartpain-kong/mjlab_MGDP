@@ -45,9 +45,12 @@ from .passage_terrain_cfg import lgdog1_passage_terrain_cfg, lesson_route, GOAL_
 from .domain_rand_cfg import configure_race_himloco_randomization
 
 DEPTH_SITE = "mgdp_depth"
-DEPTH_HW = (16, 16)
-DEPTH_FOVY = 87.0
-DEPTH_MAX = 5.0
+# ★ 2026-11-19：按 WMP 思路提高有效角分辨率。原 16x16/87°/5 m 在 2 m 处每像素约 19 cm，
+#   绕桩杆(10 cm)、轮胎胎面(16.5 cm)几乎不可见；改为 32x32/70°/3 m，2 m 处约 7.5 cm。
+#   注意：这会改变感知输入契约，旧感知权重与旧 checkpoint 不兼容，需要重新预训练。
+DEPTH_HW = (32, 32)
+DEPTH_FOVY = 70.0
+DEPTH_MAX = 3.0
 PROPRIO_HISTORY = 4
 
 # 前头顶安装，站立不动时光轴水平朝前（+X），与地面平行。
