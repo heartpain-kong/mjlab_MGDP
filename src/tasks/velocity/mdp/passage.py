@@ -681,7 +681,8 @@ class PassageCurriculum(ManagerTermBase):
   def __call__(self, env, env_ids, min_episodes=32, success_threshold=.7,
                max_error=.25, speed_limit=DEFAULT_SPEED_LIMIT, fixed_speed=None, speed_floor=.35,
                terrain_max_error='speed', level_up_streak=1, level_down_streak=1,
-               level_quota_from=8, level_quota_fraction=1.0):
+               level_quota_from=8, level_quota_fraction=1.0,
+               progress_curriculum=False, trajectory_curriculum=False):
     if level_up_streak < 1 or level_down_streak < 1:
       raise ValueError('Terrain streak lengths must be positive')
     if fixed_speed is not None:
