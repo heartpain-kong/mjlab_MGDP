@@ -293,6 +293,18 @@ def lgdog1_wall_training_env_cfg(play=False, checkpoint=DEFAULT_WALL_CHECKPOINT,
         cfg.curriculum['passage'].params.update(terrain_max_error=None,
             level_up_streak=2,level_down_streak=2)
     cfg.commands['twist'].wall_reward_contract_version=wall_reward_contract(rules)
+    # ★ 2026-11-19：默认启用分组速度课程（高墙 0% 时只冻结本组）与按组指令带宽。
+    twist = cfg.commands['twist']
+    twist.speed_groups = {
+        'open': ('start_flat', 'random_hills', 'mjlab_rough'),
+        'technical': ('stepping_stones', 'balance_beam', 'gap_steps',
+                      'slalom_brick', 'clearance_frame', 'tire_array'),
+        'wall': ('high_wall',),
+    }
+    twist.speed_group_floor = .6
+    twist.speed_group_ceiling = 2.
+    twist.yaw_max, twist.yaw_max_limit = .4, .8
+    twist.vy_max, twist.vy_max_limit = .1, .3
     cfg.commands["twist"].waypoints = {name:lesson_route(name) for name in lessons}
     cfg.commands['twist'].waypoints['gap_steps']=((0.,0.),(10.4,0.))
     cfg.commands['twist'].waypoints['slalom_brick']=SAFE_SLALOM_ROUTE
