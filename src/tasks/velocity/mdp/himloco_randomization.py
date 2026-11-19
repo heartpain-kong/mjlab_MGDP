@@ -119,6 +119,46 @@ def joint_friction_damping_strength(
   _record(env, "damping_scale", ids, damping)
 
 
+@requires_model_fields("site_pos", "site_quat")
+def depth_camera_pose(env, env_ids, asset_cfg, pos_noise_m=.01, pitch_noise_deg=5.,
+                      yaw_roll_noise_deg=2.):
+  """按 WMP 的做法随机深度相机安装位姿。
+
+  WMP：位置 ±1 cm、俯仰 15~25°、yaw/roll ±2°。这里以名义姿态为基准，每个 episode
+  叠加位置 ±pos_noise_m、俯仰 ±pitch_noise_deg、yaw/roll ±yaw_roll_noise_deg，
+  直接写 per-world 的 site_pos/site_quat，射线方向随之改变。
+  """
+  import math
+  import torch
+  site_ids = asset_cfg.site_ids
+  if site_ids is None or len(site_ids) == 0:
+    raise ValueError("depth_camera_pose needs a site asset_cfg")
+  site_ids = torch.as_tensor(site_ids, device=env.device, dtype=torch.long)
+  base = getattr(env, "_depth_camera_base", None)
+  if base is None:
+    base = (env.sim.model.site_pos[:, site_ids].clone(),
+            env.sim.model.site_quat[:, site_ids].clone())
+    env._depth_camera_base = base
+  ids = _ids(env, env_ids)
+  n = ids.numel()
+  dev = env.device
+  dpos = (torch.rand(n, 1, 3, device=dev) * 2 - 1) * float(pos_noise_m)
+  def small(deg, axis):
+    a = (torch.rand(n, 1, device=dev) * 2 - 1) * math.radians(deg) * .5
+    q = torch.zeros(n, 1, 4, device=dev)
+    q[..., 0] = torch.cos(a)
+    q[..., axis] = torch.sin(a)
+    return q
+  q = small(yaw_roll_noise_deg, 3) * small(pitch_noise_deg, 2) * small(yaw_roll_noise_deg, 1)
+  bq = base[1][ids]
+  w = q[..., 0] * bq[..., 0] - q[..., 1] * bq[..., 1] - q[..., 2] * bq[..., 2] - q[..., 3] * bq[..., 3]
+  x = q[..., 0] * bq[..., 1] + q[..., 1] * bq[..., 0] + q[..., 2] * bq[..., 3] - q[..., 3] * bq[..., 2]
+  y = q[..., 0] * bq[..., 2] - q[..., 1] * bq[..., 3] + q[..., 2] * bq[..., 0] + q[..., 3] * bq[..., 1]
+  z = q[..., 0] * bq[..., 3] + q[..., 1] * bq[..., 2] - q[..., 2] * bq[..., 1] + q[..., 3] * bq[..., 0]
+  env.sim.model.site_pos[ids[:, None], site_ids] = base[0][ids] + dpos
+  env.sim.model.site_quat[ids[:, None], site_ids] = torch.stack([w, x, y, z], dim=-1)
+
+
 def push_xy_velocity(env, env_ids, interval_s, max_velocity, asset_cfg):
   """Match HIMLoco's global periodic absolute XY velocity replacement."""
   period = max(1, math.ceil(interval_s / env.step_dt))

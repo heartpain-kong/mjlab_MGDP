@@ -8,6 +8,7 @@ from src.tasks.velocity.mdp.actuator_reality import (
   ActuatorRealityJointPositionActionCfg, LGDOG1_NO_LOAD_SPEEDS, actuator_reality,
 )
 from src.tasks.velocity.mdp.himloco_randomization import (
+  depth_camera_pose,
   payload_mass_inertia, pd_motor_strength, initial_joint_positions, push_xy_velocity,
 )
 from src.tasks.velocity.mdp.himloco_actions import HIMLocoJointPositionActionCfg
@@ -94,6 +95,11 @@ def configure_race_himloco_randomization(cfg):
   cfg.events["himloco_push"] = EventTermCfg(func=push_xy_velocity, mode="step", params={
     "asset_cfg": SceneEntityCfg("robot"), "interval_s": profile.push_interval_s,
     "max_velocity": profile.max_push_vel_xy,
+  })
+  # ★ 2026-11-19（对齐 WMP）：深度相机安装位姿随机化——位置 ±1 cm、俯仰 ±5°、yaw/roll ±2°。
+  cfg.events["depth_camera_pose"] = EventTermCfg(func=depth_camera_pose, mode="reset", params={
+    "asset_cfg": SceneEntityCfg("robot", site_names=("mgdp_depth",)),
+    "pos_noise_m": .01, "pitch_noise_deg": 5., "yaw_roll_noise_deg": 2.,
   })
   original = cfg.actions["joint_pos"]
   args = {name: getattr(original, name) for name in _JOINT_ACTION_ARGS if hasattr(original, name)}
