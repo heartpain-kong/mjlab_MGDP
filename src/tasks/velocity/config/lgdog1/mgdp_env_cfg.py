@@ -286,6 +286,15 @@ def lgdog1_wall_training_env_cfg(play=False, checkpoint=DEFAULT_WALL_CHECKPOINT,
             lessons[name] = UnifiedObstacleTerrainCfg(kind=name,size=generator.size)
     for terrain in lessons.values():
         terrain.proportion = 1./len(lessons)
+    # ★ 2026-11-20：地形去重（可选）。默认保持 10 个课目，避免打乱既有测试与 checkpoint 契约；
+    #   设 LGDOG_WALL_LESSONS 即可只保留指定课目，例如 8 课目（6 个比赛障碍 + 平地 + 粗糙）：
+    #   export LGDOG_WALL_LESSONS=start_flat,stepping_stones,gap_steps,high_wall,clearance_frame,tire_array,mjlab_rough,slalom_brick
+    _lessons_env = __import__('os').environ.get('LGDOG_WALL_LESSONS', '').strip()
+    if _lessons_env:
+        keep = {name.strip() for name in _lessons_env.split(',') if name.strip()}
+        lessons = {name: terrain for name, terrain in lessons.items() if name in keep}
+        for terrain in lessons.values():
+            terrain.proportion = 1./len(lessons)
     generator.sub_terrains = lessons
     old=cfg.commands['twist']
     cfg.commands['twist']=BodyAwarePassageCommandCfg(**{f.name:getattr(old,f.name) for f in fields(old) if f.init})
