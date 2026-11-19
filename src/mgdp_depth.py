@@ -13,7 +13,8 @@ PROFILES = {
     'd435i_edge16': {'rays': (32, 32), 'output': (16, 16), 'pool': 2},
     'd435i_native32': {'rays': (32, 48), 'output': (32, 48), 'pool': 1},
     # ★ 2026-11-19：对齐 WMP——64x64 原生分辨率（不池化），俯角取 15~25° 中值 22°，识别距离 2 m。
-    D435I20_PROFILE: {'rays': (64, 64), 'output': (64, 64), 'pool': 1, 'pitch_down_deg': 22.},
+    # 2026-11-19 夜：64x64 使单轮 10.5 s（21.9k 样本/秒），回 32x32 换取吞吐（约 2 倍）。
+    D435I20_PROFILE: {'rays': (32, 32), 'output': (32, 32), 'pool': 1, 'pitch_down_deg': 22.},
 }
 
 

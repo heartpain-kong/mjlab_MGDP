@@ -64,13 +64,17 @@ _TASK_LIST = (
     label="MGDP · 比赛尺寸强化课程 · D435i下俯20°",algorithm="ppo",scene="race_depth",
     experiment=D435I20_EXPERIMENT,obs=252,critic=261,profile="mgdp_v6",
     docs="doc/MGDP_D435I_DOWN20.md",requires_pretrain=True,directed_passage=True,
-    train_presets={name:{**preset,"terrain_num_rows":8,"terrain_num_cols":20}
-                   for name,preset in RACE_TRAIN_PRESETS.items()},
+    train_presets={**{name: {**preset, "terrain_num_rows": 8, "terrain_num_cols": 10}
+                      for name, preset in RACE_TRAIN_PRESETS.items()},
+                   # 2026-11-19：L40 上 64x64 深度单轮 10.5 s、7168 环境 ETA 46 h。
+                   # 正式预设改为 4080 环境（80 格 × 51）+ 8000 轮，约 13 h 可看趋势。
+                   "full": {**RACE_TRAIN_PRESETS["full"], "envs": 4080, "iterations": 8000,
+                            "terrain_num_rows": 8, "terrain_num_cols": 10}},
     pretrain_checkpoint=D435I20_CHECKPOINT,
     pretrain_command=(f"python -m scripts.pretrain_mgdp --task {D435I20_TASK} "
       f"--depth-profile {D435I20_PROFILE} --num-envs 64 --terrain-rows 8 --terrain-cols 10 "
       f"--batch-size 64 --steps 4000 --iterations 3000 --out {D435I20_CHECKPOINT}"),
-    description="D435i下俯20°：32×32射线池化为16×16；新训练从0.6m/s渐进扩速，上限2.0m/s；动作映射0.30、沿用V6奖励。",
+    description="D435i下俯20°：32×32 原生深度（安装 0.16/0.10、俯角 22°、量程 2 m、位姿随机化）；新训练从0.6m/s渐进扩速，上限2.0m/s；动作映射0.50、沿用V6奖励。",
   ),
   TaskSpec(
     alias="him_flat", id="LgDog1-Flat-Blind-HIM-Standard",

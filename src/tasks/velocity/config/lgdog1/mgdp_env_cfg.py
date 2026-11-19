@@ -48,7 +48,7 @@ DEPTH_SITE = "mgdp_depth"
 # ★ 2026-11-19：按 WMP 思路提高有效角分辨率。原 16x16/87°/5 m 在 2 m 处每像素约 19 cm，
 #   绕桩杆(10 cm)、轮胎胎面(16.5 cm)几乎不可见；改为 32x32/70°/3 m，2 m 处约 7.5 cm。
 #   注意：这会改变感知输入契约，旧感知权重与旧 checkpoint 不兼容，需要重新预训练。
-DEPTH_HW = (64, 64)
+DEPTH_HW = (32, 32)
 DEPTH_FOVY = 60.0
 DEPTH_MAX = 2.0
 PROPRIO_HISTORY = 4
