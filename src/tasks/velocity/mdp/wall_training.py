@@ -209,7 +209,7 @@ class WallApproachReward(WallGeometry):
   """
 
   def __init__(self, cfg, env):
-    super().__init__(env)
+    super().__init__(cfg, env)
     self.prev_x = torch.zeros(env.num_envs, device=env.device)
     self.ready = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
 
