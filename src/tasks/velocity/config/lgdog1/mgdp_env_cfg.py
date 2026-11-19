@@ -267,7 +267,8 @@ def lgdog1_wall_training_env_cfg(play=False, checkpoint=DEFAULT_WALL_CHECKPOINT,
     rules=load_wall_reward_settings()
     generator = cfg.scene.terrain.terrain_generator
     generator.num_rows = 8
-    generator.num_cols = 20
+    # ★ 速度开关：LGDOG_WALL_COLS=10 时每个 lesson 只生成 1 列（几何减半，物理约快 1.8 倍）。
+    generator.num_cols = int(__import__('os').environ.get('LGDOG_WALL_COLS', 20))
     generator.size = (12.,8.)
     lessons = {}
     for name, terrain in generator.sub_terrains.items():
