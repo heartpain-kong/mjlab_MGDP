@@ -81,7 +81,7 @@ class StandardHIMTests(unittest.TestCase):
   def test_stability_training_defaults_are_recorded_in_agent_config(self):
     cfg = load_rl_cfg(TASK)
     self.assertEqual(cfg.clip_actions, 1.0)
-    self.assertEqual(cfg.num_steps_per_env, 32)
+    self.assertEqual(cfg.num_steps_per_env, 24)
     self.assertEqual(cfg.algorithm.estimator_epochs, 5)
     env = lgdog1_him_standard_env_cfg()
     self.assertEqual(env.commands["twist"].resampling_time_range, (3.0, 5.0))

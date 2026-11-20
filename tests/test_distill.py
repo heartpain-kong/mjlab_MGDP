@@ -13,7 +13,7 @@ import io
 import math
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -29,6 +29,7 @@ from src.tasks.velocity.rl.distill import (
   ROLE_STUDENT,
   ROLE_TEACHER,
   TEACHER_TASK_ID,
+  TERRAIN_LEVELS,
   WALL_TASK_ID,
   MaskedActor,
   add_privileged_observation_group,
@@ -79,7 +80,12 @@ def _lesson_cfg(
   sub_terrains = {
     name: SimpleNamespace(proportion=1.0 / len(names)) for name in names
   }
-  generator = SimpleNamespace(sub_terrains=sub_terrains, num_rows=rows, num_cols=cols)
+  generator = SimpleNamespace(
+    sub_terrains=sub_terrains,
+    num_rows=rows,
+    num_cols=cols,
+    difficulty_range=(0.0, 1.0),
+  )
   return SimpleNamespace(
     scene=SimpleNamespace(terrain=SimpleNamespace(terrain_generator=generator))
   )
@@ -901,6 +907,181 @@ class DistillWallCliTests(unittest.TestCase):
 
     with redirect_stdout(io.StringIO()), self.assertRaises(SystemExit) as raised:
       distill_wall_main([])
+    self.assertNotEqual(raised.exception.code, 0)
+
+
+# ---------------------------------------------------------------------------
+# 10. Pinned terrain difficulty (``level`` / ``--teacher-level``)
+# ---------------------------------------------------------------------------
+
+
+def _terrain_generator(cfg) -> SimpleNamespace:
+  return cfg.scene.terrain.terrain_generator
+
+
+class TerrainLevelPinTests(unittest.TestCase):
+  """``filter_terrain_lessons(level=...)`` pins the 8-stage curriculum."""
+
+  def test_level_eight_pins_a_single_row_at_the_top_stage(self):
+    cfg = _lesson_cfg()
+    output = io.StringIO()
+    with redirect_stdout(output):
+      result = filter_terrain_lessons(cfg, level=8)
+    self.assertIs(result, cfg)
+    generator = _terrain_generator(cfg)
+    self.assertEqual(generator.num_rows, 1)
+    self.assertEqual(generator.difficulty_range, (7.5 / 8, 7.5 / 8))
+    # (level - 0.5) / 8 must quantise to the level's 0-based stage (7 for level 8)
+    self.assertEqual(int(generator.difficulty_range[0] * 8), 7)
+    self.assertIn("[distill] level=8 difficulty=0.9375", output.getvalue())
+    # pinning only the level leaves the lesson roster alone
+    self.assertEqual(
+      list(generator.sub_terrains), ["start_flat", "high_wall", "stepping_stones"]
+    )
+
+  def test_level_one_is_the_lowest_stage(self):
+    cfg = _lesson_cfg()
+    output = io.StringIO()
+    with redirect_stdout(output):
+      filter_terrain_lessons(cfg, None, level=1)
+    generator = _terrain_generator(cfg)
+    self.assertEqual(generator.num_rows, 1)
+    self.assertEqual(generator.difficulty_range, (0.5 / 8, 0.5 / 8))
+    self.assertEqual(int(generator.difficulty_range[0] * 8), 0)
+    self.assertIn("[distill] level=1 difficulty=0.0625", output.getvalue())
+
+  def test_every_level_quantises_to_its_own_stage(self):
+    self.assertEqual(tuple(TERRAIN_LEVELS), (1, 2, 3, 4, 5, 6, 7, 8))
+    for level in TERRAIN_LEVELS:
+      cfg = _lesson_cfg()
+      with redirect_stdout(io.StringIO()):
+        filter_terrain_lessons(cfg, level=level)
+      generator = _terrain_generator(cfg)
+      difficulty = generator.difficulty_range[0]
+      self.assertAlmostEqual(difficulty, (level - 0.5) / 8, places=9)
+      self.assertEqual(generator.difficulty_range, (difficulty, difficulty))
+      self.assertEqual(int(difficulty * 8), level - 1)
+      self.assertEqual(generator.num_rows, 1)
+
+  def test_level_out_of_range_is_rejected(self):
+    for bad in (0, 9, -1, 10):
+      cfg = _lesson_cfg()
+      with self.assertRaises(ValueError) as raised:
+        filter_terrain_lessons(cfg, level=bad)
+      message = str(raised.exception)
+      self.assertIn("1", message)
+      self.assertIn("8", message)
+      # the cfg is left untouched on a bad level
+      generator = _terrain_generator(cfg)
+      self.assertEqual(generator.num_rows, 8)
+      self.assertEqual(generator.difficulty_range, (0.0, 1.0))
+      self.assertEqual(
+        list(generator.sub_terrains),
+        ["start_flat", "high_wall", "stepping_stones"],
+      )
+
+  def test_level_and_lesson_compose(self):
+    cfg = _lesson_cfg()
+    output = io.StringIO()
+    with redirect_stdout(output):
+      filter_terrain_lessons(cfg, "high_wall", level=8)
+    generator = _terrain_generator(cfg)
+    self.assertEqual(list(generator.sub_terrains), ["high_wall"])
+    self.assertEqual(generator.num_rows, 1)
+    self.assertEqual(generator.difficulty_range, (7.5 / 8, 7.5 / 8))
+    # the lesson line reports the pinned single row (num_rows was set first)
+    text = output.getvalue()
+    self.assertIn("[distill] level=8 difficulty=0.9375", text)
+    self.assertIn("[distill] lesson=high_wall rows=1 cols=20", text)
+
+
+class RealWallTaskTeacherLevelTests(unittest.TestCase):
+  """The level is threaded through the cfg builders of the registered wall task."""
+
+  def test_real_teacher_cfg_pins_the_level(self):
+    cfg = build_teacher_env_cfg(WALL_TASK_ID, lesson="high_wall", level=8)
+    generator = _terrain_generator(cfg)
+    self.assertEqual(generator.num_rows, 1)
+    self.assertEqual(generator.difficulty_range, (7.5 / 8, 7.5 / 8))
+    self.assertEqual(list(generator.sub_terrains), ["high_wall"])
+    self.assertIn("privileged", cfg.observations)
+
+  def test_real_distill_cfg_pins_the_level(self):
+    cfg = build_distill_env_cfg(WALL_TASK_ID, level=1)
+    generator = _terrain_generator(cfg)
+    self.assertEqual(generator.num_rows, 1)
+    self.assertEqual(generator.difficulty_range, (0.5 / 8, 0.5 / 8))
+    self.assertIn("height_scan", cfg.observations["actor"].terms)
+
+
+class RegisterTeacherTaskLevelTests(unittest.TestCase):
+  """``register_teacher_task(level=...)`` keeps its cfg and its idempotency."""
+
+  def test_registered_teacher_cfg_carries_the_level_and_id_is_idempotent(self):
+    from mjlab.tasks.registry import _REGISTRY, list_tasks
+
+    task_id = teacher_task_id("high_wall")
+    previous = _REGISTRY.pop(task_id, None)
+    try:
+      registered = register_teacher_task(lesson="high_wall", level=8)
+      self.assertEqual(registered, task_id)  # the id rule is unchanged by level
+      self.assertEqual(teacher_task_id("high_wall"), task_id)
+      self.assertIn(task_id, list_tasks())
+      for env_cfg in (
+        _REGISTRY[task_id].env_cfg,
+        _REGISTRY[task_id].play_env_cfg,
+      ):
+        generator = _terrain_generator(env_cfg)
+        self.assertEqual(generator.num_rows, 1)
+        self.assertEqual(generator.difficulty_range, (7.5 / 8, 7.5 / 8))
+      # idempotent: a second call reuses the first registration (and its level)
+      self.assertEqual(register_teacher_task(lesson="high_wall", level=3), task_id)
+      generator = _terrain_generator(_REGISTRY[task_id].env_cfg)
+      self.assertEqual(generator.difficulty_range, (7.5 / 8, 7.5 / 8))
+    finally:
+      _REGISTRY.pop(task_id, None)
+      if previous is not None:
+        _REGISTRY[task_id] = previous
+
+  def test_out_of_range_level_is_rejected_before_reusing_a_task(self):
+    with self.assertRaises(ValueError):
+      register_teacher_task(level=9)
+
+
+class TeacherLevelCliTests(unittest.TestCase):
+  def test_cli_teacher_level_registers_a_pinned_task(self):
+    from mjlab.tasks.registry import _REGISTRY, list_tasks
+    from scripts.distill_wall import main as distill_wall_main
+
+    task_id = teacher_task_id()
+    previous = _REGISTRY.pop(task_id, None)
+    try:
+      output = io.StringIO()
+      with redirect_stdout(output):
+        return_code = distill_wall_main(["--teacher-level", "8", "--register-teacher"])
+      text = output.getvalue()
+      self.assertEqual(return_code, 0)
+      # the printed (re-runnable) distil command carries the pinned level
+      self.assertIn("--teacher-level 8", text)
+      self.assertIn(task_id, list_tasks())
+      for env_cfg in (
+        _REGISTRY[task_id].env_cfg,
+        _REGISTRY[task_id].play_env_cfg,
+      ):
+        generator = _terrain_generator(env_cfg)
+        self.assertEqual(generator.num_rows, 1)
+        self.assertEqual(generator.difficulty_range, (7.5 / 8, 7.5 / 8))
+    finally:
+      _REGISTRY.pop(task_id, None)
+      if previous is not None:
+        _REGISTRY[task_id] = previous
+
+  def test_cli_rejects_an_out_of_range_teacher_level(self):
+    from scripts.distill_wall import main as distill_wall_main
+
+    with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+      with self.assertRaises(SystemExit) as raised:
+        distill_wall_main(["--teacher-level", "9", "--register-teacher"])
     self.assertNotEqual(raised.exception.code, 0)
 
 

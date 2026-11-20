@@ -85,6 +85,26 @@ and sets its ``proportion=1.0``::
     python scripts/distill_wall.py --lesson high_wall --teacher ... --out ...
     python scripts/distill_wall.py --list-lessons   # lessons + teacher task ids
 
+Pinning the difficulty stage (``level``)
+----------------------------------------
+The terrain curriculum ramps difficulty over eight rows, so a freshly sampled
+teacher spends most envs on the easy stages.  Every cfg builder and
+``register_teacher_task`` therefore accepts ``level=1..8``: it sets
+``generator.num_rows = 1`` and ``generator.difficulty_range = (d, d)`` with
+``d = (level - 0.5) / 8`` (the mid-point of the 8-stage curriculum, so
+``stage = int(d * 8) == level - 1``), i.e. every env is generated at exactly that
+stage::
+
+    register_teacher_task(lesson="high_wall", level=8)   # competition stage, pinned
+    build_teacher_env_cfg(WALL_TASK_ID, lesson="high_wall", level=8)
+    build_distill_env(WALL_TASK_ID, lesson="high_wall", level=8, ...)
+
+    python scripts/distill_wall.py --lesson high_wall --teacher-level 8 ...
+
+The printed summary is ``[distill] level=8 difficulty=0.9375``.  ``level=None``
+(and the CLI default) keeps the ramping curriculum; the task id rule is
+unchanged, so the same teacher task id is reused for a pinned level.
+
 ``lesson=None`` (or the CLI's ``--lesson all``) keeps the current ten-lesson
 behaviour, so the existing task id / checkpoints remain valid.  Known
 limitation: the wall *course* managers still hard-require several lesson names
@@ -194,6 +214,15 @@ A per-lesson teacher appends ``-<lesson>``, e.g.
 
 LESSON_ALL = "all"
 """CLI value meaning "do not filter the lesson roster" (maps to ``lesson=None``)."""
+
+TERRAIN_LEVELS = (1, 2, 3, 4, 5, 6, 7, 8)
+"""Difficulty stages a lesson is graded into (1 = easiest, 8 = hardest).
+
+The passage terrains quantise difficulty with ``stage = int(difficulty * 8)``
+(``passage_terrain_cfg.py``), and the wall course has one row per stage, so the
+1-based stage ``n`` spans ``[(n - 1) / 8, n / 8)`` with mid-point
+``(n - 0.5) / 8``.
+"""
 
 HEIGHT_SCAN_TERM = "height_scan"
 """Observation term holding the 187-dim terrain height scan (in the critic group)."""
@@ -1771,23 +1800,73 @@ def terrain_lessons(cfg: Any) -> list[str]:
   return [str(name) for name in sub_terrains]
 
 
-def filter_terrain_lessons(cfg: Any, lesson: str | None) -> Any:
-  """Restrict a loaded env config to a single terrain lesson.
+def _terrain_level_difficulty(level: int) -> float:
+  """Return the generator difficulty that lands in the 1-based level ``level``.
 
-  ``lesson=None`` returns ``cfg`` untouched (the full ten-lesson wall course).
-  Otherwise ``cfg.scene.terrain.terrain_generator.sub_terrains`` is replaced by
-  just ``{lesson: cfg}`` with that lesson's ``proportion`` set to ``1.0``, so the
-  whole terrain grid becomes that one lesson.  A one-line summary is printed::
+  ``passage_terrain_cfg`` maps a generator difficulty to a 0-based stage with
+  ``stage = int(difficulty * 8)`` (clipped to ``[0, 7]``).  The 1-based stage
+  ``n`` therefore spans ``[(n - 1) / 8, n / 8)``; its mid-point
+  ``(n - 0.5) / 8`` is used so the per-cell row jitter in
+  ``TerrainGeneratorCfg`` cannot push the value into a neighbouring stage.
+
+  Raises:
+    ValueError: if ``level`` is not an integer in ``1..8`` (the message says so).
+  """
+  valid = (
+    isinstance(level, (int, float))
+    and not isinstance(level, bool)
+    and float(level) == int(level)
+  )
+  if not valid or not TERRAIN_LEVELS[0] <= int(level) <= TERRAIN_LEVELS[-1]:
+    raise ValueError(
+      f"level must be an integer between {TERRAIN_LEVELS[0]} and "
+      f"{TERRAIN_LEVELS[-1]} (inclusive; the wall course has "
+      f"{len(TERRAIN_LEVELS)} difficulty stages), got {level!r}"
+    )
+  return (int(level) - 0.5) / 8.0
+
+
+def filter_terrain_lessons(
+  cfg: Any, lesson: str | None = None, level: int | None = None
+) -> Any:
+  """Restrict a loaded env config to a single terrain lesson and/or difficulty.
+
+  ``lesson=None`` keeps the full ten-lesson wall course.  Otherwise
+  ``cfg.scene.terrain.terrain_generator.sub_terrains`` is replaced by just
+  ``{lesson: cfg}`` with that lesson's ``proportion`` set to ``1.0``, so the whole
+  terrain grid becomes that one lesson.  A one-line summary is printed::
 
       [distill] lesson=high_wall rows=8 cols=20
 
+  ``level`` (1..8, ``None`` = do not pin) pins the difficulty stage: the
+  generator is reduced to a single row (``num_rows = 1``) with
+  ``difficulty_range = (d, d)``, where ``d = (level - 0.5) / 8`` is the mid-point
+  of the 1-based 8-stage curriculum (``stage = int(difficulty * 8)`` in
+  ``passage_terrain_cfg``), so every env starts on the requested stage::
+
+      [distill] level=8 difficulty=0.9375
+
+  Pinning only ``level`` (with ``lesson=None``) is allowed and does not need a
+  ``sub_terrains`` roster.  Both filters compose; the lesson line is printed
+  after the level pin, so its ``rows=`` field reports the pinned single row.
+
   Raises:
-    ValueError: if the config has no terrain generator, the roster is empty, or
-      ``lesson`` is not one of the available lessons (the message lists them).
+    ValueError: if the config has no terrain generator, the roster is empty,
+      ``lesson`` is not one of the available lessons (the message lists them), or
+      ``level`` is outside ``1..8``.
   """
-  if lesson is None:
+  difficulty: float | None = None
+  if level is not None:
+    difficulty = _terrain_level_difficulty(level)
+  if lesson is None and difficulty is None:
     return cfg
   generator = _terrain_generator_of(cfg)
+  if difficulty is not None:
+    generator.num_rows = 1
+    generator.difficulty_range = (difficulty, difficulty)
+    print(f"[distill] level={int(level)} difficulty={difficulty}", flush=True)
+  if lesson is None:
+    return cfg
   sub_terrains = getattr(generator, "sub_terrains", None)
   if not isinstance(sub_terrains, Mapping) or not sub_terrains:
     raise ValueError(
@@ -1817,7 +1896,10 @@ def available_lessons(task_id: str = WALL_TASK_ID) -> list[str]:
 
 
 def build_distill_env_cfg(
-  task_id: str = WALL_TASK_ID, lesson: str | None = None, play: bool = False
+  task_id: str = WALL_TASK_ID,
+  lesson: str | None = None,
+  play: bool = False,
+  level: int | None = None,
 ) -> Any:
   """Load a task's env config and append the privileged height scan to the actor.
 
@@ -1829,17 +1911,21 @@ def build_distill_env_cfg(
   contracts / warm start keep working); both produce the same flat
   ``[proprio | depth | height]`` policy input.
 
-  ``lesson`` optionally restricts the terrain roster to one lesson (see
-  :func:`filter_terrain_lessons`); ``None`` keeps the full course.
+  ``lesson`` optionally restricts the terrain roster to one lesson and ``level``
+  (1..8) optionally pins the difficulty stage (see
+  :func:`filter_terrain_lessons`); ``None`` keeps the full course / curriculum.
   """
   cfg = _load_task_env_cfg(task_id, play=play)
-  filter_terrain_lessons(cfg, lesson)
+  filter_terrain_lessons(cfg, lesson, level=level)
   append_height_scan_to_actor(cfg)
   return cfg
 
 
 def build_teacher_env_cfg(
-  task_id: str = WALL_TASK_ID, lesson: str | None = None, play: bool = False
+  task_id: str = WALL_TASK_ID,
+  lesson: str | None = None,
+  play: bool = False,
+  level: int | None = None,
 ) -> Any:
   """Load a task's env config with the privileged scan as a separate group.
 
@@ -1847,11 +1933,12 @@ def build_teacher_env_cfg(
   height scan becomes the ``"privileged"`` observation group, and
   :func:`register_teacher_task` adds it to ``rl_cfg.obs_groups["actor"]``.
 
-  ``lesson`` optionally restricts the terrain roster to one lesson (see
-  :func:`filter_terrain_lessons`); ``None`` keeps the full course.
+  ``lesson`` optionally restricts the terrain roster to one lesson and ``level``
+  (1..8) optionally pins the difficulty stage (see
+  :func:`filter_terrain_lessons`); ``None`` keeps the full course / curriculum.
   """
   cfg = _load_task_env_cfg(task_id, play=play)
-  filter_terrain_lessons(cfg, lesson)
+  filter_terrain_lessons(cfg, lesson, level=level)
   add_privileged_observation_group(cfg)
   return cfg
 
@@ -1865,6 +1952,7 @@ def build_distill_env(
   policy_groups: Sequence[str] | None = None,
   perception_checkpoint: str | Path | None = None,
   lesson: str | None = None,
+  level: int | None = None,
 ) -> DistillEnv:
   """Build a single privileged distillation environment for ``task_id``.
 
@@ -1875,14 +1963,15 @@ def build_distill_env(
   (the wall task defaults to ``logs/mgdp/perception/mgdp_wall_v5.pt``; the
   encoder must match the current perception architecture and camera/sensing
   contract).  ``lesson`` optionally restricts the terrain roster to a single
-  lesson (see :func:`filter_terrain_lessons`); ``None`` keeps the full course.
+  lesson and ``level`` (1..8) optionally pins the difficulty stage (see
+  :func:`filter_terrain_lessons`); ``None`` keeps the full course / curriculum.
   """
   import mjlab.tasks  # noqa: F401
   import src.tasks  # noqa: F401
   from mjlab.envs import ManagerBasedRlEnv
   from mjlab.tasks.registry import load_rl_cfg
 
-  cfg = build_distill_env_cfg(task_id, lesson=lesson, play=play)
+  cfg = build_distill_env_cfg(task_id, lesson=lesson, play=play, level=level)
   if int(num_envs) <= 0:
     raise ValueError(f"num_envs must be positive, got {num_envs}")
   cfg.scene.num_envs = int(num_envs)
@@ -1929,6 +2018,7 @@ def teacher_task_id(lesson: str | None = None) -> str:
 
 def register_teacher_task(
   lesson: str | None = None,
+  level: int | None = None,
   source_task_id: str = WALL_TASK_ID,
 ) -> str:
   """Register a privileged teacher RL task on top of ``source_task_id``.
@@ -1942,9 +2032,11 @@ def register_teacher_task(
   contracts keep working::
 
       from src.tasks.velocity.rl.distill import register_teacher_task, teacher_task_id
-      register_teacher_task()                     # idempotent
-      register_teacher_task(lesson="high_wall")   # -> "...-Wall-Teacher-high_wall"
-      teacher_task_id("high_wall")                # same id, without registering
+      register_teacher_task()                           # idempotent
+      register_teacher_task(lesson="high_wall")         # -> "...-Wall-Teacher-high_wall"
+      register_teacher_task(level=8)                     # pinned to difficulty stage 8
+      register_teacher_task(lesson="high_wall", level=8) # both filters
+      teacher_task_id("high_wall")                      # same id, without registering
 
       # scripts/train.py imports ``src.tasks`` but not this module, so run it in
       # one process after registering the task:
@@ -1954,12 +2046,14 @@ def register_teacher_task(
       #     'LgDog1-Race-MGDP-Wall-Teacher-high_wall']; \
       #     runpy.run_path('scripts/train.py', run_name='__main__')"
 
-  ``lesson`` filters the terrain roster to that single lesson (see
-  :func:`filter_terrain_lessons`) for both the training and play config; it also
-  selects the task id (see :func:`teacher_task_id`).  Registration is
-  idempotent: an already registered id is reused and returned without
-  re-building or re-registering it, and a concurrent/duplicate ``register``
-  ValueError is swallowed.
+  ``lesson`` filters the terrain roster to that single lesson and ``level``
+  (1..8) pins the terrain difficulty stage (see :func:`filter_terrain_lessons`)
+  for both the training and play config.  ``lesson`` also selects the task id
+  (see :func:`teacher_task_id`); the id rule is unchanged by ``level``, so
+  registering the same lesson at two different levels reuses the first
+  registration (idempotent).  Registration is idempotent: an already registered
+  id is reused and returned without re-building or re-registering it, and a
+  concurrent/duplicate ``register`` ValueError is swallowed.
 
   Teacher checkpoints end up with a 439-dim actor in canonical order, which is
   what ``scripts/distill_wall.py`` expects by default
@@ -1970,20 +2064,26 @@ def register_teacher_task(
 
   Raises:
     ValueError: if ``lesson`` is not an available lesson (the message lists the
-      available lessons) or the source task is unknown.
+      available lessons), ``level`` is outside ``1..8``, or the source task is
+      unknown.
   """
   import mjlab.tasks  # noqa: F401
   import src.tasks  # noqa: F401
   from mjlab.tasks.registry import list_tasks, load_rl_cfg, register_mjlab_task
   from src.tasks.velocity.rl import PPOHIMRunner
 
+  # Validate eagerly so an out-of-range level fails even when the task id is
+  # already registered (the idempotent path below returns before building cfgs).
+  if level is not None:
+    _terrain_level_difficulty(level)
+
   task_id = teacher_task_id(lesson)
   if task_id in list_tasks():
     print(f"[distill] teacher task {task_id!r} is already registered; reusing it", flush=True)
     return task_id
 
-  env_cfg = build_teacher_env_cfg(source_task_id, lesson=lesson, play=False)
-  play_env_cfg = build_teacher_env_cfg(source_task_id, lesson=lesson, play=True)
+  env_cfg = build_teacher_env_cfg(source_task_id, lesson=lesson, play=False, level=level)
+  play_env_cfg = build_teacher_env_cfg(source_task_id, lesson=lesson, play=True, level=level)
   rl_cfg = load_rl_cfg(source_task_id)
   actor_groups = tuple(rl_cfg.obs_groups["actor"])
   if TEACHER_PRIVILEGED_GROUP not in actor_groups:
@@ -2001,7 +2101,8 @@ def register_teacher_task(
     )
     print(
       f"[distill] registered teacher task {task_id!r} "
-      f"(lesson={lesson!r}, actor obs groups: {tuple(rl_cfg.obs_groups['actor'])})",
+      f"(lesson={lesson!r}, level={level!r}, "
+      f"actor obs groups: {tuple(rl_cfg.obs_groups['actor'])})",
       flush=True,
     )
   except ValueError as error:
@@ -2028,6 +2129,7 @@ __all__ = [
   "ROLE_TEACHER",
   "TEACHER_PRIVILEGED_GROUP",
   "TEACHER_TASK_ID",
+  "TERRAIN_LEVELS",
   "WALL_TASK_ID",
   "add_privileged_observation_group",
   "append_height_scan_to_actor",

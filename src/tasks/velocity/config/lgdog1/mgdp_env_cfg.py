@@ -48,7 +48,7 @@ DEPTH_SITE = "mgdp_depth"
 # ★ 2026-11-19：按 WMP 思路提高有效角分辨率。原 16x16/87°/5 m 在 2 m 处每像素约 19 cm，
 #   绕桩杆(10 cm)、轮胎胎面(16.5 cm)几乎不可见；改为 32x32/70°/3 m，2 m 处约 7.5 cm。
 #   注意：这会改变感知输入契约，旧感知权重与旧 checkpoint 不兼容，需要重新预训练。
-DEPTH_HW = (32, 32)
+DEPTH_HW = (24, 32)
 DEPTH_FOVY = 60.0
 DEPTH_MAX = 2.0
 PROPRIO_HISTORY = 4
@@ -295,6 +295,8 @@ def lgdog1_wall_training_env_cfg(play=False, checkpoint=DEFAULT_WALL_CHECKPOINT,
         lessons = {name: terrain for name, terrain in lessons.items() if name in keep}
         for terrain in lessons.values():
             terrain.proportion = 1./len(lessons)
+        if 'LGDOG_WALL_COLS' not in __import__('os').environ:
+            generator.num_cols = len(lessons)
     generator.sub_terrains = lessons
     old=cfg.commands['twist']
     cfg.commands['twist']=BodyAwarePassageCommandCfg(**{f.name:getattr(old,f.name) for f in fields(old) if f.init})

@@ -60,6 +60,24 @@ original teacher task id ``LgDog1-Race-MGDP-Wall-Teacher``.  A per-lesson run
 filters ``cfg.scene.terrain.terrain_generator.sub_terrains`` to that one lesson
 (``proportion=1.0``) and prints a ``[distill] lesson=<name> rows=.. cols=..`` line.
 
+Pinning the difficulty stage (``--teacher-level``)
+--------------------------------------------------
+By default the terrain curriculum ramps difficulty over eight rows, so a teacher
+spends most envs on the easy stages.  ``--teacher-level {1..8}`` pins the whole
+terrain to one stage: ``num_rows`` becomes 1 and
+``difficulty_range = ((level-0.5)/8, (level-0.5)/8)``, i.e. ``stage =
+int(difficulty*8) == level-1``, and the run prints
+``[distill] level=<n> difficulty=<d>``.  Use the same level when registering the
+teacher task (``--register-teacher`` prints the matching command)::
+
+    python scripts/distill_wall.py --lesson high_wall --teacher-level 8 --register-teacher
+    python scripts/distill_wall.py --lesson high_wall --teacher-level 8 \
+      --teacher logs/rsl_rl/lgdog1_wall_teacher_high_wall/<run>/model_XXXX.pt \
+      --out logs/distill/wall_student_high_wall/model.pt
+
+The default (flag unset) keeps the ramping curriculum; the task id rule is
+unchanged, so ``--teacher-level`` does not create new task ids.
+
 If no privileged teacher exists yet, the current 252-dim wall checkpoint can also
 be passed directly as ``--teacher`` (zero-padded, so it ignores the height scan)
 or used via ``--student-init``; distillation alone then reproduces the old
@@ -88,6 +106,7 @@ from src.tasks.velocity.rl.distill import (
   INPUT_ORDER_CANONICAL,
   INPUT_ORDER_ENV,
   LESSON_ALL,
+  TERRAIN_LEVELS,
   WALL_TASK_ID,
   MaskedActor,
   available_lessons,
@@ -146,6 +165,13 @@ def build_parser() -> argparse.ArgumentParser:
                            "ten-lesson course, otherwise the terrain roster is filtered to that "
                            "one lesson (proportion=1.0) and the teacher task id becomes "
                            "LgDog1-Race-MGDP-Wall-Teacher-<lesson>")
+  parser.add_argument("--teacher-level", type=int, choices=TERRAIN_LEVELS, default=None,
+                      metavar="{1..8}",
+                      help="pin the terrain difficulty to one stage (1 = easiest, 8 = hardest) "
+                           "instead of the ramping curriculum: num_rows becomes 1 and "
+                           "difficulty_range = ((level-0.5)/8, (level-0.5)/8), so every env is "
+                           "generated at exactly that stage; pass the same value when "
+                           "registering the teacher task")
   parser.add_argument("--list-lessons", action="store_true",
                       help="print the available terrain lessons and their teacher task ids, then exit")
   parser.add_argument("--register-teacher", action="store_true",
@@ -240,19 +266,39 @@ def _list_lessons(task_id: str) -> int:
   return 0
 
 
+def _level_kwarg(level: int | None) -> str:
+  """``register_teacher_task`` keyword fragment for ``--teacher-level``."""
+  return "" if level is None else f", level={int(level)}"
+
+
 def _register_teacher(args: argparse.Namespace, lesson: str | None) -> int:
-  """Register the teacher task for ``lesson`` and print how to train it."""
-  task_id = register_teacher_task(lesson=lesson, source_task_id=args.task)
+  """Register the teacher task for ``lesson``/``--teacher-level`` and print how to train it."""
+  level = args.teacher_level
+  task_id = register_teacher_task(lesson=lesson, level=level, source_task_id=args.task)
   print(f"[distill] teacher task id: {task_id}", flush=True)
+  if level is not None:
+    print(
+      f"[distill] terrain difficulty pinned to stage {level} "
+      f"(difficulty_range={((level - 0.5) / 8, (level - 0.5) / 8)}); use the same "
+      "level when distilling",
+      flush=True,
+    )
   print(
     "  python -c \"import sys, runpy; import src.tasks; "
     "from src.tasks.velocity.rl.distill import register_teacher_task; "
-    f"register_teacher_task(lesson={lesson!r}); "
+    f"register_teacher_task(lesson={lesson!r}{_level_kwarg(level)}); "
     f"sys.argv=['scripts/train.py', '{task_id}']; "
     "runpy.run_path('scripts/train.py', run_name='__main__')\" "
     "--warm-start-checkpoint <teacher_init.pt> ...",
     flush=True,
   )
+  if level is not None:
+    print(
+      "[distill] then distil with the same pinned level, e.g. "
+      f"python scripts/distill_wall.py --lesson {args.lesson} --teacher-level {level} "
+      "--teacher <teacher.pt> --out <student.pt>",
+      flush=True,
+    )
   return 0
 
 
@@ -261,6 +307,7 @@ def _write_run_report(path: Path, args: argparse.Namespace, layout, result: dict
     "script": "scripts/distill_wall.py",
     "task": args.task,
     "lesson": args.lesson,
+    "teacher_level": args.teacher_level,
     "teacher_task_id": teacher_task_id(_resolve_lesson(args)),
     "device": args.device,
     "teacher": str(args.teacher),
@@ -312,8 +359,8 @@ def main(argv: list[str] | None = None) -> int:
   print("=" * 100, flush=True)
   print("[distill] LgDog1 high-wall teacher-student DAgger (single env, input masks)", flush=True)
   print(
-    f"[distill] task={args.task} lesson={args.lesson} teacher_task="
-    f"{teacher_task_id(lesson)} device={device} teacher={args.teacher}",
+    f"[distill] task={args.task} lesson={args.lesson} teacher_level={args.teacher_level} "
+    f"teacher_task={teacher_task_id(lesson)} device={device} teacher={args.teacher}",
     flush=True,
   )
   print("=" * 100, flush=True)
@@ -325,6 +372,7 @@ def main(argv: list[str] | None = None) -> int:
     seed=args.seed,
     perception_checkpoint=args.perception_checkpoint,
     lesson=lesson,
+    level=args.teacher_level,
   )
   try:
     layout = env.layout
@@ -369,7 +417,8 @@ def main(argv: list[str] | None = None) -> int:
       print(
         "  python -c \"import sys, runpy; import src.tasks; "
         "from src.tasks.velocity.rl.distill import register_teacher_task; "
-        f"register_teacher_task(lesson={lesson!r}); sys.argv=['scripts/train.py', "
+        f"register_teacher_task(lesson={lesson!r}{_level_kwarg(args.teacher_level)}); "
+        f"sys.argv=['scripts/train.py', "
         f"'{teacher_id}']; "
         "runpy.run_path('scripts/train.py', run_name='__main__')\" "
         f"--warm-start-checkpoint {init_path}",
