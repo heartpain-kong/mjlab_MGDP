@@ -81,11 +81,28 @@ class NoPassageProgress(ManagerTermBase):
 
 
 class WallGeometry(ManagerTermBase):
+  """Wall centres/counts/heights of the high-wall lesson.
+
+  ``LGDOG_WALL_LESSONS`` / the distillation single-lesson cfgs can trim the
+  course so the high-wall lesson is absent.  Construction then must not fail:
+  the geometry is emptied and every wall-specific term returns zero, while the
+  rest of the task keeps training on the remaining lessons.
+  """
   def __init__(self, cfg, env):
     super().__init__(env)
     terrain = env.scene.terrain
     generator = terrain.cfg.terrain_generator
     wall = generator.sub_terrains.get("high_wall")
+    self.available = wall is not None
+    self.indices = torch.arange(3, device=env.device)
+    if wall is None:
+      self.wall_columns = torch.zeros(generator.num_cols, dtype=torch.bool,
+                                      device=env.device)
+      # Empty geometry has no wall: centres are empty and the counts are zero.
+      self.centres = torch.zeros(0, device=env.device)
+      self.counts = torch.zeros((), dtype=torch.long, device=env.device)
+      self.heights = torch.zeros(0, device=env.device)
+      return
     if not isinstance(wall, WallSkillTerrainCfg) or generator.num_rows != 8:
       raise ValueError("WallTraining requires its eight-row auxiliary terrain")
     if tuple(generator.difficulty_range) != (0., 1.):
@@ -98,10 +115,12 @@ class WallGeometry(ManagerTermBase):
     self.centres = torch.tensor(getattr(wall,'wall_centres',WALL_CENTRES), device=env.device) - START_X
     self.counts = torch.tensor(wall.counts, device=env.device)
     self.heights = torch.tensor(wall.heights, device=env.device)
-    self.indices = torch.arange(3, device=env.device)
 
   def active_walls(self, env):
     terrain = env.scene.terrain
+    if not self.available:
+      return torch.zeros((len(terrain.terrain_types), len(self.indices)),
+                         dtype=torch.bool, device=terrain.terrain_types.device)
     return (self.wall_columns[terrain.terrain_types, None] &
             (self.indices[None, :] < self.counts[terrain.terrain_levels, None]))
 
@@ -123,6 +142,8 @@ class WallCrossingBonus(WallGeometry):
     self.ready[ids] = False
 
   def __call__(self, env, asset_cfg, root_clearance_m=.35, foot_clearance_m=.03):
+    if not self.available:
+      return torch.zeros(env.num_envs, device=env.device)
     command = env.command_manager.get_term("twist")
     rear = self.centres + WALL_HALF_THICKNESS
     foot_x = self.feet(env, asset_cfg)[:, :, 0].amin(dim=1)
@@ -146,6 +167,8 @@ class WallSwingClearance(WallGeometry):
   """
   def __call__(self, env, asset_cfg, sensor_name="feet_ground_contact",
                margin_m=.03, approach_m=.25, departure_m=.08):
+    if not self.available:
+      return torch.zeros(env.num_envs, device=env.device)
     feet = self.feet(env, asset_cfg)
     speed = env.scene[asset_cfg.name].data.site_lin_vel_w[:, asset_cfg.site_ids, 0]
     in_air = env.scene[sensor_name].data.found == 0
@@ -185,6 +208,7 @@ class WallProgressReward(WallGeometry):
     if progress_reference_mps<=0:raise ValueError('Progress reference speed must be positive')
     value=self.base(env,**params)
     if not self.positive_weight:return value
+    if not self.available:return value
     command=env.command_manager.get_term('twist');progress=command.route_state()[3]
     previous=torch.where(self.ready,self.highwater,progress)
     delta=(progress-previous).clamp_min(0.)
@@ -260,6 +284,8 @@ class WallApproachReward(WallGeometry):
       raise ValueError('max_distance_m must be positive')
     # 旧 reward 配置仍会传这个参数；新的速度投影不需要它。
     del min_command_mps
+    if not self.available:
+      return torch.zeros(env.num_envs, device=env.device)
     command = env.command_manager.get_term("twist")
     xy = command.local_xy()
     zero = torch.zeros(xy.shape[0], device=xy.device, dtype=xy.dtype)
@@ -311,6 +337,8 @@ class WallWaitingPenalty(WallGeometry):
                root_clearance_m=.35,foot_clearance_m=.03):
     if approach_m<=0 or grace_s<0 or ramp_s<=0 or max_rate<0 or min_progress_m<=0:
       raise ValueError('Invalid wall waiting penalty parameters')
+    if not self.available:
+      return torch.zeros(env.num_envs, device=env.device)
     command=env.command_manager.get_term('twist');root_x=command.local_xy()[:,0]
     foot_x=self.feet(env,asset_cfg)[:,:,0].amin(dim=1);rear=self.centres+WALL_HALF_THICKNESS
     clear=(root_x[:,None]>=rear+root_clearance_m)&(foot_x[:,None]>=rear+foot_clearance_m)

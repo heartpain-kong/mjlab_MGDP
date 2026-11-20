@@ -4,7 +4,7 @@ import torch
 from mjlab.managers.manager_base import ManagerTermBase
 from mjlab.sensor.contact_sensor import ContactSensor,ContactSensorCfg
 from mjlab.utils.lab_api.math import quat_apply
-from .passage import PassageCommand,PassageCommandCfg
+from .passage import PassageCommand,PassageCommandCfg,kind_columns_or_empty
 from ..config.lgdog1.passage_terrain_cfg import START_X
 
 
@@ -14,21 +14,27 @@ SAFE_SLALOM_ROUTE=((0.,0.),(.65,-.6),(1.4,.02),(2.3,-1.22),(3.2,.02),(4.1,-1.22)
 
 
 def kind_columns(env,kind):
-  g=env.scene.terrain.cfg.terrain_generator
-  p=torch.tensor([t.proportion for t in g.sub_terrains.values()],device=env.device)
-  kinds=torch.searchsorted((p/p.sum()).cumsum(0),torch.arange(g.num_cols,device=env.device)/g.num_cols+.001,right=True)
-  return kinds==list(g.sub_terrains).index(kind)
+  """Columns owned by ``kind``; all False when the lesson was trimmed away."""
+  return kind_columns_or_empty(env,kind)
 
 
 class BodyAwarePassageCommand(PassageCommand):
   def __init__(self,cfg,env):
     super().__init__(cfg,env)
-    self.slalom_columns=kind_columns(env,'slalom_brick')
-    self.wall_columns=kind_columns(env,'high_wall')
+    generator=env.scene.terrain.cfg.terrain_generator
+    self.slalom_columns=kind_columns_or_empty(env,'slalom_brick')
+    self.wall_columns=kind_columns_or_empty(env,'high_wall')
     from ..config.lgdog1.passage_terrain_cfg import WALL_CENTRES,START_X
-    wall=env.scene.terrain.cfg.terrain_generator.sub_terrains['high_wall']
-    self.wall_centres=torch.tensor(getattr(wall,'wall_centres',WALL_CENTRES),device=self.device)-START_X
-    self.wall_counts=torch.tensor(wall.counts,device=self.device)
+    wall=generator.sub_terrains.get('high_wall')
+    # A trimmed course may not contain the wall lesson: disable every wall-only
+    # branch (route clearance, approach speed limits) instead of crashing.
+    self.wall_available=wall is not None
+    if wall is None:
+      self.wall_centres=torch.zeros(0,device=self.device)
+      self.wall_counts=torch.zeros((),dtype=torch.long,device=self.device)
+    else:
+      self.wall_centres=torch.tensor(getattr(wall,'wall_centres',WALL_CENTRES),device=self.device)-START_X
+      self.wall_counts=torch.tensor(wall.counts,device=self.device)
     self.lane_limits=torch.where(self.slalom_columns,
       torch.full((len(self.slalom_columns),),cfg.slalom_lane_half_width,device=self.device),
       torch.full((len(self.slalom_columns),),cfg.lane_half_width,device=self.device))
@@ -36,7 +42,7 @@ class BodyAwarePassageCommand(PassageCommand):
       torch.full_like(self.lane_limits,cfg.slalom_waypoint_radius),
       torch.full_like(self.lane_limits,cfg.waypoint_radius))
     self.wall_success_feet=None
-    if cfg.skill_training_profile.get('version')==5:
+    if self.wall_available and cfg.skill_training_profile.get('version')==5:
       from ..config.lgdog1.env_cfgs import FOOT_SITES
       from src.wall_reward_settings import load_wall_reward_settings
       self.wall_success_feet=self.robot.find_sites(FOOT_SITES,preserve_order=True)[0]
@@ -47,7 +53,7 @@ class BodyAwarePassageCommand(PassageCommand):
     final=self.routes[keys,self.last_waypoint[keys]]
     success=((self.waypoint_index==self.last_waypoint[keys]) &
             ((self.local_xy()-final).norm(dim=-1)<=self.radii[types]))
-    if self.wall_success_feet is not None:
+    if self.wall_success_feet is not None and self.wall_available:
       levels=self._env.scene.terrain.terrain_levels
       partial=bool(self.cfg.staged_waypoints)
       last=torch.where(levels<2,torch.zeros_like(levels),self.wall_counts[levels]-1) if partial else self.wall_counts[levels]-1
@@ -67,10 +73,13 @@ class BodyAwarePassageCommand(PassageCommand):
     if self.cfg.obstacle_speed_limits is not None:
       wall_speed,slalom_speed=self.cfg.obstacle_speed_limits
       terrain=self._env.scene.terrain
-      dx=self.local_xy()[:,0,None]-self.wall_centres[None,:]
-      active=torch.arange(3,device=self.device)[None,:]<self.wall_counts[terrain.terrain_levels,None]
-      near_wall=self.wall_columns[types]&((dx>=-.6)&(dx<=.6)&active).any(dim=1)
-      cap=torch.where(near_wall,torch.full_like(self.speed,wall_speed),self.speed)
+      near_wall=torch.zeros(len(types),dtype=torch.bool,device=self.device)
+      cap=self.speed
+      if self.wall_available:
+        dx=self.local_xy()[:,0,None]-self.wall_centres[None,:]
+        active=torch.arange(3,device=self.device)[None,:]<self.wall_counts[terrain.terrain_levels,None]
+        near_wall=self.wall_columns[types]&((dx>=-.6)&(dx<=.6)&active).any(dim=1)
+        cap=torch.where(near_wall,torch.full_like(self.speed,wall_speed),self.speed)
       cap=torch.where(self.slalom_columns[types],torch.full_like(cap,slalom_speed),cap)
       if self.cfg.skill_training_profile.get('version',0)>=4:
         cap=torch.where(self.wall_columns[types]&~near_wall,torch.full_like(cap,.6),cap)
@@ -143,11 +152,14 @@ class PositionHistoryContactSensorCfg(ContactSensorCfg):
 class StoneGroundContact(ManagerTermBase):
   """Only the stone FIELD forbids floor contact; approach and exit remain safe."""
   def __init__(self,cfg,env):
-    super().__init__(env);self.columns=kind_columns(env,'stepping_stones')
+    super().__init__(env);self.columns=kind_columns_or_empty(env,'stepping_stones')
 
   def __call__(self,env,sensor_name='stone_support_contact',entry_end_x=2.2,exit_start_x=5.9,
                floor_tolerance_m=.012,min_force_n=1.,min_feet=1,exit_by_level=None,
                min_stone_height_m=.03):
+    if not bool(self.columns.any()):
+      # The stepping-stone lesson was trimmed from this terrain: never fail.
+      return torch.zeros(env.num_envs,dtype=torch.bool,device=env.device)
     data=env.scene[sensor_name].data
     p=data.pos_history-env.scene.terrain.env_origins[:,None,None,:]
     loaded=(data.found_history>0)&(data.force_history.norm(dim=-1)>=min_force_n)
@@ -211,15 +223,21 @@ def box_corners(position,quat,half_size):
 
 class SlalomBodyProjection(ManagerTermBase):
   def __init__(self,cfg,env):
-    super().__init__(env);self.columns=kind_columns(env,'slalom_brick')
+    super().__init__(env);self.columns=kind_columns_or_empty(env,'slalom_brick')
+    self.half_size=None;self.poles=None;self.radii=None
+    if not bool(self.columns.any()):
+      # No slalom lesson in the current terrain: the pole collision rule is off.
+      return
     geom=env.sim.mj_model.geom('robot/trunk_collision')
     self.half_size=torch.tensor(geom.size,device=env.device,dtype=torch.float32)
     self.poles=torch.tensor([(1.4+i*.9,-.6) for i in range(4)]+[(4.1,.3),(4.1,1.2)],device=env.device)
-    obstacle=env.scene.terrain.cfg.terrain_generator.sub_terrains['slalom_brick']
+    obstacle=env.scene.terrain.cfg.terrain_generator.sub_terrains.get('slalom_brick')
     radii=getattr(obstacle,'post_radii',None)
     self.radii=None if radii is None else torch.tensor(radii,device=env.device)
 
   def __call__(self,env,asset_cfg,post_radius_m=.05,margin_m=.03):
+    if self.half_size is None:
+      return torch.zeros(env.num_envs,dtype=torch.bool,device=env.device)
     robot=env.scene[asset_cfg.name].data
     position=robot.geom_pos_w[:,asset_cfg.geom_ids,:].squeeze(1)-env.scene.terrain.env_origins
     quat=robot.geom_quat_w[:,asset_cfg.geom_ids,:].squeeze(1)

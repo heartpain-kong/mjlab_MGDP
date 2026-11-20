@@ -66,6 +66,35 @@ it was trained on the full 439-dim vector; use ``teacher_sees_student=True``
 Loading the checkpoint is identical for both modes because both networks have
 the same 439-dim input; only the distillation-time mask changes.
 
+Per-lesson teachers (``--lesson``)
+----------------------------------
+By default the teacher sees the whole ten-lesson wall course, which mixes a
+36 cm wall with stepping stones, beams, tyres and so on.  Some lessons are much
+easier to learn in isolation because their terrain is fixed and their difficulty
+is concentrated (``high_wall`` and ``stepping_stones`` are the two the WMP review
+asked for).  Every cfg builder therefore accepts ``lesson=<name>``: it filters
+``cfg.scene.terrain.terrain_generator.sub_terrains`` down to that single lesson
+and sets its ``proportion=1.0``::
+
+    register_teacher_task(lesson="high_wall")
+    # -> "LgDog1-Race-MGDP-Wall-Teacher-high_wall"  (lesson=None keeps "...-Teacher")
+
+    build_teacher_env_cfg(WALL_TASK_ID, lesson="high_wall")
+    build_distill_env(WALL_TASK_ID, lesson="high_wall", ...)
+
+    python scripts/distill_wall.py --lesson high_wall --teacher ... --out ...
+    python scripts/distill_wall.py --list-lessons   # lessons + teacher task ids
+
+``lesson=None`` (or the CLI's ``--lesson all``) keeps the current ten-lesson
+behaviour, so the existing task id / checkpoints remain valid.  Known
+limitation: the wall *course* managers still hard-require several lesson names
+(``BodyAwarePassageCommand`` needs ``high_wall`` + ``slalom_brick``,
+``WallGeometry`` rewards need ``high_wall``, ``StoneGroundContact`` needs
+``stepping_stones``, ``SlalomBodyProjection`` needs ``slalom_brick``), so a
+single-lesson env config still has to have those terms pruned before the env can
+be constructed end-to-end; the filter in this module only reshapes the terrain
+roster.
+
 How to get the teacher weights
 ------------------------------
 The existing wall checkpoints (e.g. ``.../lgdog1_velocity_race_mgdp_wall_v5/``
@@ -155,6 +184,16 @@ from rsl_rl.modules import EmpiricalNormalization, MLP
 
 WALL_TASK_ID = "LgDog1-Race-MGDP-WallTraining"
 """The high-wall training task this module is written for (single 12-DoF dog)."""
+
+TEACHER_TASK_ID = "LgDog1-Race-MGDP-Wall-Teacher"
+"""Base teacher task id (all ten wall lessons), registered by :func:`register_teacher_task`.
+
+A per-lesson teacher appends ``-<lesson>``, e.g.
+``LgDog1-Race-MGDP-Wall-Teacher-high_wall`` for ``lesson="high_wall"``.
+"""
+
+LESSON_ALL = "all"
+"""CLI value meaning "do not filter the lesson roster" (maps to ``lesson=None``)."""
 
 HEIGHT_SCAN_TERM = "height_scan"
 """Observation term holding the 187-dim terrain height scan (in the critic group)."""
@@ -1692,7 +1731,94 @@ def _inherit_checkpoint_infos(checkpoint: str | Path) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def build_distill_env_cfg(task_id: str = WALL_TASK_ID, play: bool = False) -> Any:
+def _load_task_env_cfg(task_id: str, play: bool = False) -> Any:
+  """Load a registered task's (deep-copied) env config with lazy sim imports."""
+  import mjlab.tasks  # noqa: F401  (populates task-relevant imports)
+  import src.tasks  # noqa: F401  (registers the LgDog1 tasks)
+  from mjlab.tasks.registry import load_env_cfg
+
+  try:
+    return load_env_cfg(task_id, play=play)
+  except KeyError as error:
+    from mjlab.tasks.registry import list_tasks
+
+    raise ValueError(
+      f"unknown task {task_id!r}; available tasks: {list_tasks()}"
+    ) from error
+
+
+def _terrain_generator_of(cfg: Any) -> Any:
+  """Return ``cfg.scene.terrain.terrain_generator`` or raise a clear ``ValueError``."""
+  scene = getattr(cfg, "scene", None)
+  terrain = getattr(scene, "terrain", None)
+  generator = getattr(terrain, "terrain_generator", None)
+  if generator is None:
+    raise ValueError(
+      "env config has no scene.terrain.terrain_generator; a lesson filter only "
+      "applies to generator-based terrain tasks"
+    )
+  return generator
+
+
+def terrain_lessons(cfg: Any) -> list[str]:
+  """Return the sub-terrain lesson names of a loaded env config."""
+  generator = _terrain_generator_of(cfg)
+  sub_terrains = getattr(generator, "sub_terrains", None)
+  if not isinstance(sub_terrains, Mapping) or not sub_terrains:
+    raise ValueError(
+      "env config has an empty scene.terrain.terrain_generator.sub_terrains"
+    )
+  return [str(name) for name in sub_terrains]
+
+
+def filter_terrain_lessons(cfg: Any, lesson: str | None) -> Any:
+  """Restrict a loaded env config to a single terrain lesson.
+
+  ``lesson=None`` returns ``cfg`` untouched (the full ten-lesson wall course).
+  Otherwise ``cfg.scene.terrain.terrain_generator.sub_terrains`` is replaced by
+  just ``{lesson: cfg}`` with that lesson's ``proportion`` set to ``1.0``, so the
+  whole terrain grid becomes that one lesson.  A one-line summary is printed::
+
+      [distill] lesson=high_wall rows=8 cols=20
+
+  Raises:
+    ValueError: if the config has no terrain generator, the roster is empty, or
+      ``lesson`` is not one of the available lessons (the message lists them).
+  """
+  if lesson is None:
+    return cfg
+  generator = _terrain_generator_of(cfg)
+  sub_terrains = getattr(generator, "sub_terrains", None)
+  if not isinstance(sub_terrains, Mapping) or not sub_terrains:
+    raise ValueError(
+      "env config has an empty scene.terrain.terrain_generator.sub_terrains; "
+      "cannot filter to a lesson"
+    )
+  names = [str(name) for name in sub_terrains]
+  name = str(lesson)
+  if name not in names:
+    raise ValueError(f"unknown lesson {name!r}; available lessons: {names}")
+  selected = sub_terrains[name]
+  selected.proportion = 1.0
+  generator.sub_terrains = {name: selected}
+  rows = getattr(generator, "num_rows", "?")
+  cols = getattr(generator, "num_cols", "?")
+  print(f"[distill] lesson={name} rows={rows} cols={cols}", flush=True)
+  return cfg
+
+
+def available_lessons(task_id: str = WALL_TASK_ID) -> list[str]:
+  """List the terrain-lesson names ``task_id`` can be filtered to.
+
+  Loads the task's *training* env config (no simulation / MuJoCo scene is built),
+  so it is safe to call from a CLI listing mode.
+  """
+  return terrain_lessons(_load_task_env_cfg(task_id, play=False))
+
+
+def build_distill_env_cfg(
+  task_id: str = WALL_TASK_ID, lesson: str | None = None, play: bool = False
+) -> Any:
   """Load a task's env config and append the privileged height scan to the actor.
 
   This is the config of the *distillation* env: the 187-dim ``height_scan`` term
@@ -1702,42 +1828,30 @@ def build_distill_env_cfg(task_id: str = WALL_TASK_ID, play: bool = False) -> An
   :func:`build_teacher_env_cfg` instead (separate observation group, so the MGDP
   contracts / warm start keep working); both produce the same flat
   ``[proprio | depth | height]`` policy input.
+
+  ``lesson`` optionally restricts the terrain roster to one lesson (see
+  :func:`filter_terrain_lessons`); ``None`` keeps the full course.
   """
-  import mjlab.tasks  # noqa: F401  (populates task-relevant imports)
-  import src.tasks  # noqa: F401  (registers the LgDog1 tasks)
-  from mjlab.tasks.registry import load_env_cfg
-
-  try:
-    cfg = load_env_cfg(task_id, play=play)
-  except KeyError as error:
-    from mjlab.tasks.registry import list_tasks
-
-    raise ValueError(
-      f"unknown task {task_id!r}; available tasks: {list_tasks()}"
-    ) from error
+  cfg = _load_task_env_cfg(task_id, play=play)
+  filter_terrain_lessons(cfg, lesson)
   append_height_scan_to_actor(cfg)
   return cfg
 
 
-def build_teacher_env_cfg(task_id: str = WALL_TASK_ID, play: bool = False) -> Any:
+def build_teacher_env_cfg(
+  task_id: str = WALL_TASK_ID, lesson: str | None = None, play: bool = False
+) -> Any:
   """Load a task's env config with the privileged scan as a separate group.
 
   The actor group is left untouched (history / MGDP contract compatible); the
   height scan becomes the ``"privileged"`` observation group, and
   :func:`register_teacher_task` adds it to ``rl_cfg.obs_groups["actor"]``.
+
+  ``lesson`` optionally restricts the terrain roster to one lesson (see
+  :func:`filter_terrain_lessons`); ``None`` keeps the full course.
   """
-  import mjlab.tasks  # noqa: F401
-  import src.tasks  # noqa: F401
-  from mjlab.tasks.registry import load_env_cfg
-
-  try:
-    cfg = load_env_cfg(task_id, play=play)
-  except KeyError as error:
-    from mjlab.tasks.registry import list_tasks
-
-    raise ValueError(
-      f"unknown task {task_id!r}; available tasks: {list_tasks()}"
-    ) from error
+  cfg = _load_task_env_cfg(task_id, play=play)
+  filter_terrain_lessons(cfg, lesson)
   add_privileged_observation_group(cfg)
   return cfg
 
@@ -1750,6 +1864,7 @@ def build_distill_env(
   seed: int | None = None,
   policy_groups: Sequence[str] | None = None,
   perception_checkpoint: str | Path | None = None,
+  lesson: str | None = None,
 ) -> DistillEnv:
   """Build a single privileged distillation environment for ``task_id``.
 
@@ -1759,14 +1874,15 @@ def build_distill_env(
   ``perception_checkpoint`` optionally overrides the frozen MGDP depth encoder
   (the wall task defaults to ``logs/mgdp/perception/mgdp_wall_v5.pt``; the
   encoder must match the current perception architecture and camera/sensing
-  contract).
+  contract).  ``lesson`` optionally restricts the terrain roster to a single
+  lesson (see :func:`filter_terrain_lessons`); ``None`` keeps the full course.
   """
   import mjlab.tasks  # noqa: F401
   import src.tasks  # noqa: F401
   from mjlab.envs import ManagerBasedRlEnv
   from mjlab.tasks.registry import load_rl_cfg
 
-  cfg = build_distill_env_cfg(task_id, play=play)
+  cfg = build_distill_env_cfg(task_id, lesson=lesson, play=play)
   if int(num_envs) <= 0:
     raise ValueError(f"num_envs must be positive, got {num_envs}")
   cfg.scene.num_envs = int(num_envs)
@@ -1797,8 +1913,22 @@ def build_distill_env(
   return DistillEnv.from_env(env, groups)
 
 
+def teacher_task_id(lesson: str | None = None) -> str:
+  """Task id :func:`register_teacher_task` registers for ``lesson``.
+
+  * ``lesson=None``  -> ``LgDog1-Race-MGDP-Wall-Teacher`` (all ten lessons);
+  * ``lesson="high_wall"`` -> ``LgDog1-Race-MGDP-Wall-Teacher-high_wall``.
+
+  The id rule is pure (no registry access), so it can be used to print the id
+  that *will* be registered.
+  """
+  if lesson is None:
+    return TEACHER_TASK_ID
+  return f"{TEACHER_TASK_ID}-{str(lesson)}"
+
+
 def register_teacher_task(
-  new_task_id: str = "LgDog1-Race-MGDP-Wall-Teacher",
+  lesson: str | None = None,
   source_task_id: str = WALL_TASK_ID,
 ) -> str:
   """Register a privileged teacher RL task on top of ``source_task_id``.
@@ -1811,27 +1941,49 @@ def register_teacher_task(
   checkpoint, see :func:`save_teacher_init_checkpoint`) and the MGDP perception
   contracts keep working::
 
-      from src.tasks.velocity.rl.distill import register_teacher_task
-      register_teacher_task()          # idempotent
+      from src.tasks.velocity.rl.distill import register_teacher_task, teacher_task_id
+      register_teacher_task()                     # idempotent
+      register_teacher_task(lesson="high_wall")   # -> "...-Wall-Teacher-high_wall"
+      teacher_task_id("high_wall")                # same id, without registering
 
       # scripts/train.py imports ``src.tasks`` but not this module, so run it in
       # one process after registering the task:
       #   python -c "import sys, runpy; import src.tasks; \
       #     from src.tasks.velocity.rl.distill import register_teacher_task; \
-      #     register_teacher_task(); sys.argv=['scripts/train.py', \
-      #     'LgDog1-Race-MGDP-Wall-Teacher']; runpy.run_path('scripts/train.py', run_name='__main__')"
+      #     register_teacher_task(lesson='high_wall'); sys.argv=['scripts/train.py', \
+      #     'LgDog1-Race-MGDP-Wall-Teacher-high_wall']; \
+      #     runpy.run_path('scripts/train.py', run_name='__main__')"
+
+  ``lesson`` filters the terrain roster to that single lesson (see
+  :func:`filter_terrain_lessons`) for both the training and play config; it also
+  selects the task id (see :func:`teacher_task_id`).  Registration is
+  idempotent: an already registered id is reused and returned without
+  re-building or re-registering it, and a concurrent/duplicate ``register``
+  ValueError is swallowed.
 
   Teacher checkpoints end up with a 439-dim actor in canonical order, which is
   what ``scripts/distill_wall.py`` expects by default
   (``--teacher-order canonical``).
+
+  Returns:
+    The registered task id.
+
+  Raises:
+    ValueError: if ``lesson`` is not an available lesson (the message lists the
+      available lessons) or the source task is unknown.
   """
   import mjlab.tasks  # noqa: F401
   import src.tasks  # noqa: F401
-  from mjlab.tasks.registry import load_rl_cfg, register_mjlab_task
+  from mjlab.tasks.registry import list_tasks, load_rl_cfg, register_mjlab_task
   from src.tasks.velocity.rl import PPOHIMRunner
 
-  env_cfg = build_teacher_env_cfg(source_task_id, play=False)
-  play_env_cfg = build_teacher_env_cfg(source_task_id, play=True)
+  task_id = teacher_task_id(lesson)
+  if task_id in list_tasks():
+    print(f"[distill] teacher task {task_id!r} is already registered; reusing it", flush=True)
+    return task_id
+
+  env_cfg = build_teacher_env_cfg(source_task_id, lesson=lesson, play=False)
+  play_env_cfg = build_teacher_env_cfg(source_task_id, lesson=lesson, play=True)
   rl_cfg = load_rl_cfg(source_task_id)
   actor_groups = tuple(rl_cfg.obs_groups["actor"])
   if TEACHER_PRIVILEGED_GROUP not in actor_groups:
@@ -1841,21 +1993,22 @@ def register_teacher_task(
     }
   try:
     register_mjlab_task(
-      task_id=new_task_id,
+      task_id=task_id,
       env_cfg=env_cfg,
       play_env_cfg=play_env_cfg,
       rl_cfg=rl_cfg,
       runner_cls=PPOHIMRunner,
     )
     print(
-      f"[distill] registered teacher task {new_task_id!r} "
-      f"(actor obs groups: {tuple(rl_cfg.obs_groups['actor'])})",
+      f"[distill] registered teacher task {task_id!r} "
+      f"(lesson={lesson!r}, actor obs groups: {tuple(rl_cfg.obs_groups['actor'])})",
       flush=True,
     )
   except ValueError as error:
     if "already registered" not in str(error):
       raise
-  return new_task_id
+    print(f"[distill] teacher task {task_id!r} was already registered", flush=True)
+  return task_id
 
 
 __all__ = [
@@ -1869,13 +2022,16 @@ __all__ = [
   "HEIGHT_SCAN_TERM",
   "INPUT_ORDER_CANONICAL",
   "INPUT_ORDER_ENV",
+  "LESSON_ALL",
   "MaskedActor",
   "ROLE_STUDENT",
   "ROLE_TEACHER",
   "TEACHER_PRIVILEGED_GROUP",
+  "TEACHER_TASK_ID",
   "WALL_TASK_ID",
   "add_privileged_observation_group",
   "append_height_scan_to_actor",
+  "available_lessons",
   "build_distill_env",
   "build_distill_env_cfg",
   "build_teacher_env_cfg",
@@ -1883,6 +2039,7 @@ __all__ = [
   "expand_actor_input_state_dict",
   "expand_blind_actor_state_dict",
   "extract_actor_state_dict",
+  "filter_terrain_lessons",
   "infer_actor_architecture",
   "load_actor_state_dict",
   "permute_actor_input_state_dict",
@@ -1891,5 +2048,7 @@ __all__ = [
   "resolve_checkpoint_path",
   "save_student_checkpoint",
   "save_teacher_init_checkpoint",
+  "teacher_task_id",
+  "terrain_lessons",
   "train_distill",
 ]

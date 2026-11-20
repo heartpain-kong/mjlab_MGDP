@@ -34,21 +34,80 @@ def terrain_column_kinds(generator, device=None):
   return torch.searchsorted(cumulative, positions, right=True)
 
 
-def resolve_speed_groups(spec, column_names, kind_of_column):
+# Terrain lessons the wall course can be trimmed to. ``LGDOG_WALL_LESSONS`` and
+# the distillation single-lesson cfgs shrink ``sub_terrains`` to a subset of the
+# ten lessons, so managers must recognise a name that WAS a lesson but is no
+# longer part of the current terrain grid. The roster is imported lazily because
+# the terrain config package imports the managers (a top-level import would
+# close an import cycle).
+_CANONICAL_TERRAIN_NAMES = None
+_MISSING_TERRAIN_WARNED = set()
+_CUT_SPEED_TERRAIN_WARNED = set()
+
+
+def known_terrain_names():
+  """All lesson names of the wall course, even when this terrain is trimmed."""
+  global _CANONICAL_TERRAIN_NAMES
+  if _CANONICAL_TERRAIN_NAMES is None:
+    try:
+      from ..config.lgdog1.passage_terrain_cfg import KINDS
+      _CANONICAL_TERRAIN_NAMES = tuple(KINDS)
+    except ImportError:  # pragma: no cover - the terrain config ships with the repo
+      _CANONICAL_TERRAIN_NAMES = ()
+  return _CANONICAL_TERRAIN_NAMES
+
+
+def kind_columns_or_empty(env, kind):
+  """Terrain columns owned by ``kind``; all False when the lesson is absent.
+
+  A trimmed terrain (``LGDOG_WALL_LESSONS`` or a distillation single-lesson
+  cfg) no longer contains every lesson, which used to crash managers through
+  ``list.index``/``sub_terrains[kind]``. Such managers degrade instead: the
+  returned mask has no True entry, so every per-environment lookup drawn from
+  it is False and the related rule becomes a no-op.
+  """
+  generator = getattr(getattr(env.scene, 'terrain', None), 'cfg', None)
+  generator = getattr(generator, 'terrain_generator', None)
+  if generator is None:
+    return torch.zeros(0, dtype=torch.bool, device=env.device)
+  names = list(generator.sub_terrains)
+  if kind not in names:
+    if kind not in _MISSING_TERRAIN_WARNED:
+      _MISSING_TERRAIN_WARNED.add(kind)
+      warnings.warn(f'Terrain lesson {kind!r} is not part of the current terrain '
+                    f'({names}); its rules and speed limits are disabled')
+    return torch.zeros(generator.num_cols, dtype=torch.bool, device=env.device)
+  proportions = torch.tensor([t.proportion for t in generator.sub_terrains.values()],
+                             device=env.device)
+  kinds = torch.searchsorted((proportions/proportions.sum()).cumsum(0),
+    torch.arange(generator.num_cols, device=env.device)/generator.num_cols+.001, right=True)
+  return kinds == names.index(kind)
+
+
+def resolve_speed_groups(spec, column_names, kind_of_column, known_names=None):
   """Map each configured speed group to the terrain columns it owns.
 
   ``spec`` is the ``speed_groups`` mapping of group name to terrain-column
   names. ``None`` keeps the legacy single global gate. Terrain kinds left out
   of the mapping are collected into a ``default`` group so every column keeps
   a speed band and can still expand without waiting for the others.
+
+  ``known_names`` is the full lesson roster (defaults to the wall course's
+  ``KINDS``). A name that is listed in ``speed_groups`` but was trimmed from
+  the current terrain is skipped with one warning instead of failing the whole
+  task; a group whose members were all cut is dropped. A name that is not a
+  lesson of the course at all is still a configuration error and raises
+  ``ValueError``.
   """
   if spec is None:
     return None
   if not isinstance(spec, dict) or not spec:
     raise ValueError('speed_groups must be a non-empty mapping of group name to terrains')
   known = {name: index for index, name in enumerate(column_names)}
+  roster = None
   owner = {}
   groups = {}
+  skipped = []
   for group, members in spec.items():
     names = (members,) if isinstance(members, str) else tuple(members)
     if not names:
@@ -56,13 +115,29 @@ def resolve_speed_groups(spec, column_names, kind_of_column):
     kinds = []
     for name in names:
       if name not in known:
+        if roster is None:
+          roster = (tuple(known_names) if known_names is not None
+                    else known_terrain_names())
+        if name in roster:
+          # The lesson exists in the course but was trimmed from this terrain.
+          skipped.append(name)
+          continue
         raise ValueError(f'Speed group {group!r} names unknown terrain {name!r}')
       if known[name] in owner:
         raise ValueError(f'Terrain {name!r} is in two speed groups')
       owner[known[name]] = group
       kinds.append(known[name])
+    if not kinds:
+      # Every member of this group was cut from the current terrain.
+      continue
     groups[group] = torch.isin(kind_of_column,
       torch.tensor(kinds, dtype=torch.long, device=kind_of_column.device)).nonzero().flatten()
+  if skipped:
+    key = tuple(sorted(set(skipped)))
+    if key not in _CUT_SPEED_TERRAIN_WARNED:
+      _CUT_SPEED_TERRAIN_WARNED.add(key)
+      warnings.warn(f'speed_groups name lessons cut from this terrain: {list(key)}; '
+                    f'skipping them and keeping only the present lessons')
   missing = [index for index in range(len(column_names)) if index not in owner]
   if missing:
     unclaimed = torch.isin(kind_of_column,

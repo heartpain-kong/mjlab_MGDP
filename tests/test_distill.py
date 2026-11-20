@@ -9,9 +9,11 @@ DAgger loop itself.
 from __future__ import annotations
 
 import hashlib
+import io
 import math
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -23,22 +25,32 @@ from src.tasks.velocity.rl.distill import (
   DistillLayout,
   INPUT_ORDER_CANONICAL,
   INPUT_ORDER_ENV,
+  LESSON_ALL,
   ROLE_STUDENT,
   ROLE_TEACHER,
+  TEACHER_TASK_ID,
+  WALL_TASK_ID,
   MaskedActor,
   add_privileged_observation_group,
   append_height_scan_to_actor,
+  available_lessons,
+  build_distill_env_cfg,
+  build_teacher_env_cfg,
   distill_loss,
   expand_actor_input_state_dict,
   expand_blind_actor_state_dict,
   extract_actor_state_dict,
+  filter_terrain_lessons,
   infer_actor_architecture,
   load_actor_state_dict,
   permute_actor_input_state_dict,
   prepare_actor_state_dict,
+  register_teacher_task,
   resolve_checkpoint_path,
   save_student_checkpoint,
   save_teacher_init_checkpoint,
+  teacher_task_id,
+  terrain_lessons,
   train_distill,
 )
 
@@ -58,6 +70,19 @@ def _layout(student_dim: int = 5, privileged_dim: int = 3, actor_student_dim: in
 
 def _tiny_actor(layout: DistillLayout, *, hidden_dims=(8,), output_dim=4, **kwargs) -> MaskedActor:
   return MaskedActor(layout, hidden_dims=hidden_dims, output_dim=output_dim, **kwargs)
+
+
+def _lesson_cfg(
+  names=("start_flat", "high_wall", "stepping_stones"), rows: int = 8, cols: int = 20
+) -> SimpleNamespace:
+  """Minimal stand-in for a loaded env cfg with a terrain lesson roster."""
+  sub_terrains = {
+    name: SimpleNamespace(proportion=1.0 / len(names)) for name in names
+  }
+  generator = SimpleNamespace(sub_terrains=sub_terrains, num_rows=rows, num_cols=cols)
+  return SimpleNamespace(
+    scene=SimpleNamespace(terrain=SimpleNamespace(terrain_generator=generator))
+  )
 
 
 def _blind_actor_state_dict(layout: DistillLayout, **kwargs) -> dict:
@@ -716,6 +741,167 @@ class TrainDistillTests(unittest.TestCase):
     wrong = MaskedActor(self.layout, hidden_dims=(8,), output_dim=5)
     with self.assertRaises(ValueError):
       train_distill(self.env, wrong, wrong, iterations=1, log_fn=None)
+
+
+# ---------------------------------------------------------------------------
+# 9. Per-lesson teachers (terrain filter, task ids, CLI)
+# ---------------------------------------------------------------------------
+
+
+class LessonFilterTests(unittest.TestCase):
+  def test_none_keeps_the_whole_roster_and_prints_nothing(self):
+    cfg = _lesson_cfg()
+    names_before = list(cfg.scene.terrain.terrain_generator.sub_terrains)
+    output = io.StringIO()
+    with redirect_stdout(output):
+      result = filter_terrain_lessons(cfg, None)
+    self.assertIs(result, cfg)
+    self.assertEqual(
+      list(cfg.scene.terrain.terrain_generator.sub_terrains), names_before
+    )
+    self.assertEqual(output.getvalue(), "")
+
+  def test_high_wall_becomes_the_only_lesson(self):
+    cfg = _lesson_cfg()
+    output = io.StringIO()
+    with redirect_stdout(output):
+      filter_terrain_lessons(cfg, "high_wall")
+    sub_terrains = cfg.scene.terrain.terrain_generator.sub_terrains
+    self.assertEqual(list(sub_terrains), ["high_wall"])
+    self.assertAlmostEqual(float(sub_terrains["high_wall"].proportion), 1.0, places=6)
+    self.assertEqual(terrain_lessons(cfg), ["high_wall"])
+    self.assertIn("[distill] lesson=high_wall rows=8 cols=20", output.getvalue())
+
+  def test_stepping_stones_becomes_the_only_lesson(self):
+    cfg = _lesson_cfg()
+    with redirect_stdout(io.StringIO()):
+      filter_terrain_lessons(cfg, "stepping_stones")
+    sub_terrains = cfg.scene.terrain.terrain_generator.sub_terrains
+    self.assertEqual(list(sub_terrains), ["stepping_stones"])
+    self.assertAlmostEqual(
+      float(sub_terrains["stepping_stones"].proportion), 1.0, places=6
+    )
+
+  def test_unknown_lesson_raises_with_the_available_lessons(self):
+    cfg = _lesson_cfg()
+    with self.assertRaises(ValueError) as raised:
+      filter_terrain_lessons(cfg, "moon_wall")
+    message = str(raised.exception)
+    self.assertIn("moon_wall", message)
+    self.assertIn("high_wall", message)
+    self.assertIn("stepping_stones", message)
+    # the roster is left untouched on a bad name
+    self.assertEqual(
+      list(cfg.scene.terrain.terrain_generator.sub_terrains),
+      ["start_flat", "high_wall", "stepping_stones"],
+    )
+
+  def test_cfg_without_a_terrain_generator_is_rejected(self):
+    with self.assertRaises(ValueError):
+      filter_terrain_lessons(SimpleNamespace(), "high_wall")
+    empty = SimpleNamespace(
+      scene=SimpleNamespace(
+        terrain=SimpleNamespace(terrain_generator=SimpleNamespace(sub_terrains={}))
+      )
+    )
+    with self.assertRaises(ValueError):
+      filter_terrain_lessons(empty, "high_wall")
+
+
+class TeacherTaskIdTests(unittest.TestCase):
+  def test_lesson_task_id_rule(self):
+    self.assertEqual(teacher_task_id(), TEACHER_TASK_ID)
+    self.assertEqual(TEACHER_TASK_ID, "LgDog1-Race-MGDP-Wall-Teacher")
+    self.assertEqual(
+      teacher_task_id("high_wall"), "LgDog1-Race-MGDP-Wall-Teacher-high_wall"
+    )
+    self.assertEqual(
+      teacher_task_id("stepping_stones"),
+      "LgDog1-Race-MGDP-Wall-Teacher-stepping_stones",
+    )
+
+  def test_lesson_all_is_the_cli_sentinel_for_no_filter(self):
+    self.assertEqual(LESSON_ALL, "all")
+
+
+class RealWallTaskLessonTests(unittest.TestCase):
+  """Integration checks against the registered wall task (no simulation is built)."""
+
+  def test_wall_task_cfg_can_be_filtered_to_one_lesson(self):
+    cfg = build_teacher_env_cfg(WALL_TASK_ID, lesson="high_wall")
+    generator = cfg.scene.terrain.terrain_generator
+    self.assertEqual(list(generator.sub_terrains), ["high_wall"])
+    self.assertAlmostEqual(
+      float(generator.sub_terrains["high_wall"].proportion), 1.0, places=6
+    )
+    # the privileged group is still added on top of the filtered cfg
+    self.assertIn("privileged", cfg.observations)
+
+    distill_cfg = build_distill_env_cfg(WALL_TASK_ID, lesson="stepping_stones")
+    sub_terrains = distill_cfg.scene.terrain.terrain_generator.sub_terrains
+    self.assertEqual(list(sub_terrains), ["stepping_stones"])
+    self.assertAlmostEqual(
+      float(sub_terrains["stepping_stones"].proportion), 1.0, places=6
+    )
+    self.assertIn("height_scan", distill_cfg.observations["actor"].terms)
+
+  def test_unknown_lesson_on_the_real_task_lists_the_available_lessons(self):
+    cfg = build_teacher_env_cfg(WALL_TASK_ID)  # unfiltered roster
+    available = set(terrain_lessons(cfg))
+    self.assertIn("high_wall", available)
+    self.assertIn("stepping_stones", available)
+    with self.assertRaises(ValueError) as raised:
+      build_distill_env_cfg(WALL_TASK_ID, lesson="not_a_lesson")
+    message = str(raised.exception)
+    self.assertIn("not_a_lesson", message)
+    for name in available:
+      self.assertIn(name, message)
+
+
+class RegisterTeacherTaskTests(unittest.TestCase):
+  def test_register_three_task_ids_is_idempotent(self):
+    from mjlab.tasks.registry import _REGISTRY, list_tasks
+
+    pre_existing = set(list_tasks())
+    registered_here: list[str] = []
+    for lesson in (None, "high_wall", "stepping_stones"):
+      task_id = register_teacher_task(lesson=lesson)
+      self.assertEqual(task_id, teacher_task_id(lesson))
+      if task_id not in pre_existing:
+        registered_here.append(task_id)
+      self.assertIn(task_id, list_tasks())
+      # a repeated call must not raise and must return the same id
+      self.assertEqual(register_teacher_task(lesson=lesson), task_id)
+    try:
+      self.assertIn(teacher_task_id("high_wall"), list_tasks())
+      self.assertIn(teacher_task_id("stepping_stones"), list_tasks())
+      self.assertEqual(register_teacher_task(lesson="high_wall"), teacher_task_id("high_wall"))
+    finally:
+      for task_id in registered_here:
+        _REGISTRY.pop(task_id, None)
+
+
+class DistillWallCliTests(unittest.TestCase):
+  def test_list_lessons_prints_lessons_and_teacher_task_ids(self):
+    from scripts.distill_wall import main as distill_wall_main
+
+    output = io.StringIO()
+    with redirect_stdout(output):
+      return_code = distill_wall_main(["--list-lessons"])
+    text = output.getvalue()
+    self.assertEqual(return_code, 0)
+    self.assertIn("high_wall", text)
+    self.assertIn("stepping_stones", text)
+    self.assertIn(teacher_task_id("high_wall"), text)
+    self.assertIn(teacher_task_id("stepping_stones"), text)
+    self.assertIn(TEACHER_TASK_ID, text)
+
+  def test_teacher_is_required_outside_the_listing_modes(self):
+    from scripts.distill_wall import main as distill_wall_main
+
+    with redirect_stdout(io.StringIO()), self.assertRaises(SystemExit) as raised:
+      distill_wall_main([])
+    self.assertNotEqual(raised.exception.code, 0)
 
 
 if __name__ == "__main__":

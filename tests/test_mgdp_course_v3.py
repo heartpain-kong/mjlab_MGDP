@@ -95,10 +95,11 @@ class CourseV3Tests(unittest.TestCase):
     # Earlier rows remain easier than the competition reference.
     m,_=compile(StrictStonesTerrainCfg(size=(12.,8.)),.5)
     g=next(m.geom(i) for i in range(m.ngeom) if m.geom(i).name.endswith('stone_0_0_0'))
-    self.assertAlmostEqual(2*g.size[0],.22);self.assertAlmostEqual(g.pos[2]+g.size[2],.08)
+    self.assertAlmostEqual(2*g.size[0],.22);self.assertAlmostEqual(g.pos[2]+g.size[2],.10)
 
   def test_stone_stages_progress_through_competition_then_raise_the_ceiling(self):
-    widths=(.36,.32,.28,.25,.22,.20,.18,.16);heights=(.02,.03,.04,.06,.08,.10,.12,.15)
+    # 2026-11-20：石头高度统一为比赛规格 100 mm，难度只由石面宽度决定。
+    widths=(.36,.32,.28,.25,.22,.20,.18,.16);heights=(.10,)*8
     for stage,(width,height) in enumerate(zip(widths,heights)):
       for jitter in (.001,.999):
         m,_=compile(StrictStonesTerrainCfg(size=(12.,8.)),(stage+jitter)/8)
@@ -106,8 +107,8 @@ class CourseV3Tests(unittest.TestCase):
         np.testing.assert_allclose([2*g.size[0] for g in stones],width,atol=1e-12)
         np.testing.assert_allclose([g.pos[2]+g.size[2] for g in stones],height,atol=1e-12)
     self.assertTrue(all(a>b for a,b in zip(widths,widths[1:])))
-    self.assertTrue(all(a<b for a,b in zip(heights,heights[1:])))
-    cfg=StrictStonesTerrainCfg();self.assertEqual(cfg.stone_parameters(1.),(.15,.16))
+    self.assertTrue(all(a==b for a,b in zip(heights,heights[1:])))
+    cfg=StrictStonesTerrainCfg();self.assertEqual(cfg.stone_parameters(1.),(.10,.16))
 
   def test_ground_rule_uses_actual_loaded_contacts_and_keeps_pads_safe(self):
     n=6;generator=load_env_cfg(TASK).scene.terrain.terrain_generator;generator.num_cols=10

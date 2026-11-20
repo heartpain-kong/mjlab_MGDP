@@ -42,6 +42,24 @@ uses the canonical ``[proprio | depth | height]`` order (default).  Only a teach
 trained by plain PPO on ``build_distill_env_cfg`` (height appended to the actor
 group) needs ``--teacher-order env``.
 
+Per-lesson teachers (``--lesson``)
+----------------------------------
+By default the teacher is trained on all ten wall lessons mixed together.  The
+high wall (``high_wall``) and the stepping stones (``stepping_stones``) can each
+get a teacher of their own (fixed terrain, concentrated difficulty)::
+
+    python scripts/distill_wall.py --list-lessons            # lessons + teacher ids
+    python scripts/distill_wall.py --lesson high_wall --register-teacher
+    # then RL fine-tune LgDog1-Race-MGDP-Wall-Teacher-high_wall (see printed cmd)
+    python scripts/distill_wall.py --lesson high_wall \
+      --teacher logs/rsl_rl/lgdog1_wall_teacher_high_wall/<run>/model_XXXX.pt \
+      --out logs/distill/wall_student_high_wall/model.pt
+
+``--lesson all`` (the default) keeps the previous ten-lesson behaviour and the
+original teacher task id ``LgDog1-Race-MGDP-Wall-Teacher``.  A per-lesson run
+filters ``cfg.scene.terrain.terrain_generator.sub_terrains`` to that one lesson
+(``proportion=1.0``) and prints a ``[distill] lesson=<name> rows=.. cols=..`` line.
+
 If no privileged teacher exists yet, the current 252-dim wall checkpoint can also
 be passed directly as ``--teacher`` (zero-padded, so it ignores the height scan)
 or used via ``--student-init``; distillation alone then reproduces the old
@@ -69,20 +87,42 @@ from src.tasks.velocity.rl.distill import (
   DEFAULT_INIT_STD,
   INPUT_ORDER_CANONICAL,
   INPUT_ORDER_ENV,
+  LESSON_ALL,
   WALL_TASK_ID,
   MaskedActor,
+  available_lessons,
   build_distill_env,
   expand_blind_actor_state_dict,
   extract_actor_state_dict,
   infer_actor_architecture,
   load_actor_state_dict,
   prepare_actor_state_dict,
+  register_teacher_task,
   resolve_checkpoint_path,
   save_teacher_init_checkpoint,
+  teacher_task_id,
   train_distill,
 )
 
 DEFAULT_OUT = str(Path("logs") / "distill" / "wall_student" / "model.pt")
+
+# The wall course's ten terrain lessons (``passage_terrain_cfg.KINDS``).  Kept as
+# a static tuple so ``--help`` does not need to import the simulation stack; the
+# authoritative list is printed by ``--list-lessons`` and validated at runtime
+# by :func:`filter_terrain_lessons` (``LGDOG_WALL_LESSONS`` can shrink it).
+LESSON_CHOICES = (
+  LESSON_ALL,
+  "start_flat",
+  "stepping_stones",
+  "balance_beam",
+  "gap_steps",
+  "high_wall",
+  "clearance_frame",
+  "tire_array",
+  "random_hills",
+  "mjlab_rough",
+  "slalom_brick",
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -91,8 +131,9 @@ def build_parser() -> argparse.ArgumentParser:
                 "(LgDog1 high-wall task).",
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
   )
-  parser.add_argument("--teacher", required=True,
-                      help="teacher checkpoint (.pt) trained on the height-augmented task")
+  parser.add_argument("--teacher", default=None,
+                      help="teacher checkpoint (.pt) trained on the height-augmented task; "
+                           "required unless --list-lessons/--register-teacher is used")
   parser.add_argument("--out", default=DEFAULT_OUT,
                       help="output checkpoint file (.pt) or directory")
   parser.add_argument("--iterations", type=int, default=500,
@@ -100,6 +141,17 @@ def build_parser() -> argparse.ArgumentParser:
   parser.add_argument("--lr", type=float, default=3e-4, help="Adam learning rate")
   parser.add_argument("--device", default="cuda", help="torch device (falls back to CPU if CUDA is unavailable)")
   parser.add_argument("--task", default=WALL_TASK_ID, help="wall training task to build the env from")
+  parser.add_argument("--lesson", choices=LESSON_CHOICES, default=LESSON_ALL,
+                      help="terrain lesson to train/distil in isolation: 'all' keeps the full "
+                           "ten-lesson course, otherwise the terrain roster is filtered to that "
+                           "one lesson (proportion=1.0) and the teacher task id becomes "
+                           "LgDog1-Race-MGDP-Wall-Teacher-<lesson>")
+  parser.add_argument("--list-lessons", action="store_true",
+                      help="print the available terrain lessons and their teacher task ids, then exit")
+  parser.add_argument("--register-teacher", action="store_true",
+                      help="register the teacher RL task for --lesson (or the base task for 'all') "
+                           "and exit; scripts/train.py needs the registration in its own process "
+                           "(see the printed command)")
   parser.add_argument("--perception-checkpoint", default=None,
                       help="optional frozen MGDP depth encoder override (must match the current "
                            "perception architecture and camera/sensing contract)")
@@ -168,10 +220,48 @@ def _describe_actor(name: str, actor: MaskedActor) -> str:
   )
 
 
+def _resolve_lesson(args: argparse.Namespace) -> str | None:
+  """Map the CLI ``--lesson all`` sentinel to the API's ``lesson=None``."""
+  return None if args.lesson == LESSON_ALL else str(args.lesson)
+
+
+def _list_lessons(task_id: str) -> int:
+  """Print one line per lesson with the teacher task id it maps to."""
+  lessons = available_lessons(task_id)
+  print(f"[distill] task {task_id}: {len(lessons)} terrain lessons", flush=True)
+  print(f"[distill]   {LESSON_ALL:<20} -> {teacher_task_id()}  (all lessons)", flush=True)
+  for name in lessons:
+    print(f"[distill]   {name:<20} -> {teacher_task_id(name)}", flush=True)
+  print(
+    "[distill] use --lesson <name> to build/train/distil one lesson, e.g. "
+    f"--lesson high_wall (teacher task {teacher_task_id('high_wall')})",
+    flush=True,
+  )
+  return 0
+
+
+def _register_teacher(args: argparse.Namespace, lesson: str | None) -> int:
+  """Register the teacher task for ``lesson`` and print how to train it."""
+  task_id = register_teacher_task(lesson=lesson, source_task_id=args.task)
+  print(f"[distill] teacher task id: {task_id}", flush=True)
+  print(
+    "  python -c \"import sys, runpy; import src.tasks; "
+    "from src.tasks.velocity.rl.distill import register_teacher_task; "
+    f"register_teacher_task(lesson={lesson!r}); "
+    f"sys.argv=['scripts/train.py', '{task_id}']; "
+    "runpy.run_path('scripts/train.py', run_name='__main__')\" "
+    "--warm-start-checkpoint <teacher_init.pt> ...",
+    flush=True,
+  )
+  return 0
+
+
 def _write_run_report(path: Path, args: argparse.Namespace, layout, result: dict) -> None:
   report = {
     "script": "scripts/distill_wall.py",
     "task": args.task,
+    "lesson": args.lesson,
+    "teacher_task_id": teacher_task_id(_resolve_lesson(args)),
     "device": args.device,
     "teacher": str(args.teacher),
     "out": str(args.out),
@@ -198,14 +288,34 @@ def _write_run_report(path: Path, args: argparse.Namespace, layout, result: dict
 
 
 def main(argv: list[str] | None = None) -> int:
-  args = build_parser().parse_args(argv)
+  parser = build_parser()
+  args = parser.parse_args(argv)
+  lesson = _resolve_lesson(args)
+  if args.list_lessons:
+    return _list_lessons(args.task)
+  if args.register_teacher:
+    return _register_teacher(args, lesson)
+  if not args.teacher:
+    parser.error("--teacher is required unless --list-lessons or --register-teacher is given")
+
   torch.manual_seed(int(args.seed))
   device = resolve_device(args.device)
   clip_actions = None if args.clip_actions is None or args.clip_actions < 0 else float(args.clip_actions)
 
+  try:
+    lessons = available_lessons(args.task)
+  except ValueError as error:
+    print(f"[distill][error] {error}", flush=True)
+    return 2
+  print(f"[distill] available lessons (--lesson): {', '.join((LESSON_ALL, *lessons))}", flush=True)
+
   print("=" * 100, flush=True)
   print("[distill] LgDog1 high-wall teacher-student DAgger (single env, input masks)", flush=True)
-  print(f"[distill] task={args.task} device={device} teacher={args.teacher}", flush=True)
+  print(
+    f"[distill] task={args.task} lesson={args.lesson} teacher_task="
+    f"{teacher_task_id(lesson)} device={device} teacher={args.teacher}",
+    flush=True,
+  )
   print("=" * 100, flush=True)
 
   env = build_distill_env(
@@ -214,6 +324,7 @@ def main(argv: list[str] | None = None) -> int:
     num_envs=args.num_envs,
     seed=args.seed,
     perception_checkpoint=args.perception_checkpoint,
+    lesson=lesson,
   )
   try:
     layout = env.layout
@@ -241,6 +352,7 @@ def main(argv: list[str] | None = None) -> int:
       init_path = save_teacher_init_checkpoint(
         args.write_teacher_init, expanded, source_checkpoint=args.teacher
       )
+      teacher_id = teacher_task_id(lesson)
       print("=" * 100, flush=True)
       print(f"[distill] teacher-init checkpoint written: {init_path}", flush=True)
       print(
@@ -257,8 +369,8 @@ def main(argv: list[str] | None = None) -> int:
       print(
         "  python -c \"import sys, runpy; import src.tasks; "
         "from src.tasks.velocity.rl.distill import register_teacher_task; "
-        "register_teacher_task(); sys.argv=['scripts/train.py', "
-        "'LgDog1-Race-MGDP-Wall-Teacher']; "
+        f"register_teacher_task(lesson={lesson!r}); sys.argv=['scripts/train.py', "
+        f"'{teacher_id}']; "
         "runpy.run_path('scripts/train.py', run_name='__main__')\" "
         f"--warm-start-checkpoint {init_path}",
         flush=True,
