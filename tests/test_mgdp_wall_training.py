@@ -222,7 +222,7 @@ class WallTrainingTests(unittest.TestCase):
     generator=train.scene.terrain.terrain_generator
     self.assertEqual(len(generator.sub_terrains),10)
     self.assertEqual((generator.num_rows,generator.num_cols),(8,20))
-    self.assertEqual(generator.size,(11.,4.5))
+    self.assertEqual(generator.size,(12.,6.))
     self.assertNotIn('gap_stairs',play.scene.terrain.terrain_generator.sub_terrains)
     self.assertNotIn('gap_stairs',old.scene.terrain.terrain_generator.sub_terrains)
     self.assertEqual(play.scene.terrain.terrain_generator.sub_terrains['high_wall'].counts,(3,)*8)
