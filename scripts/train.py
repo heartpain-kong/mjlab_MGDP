@@ -65,7 +65,9 @@ class TrainConfig:
   passage_fixed_speed: float | None = None
   tire_hole_guidance: bool = False
   mgdp_skill_training: bool = False
+  mgdp_skill_version: Literal[2,3,4,5] = 2
   mgdp_action_scale: float | None = None
+  mgdp_vision_mode: Literal['depth','height_oracle'] = 'depth'
   resume_checkpoint: str | None = None
   warm_start_checkpoint: str | None = None
   perception_checkpoint: str | None = None
@@ -105,7 +107,7 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
     raise ValueError("Choose either policy warm-start or full resume, not both")
   from src.config.mgdp_skill_training import configure_skill_training,configure_action_scale
   if cfg.mgdp_skill_training:
-    configure_skill_training(cfg.env)
+    configure_skill_training(cfg.env,version=cfg.mgdp_skill_version)
     print('[skills] experimental lateral slalom, short stones and bounded wall hints enabled',flush=True)
   if cfg.mgdp_action_scale is not None:
     configure_action_scale(cfg.env,cfg.mgdp_action_scale)
@@ -122,6 +124,15 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
       raise ValueError('--exploration-std is scoped to MGDP experiments')
     cfg.agent.actor.distribution_cfg = {**cfg.agent.actor.distribution_cfg,
                                        'init_std': cfg.exploration_std}
+
+  from src.config.mgdp_skill_training import configure_skill_policy
+  configure_skill_policy(cfg.agent,cfg.env)
+  from src.config.mgdp_vision import configure_vision
+  if cfg.mgdp_vision_mode=='height_oracle':
+    if cfg.warm_start_checkpoint is not None or cfg.perception_checkpoint is not None:
+      raise ValueError('地形真值对照必须新建策略，不能迁移深度策略或指定感知权重')
+    print('[diagnostic] actor uses simulated terrain heights; NOT deployable to D435i',flush=True)
+  configure_vision(cfg.env,cfg.agent,cfg.mgdp_vision_mode)
 
   cfg.agent.seed = seed
   cfg.env.seed = seed
@@ -257,6 +268,8 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
     else:
       resume_path = get_checkpoint_path(log_root_path, cfg.agent.load_run, cfg.agent.load_checkpoint)
     if 'passage' in cfg.env.curriculum:
+      from src.config.mgdp_vision import validate_vision_resume
+      validate_vision_resume(cfg.env,torch.load(resume_path,map_location='cpu',weights_only=False))
       from src.config.passage_speed import validate_passage_speed_resume
       validate_passage_speed_resume(cfg.env,torch.load(resume_path,map_location='cpu',weights_only=False))
       from src.config.tire_guidance import validate_tire_guidance_resume
@@ -298,6 +311,16 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
     env = ManagerBasedRlEnv(
       cfg=cfg.env, device=device, render_mode="rgb_array" if cfg.video else None
     )
+  # 2026-11-20：把地形分布快照接到 passage 课程上（工作台「地形难度分布」读这个文件）。
+  _passage_term = None
+  try:
+    _base_env = env.unwrapped if hasattr(env, "unwrapped") else env
+    _passage_term = _base_env.curriculum_manager.get_term("passage")
+  except Exception:
+    _passage_term = None
+  if _passage_term is not None:
+    _passage_term.status_path = Path(log_dir) / "curriculum" / "terrain_sampling.json"
+    _passage_term.write_distribution(force=True)
   print("[init] physics environment ready; creating PPO runner...", flush=True)
   report_device_memory(device, "physics-ready")
 
@@ -328,6 +351,10 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
 
   runner_kwargs = {}
   runner = runner_cls(env, agent_cfg, str(log_dir), device, **runner_kwargs)
+  if rank == 0 and hasattr(runner,'_passage_curriculum'):
+    passage_monitor=runner._passage_curriculum()
+    if passage_monitor is not None:
+      passage_monitor.status_path=log_dir / 'curriculum' / 'passage_distribution.json'
   report_device_memory(device, "runner-ready")
 
   runner.add_git_repo_to_log(__file__)
@@ -337,6 +364,8 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
   elif cfg.warm_start_checkpoint is not None:
     from src.mgdp_warmstart import warm_start_mgdp_policy
     warm_start_mgdp_policy(runner, cfg.warm_start_checkpoint)
+  if rank == 0 and hasattr(runner,'_passage_curriculum') and passage_monitor is not None:
+    passage_monitor.write_distribution(force=True)
   # Explicit user values win; only actor transfer gets the task default reset.
   transfer_std=cfg.exploration_std
   if transfer_std is None and cfg.warm_start_checkpoint is not None:
@@ -350,6 +379,14 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
   if rank == 0:
     dump_yaml(log_dir / "params" / "env.yaml", env_cfg)
     dump_yaml(log_dir / "params" / "agent.yaml", agent_cfg)
+    if cfg.mgdp_skill_training:
+      import json
+      from src.config.mgdp_effective_rules import effective_rule_snapshot
+      snapshot=effective_rule_snapshot(cfg.env)
+      (log_dir/'params'/'effective_wall_rules.json').write_text(json.dumps(snapshot,ensure_ascii=False,indent=2),encoding='utf8')
+      print(f"[skills] effective waiting cost={snapshot['max_waiting_cost_per_second']:g}/s; "
+            f"stall={snapshot['settings']['no_passage_progress']['timeout_s']:g}s; "
+            f"stage curriculum={bool(snapshot['staged_waypoints'])}",flush=True)
 
   try:
     runner.learn(
