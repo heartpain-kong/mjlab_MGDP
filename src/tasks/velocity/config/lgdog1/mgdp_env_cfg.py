@@ -272,7 +272,9 @@ def lgdog1_wall_training_env_cfg(play=False, checkpoint=DEFAULT_WALL_CHECKPOINT,
     generator.num_rows = 8
     # ★ 速度开关：LGDOG_WALL_COLS=10 时每个 lesson 只生成 1 列（几何减半，物理约快 1.8 倍）。
     generator.num_cols = int(__import__('os').environ.get('LGDOG_WALL_COLS', 20))
-    generator.size = (12.,8.)
+    # 2026-11-20：单格地形 12x8 -> 11.5x6 m，几何约 -28%，显存/物理同步下降；
+    # 最长的 gap 路线到 x=10.4 m，11.5 m 仍留 1.1 m 余量。
+    generator.size = (11.5,6.)
     lessons = {}
     for name, terrain in generator.sub_terrains.items():
         if name == "gap_steps":
