@@ -322,6 +322,11 @@ def lgdog1_wall_training_env_cfg(play=False, checkpoint=DEFAULT_WALL_CHECKPOINT,
     from src.tasks.velocity.mdp.rewards import edge_place_penalty as _edge_place_penalty
     cfg.rewards['edge_place_penalty'] = _RewardTermCfg(func=_edge_place_penalty, weight=-.5,
         params={'margin_m': .05, 'height_jump_threshold_m': .03})
+    # 2026-11-20：三段式上墙引导（抬脚 → 越过前沿 → 四脚全过由 wall_crossing 给）。
+    from src.tasks.velocity.mdp.wall_training import WallClimbProgress as _WallClimbProgress
+    cfg.rewards['wall_climb'] = _RewardTermCfg(func=_WallClimbProgress, weight=1.0,
+        params={'asset_cfg': SceneEntityCfg('robot', site_names=('FR_foot','FL_foot','RR_foot','RL_foot')),
+                'foot_bonus': .4, 'crest_bonus': 1.2})
     # ★ 2026-11-19：默认启用分组速度课程（高墙 0% 时只冻结本组）与按组指令带宽。
     twist = cfg.commands['twist']
     twist.speed_groups = {

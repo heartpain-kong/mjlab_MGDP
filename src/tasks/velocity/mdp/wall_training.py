@@ -316,6 +316,50 @@ class WallApproachReward(WallGeometry):
     return torch.where(valid, projection.clamp(min=0., max=float(v_cmd)), zero)
 
 
+class WallClimbProgress(WallGeometry):
+  """★ 2026-11-20：把"一次跳跃"拆成三段可学习信号。
+
+  1) 抬脚阶段：脚进入墙面 ±"near_x_m" 且脚底高于墙顶 → 每只脚给 "foot_bonus"；
+  2) 越过阶段：根位置越过墙前沿 "crest_m" 且此前已抬脚 → 每面墙一次性给 "crest_bonus"；
+  3) 全过阶段：仍由 WallCrossingBonus（四脚+根部）给大分，这里不重复。
+  这样"前脚搭上墙、重心提起"这一段不再没有梯度。
+  """
+
+  def __init__(self, cfg, env):
+    super().__init__(cfg, env)
+    self.lifted = torch.zeros((env.num_envs, 3), device=env.device, dtype=torch.bool)
+    self.paid = torch.zeros((env.num_envs, 3), device=env.device, dtype=torch.bool)
+
+  def reset(self, env_ids=None):
+    ids = slice(None) if env_ids is None else env_ids
+    self.lifted[ids] = False
+    self.paid[ids] = False
+
+  def __call__(self, env, asset_cfg, foot_bonus=.4, crest_bonus=1.2,
+               near_x_m=.35, top_margin_m=.02, crest_m=.30):
+    if not self.available:
+      return torch.zeros(env.num_envs, device=env.device)
+    feet = self.feet(env, asset_cfg)                       # (N, 4, 3) 局部坐标
+    active = self.active_walls(env)                        # (N, 3)
+    level = env.scene.terrain.terrain_levels
+    top = self.heights[level.clamp(max=len(self.heights) - 1)]  # (N,)
+    dx = (feet[:, None, :, 0] - self.centres[None, :, None]).abs()          # (N,3,4)
+    high = feet[:, None, :, 2] >= (top[:, None, None] + top_margin_m)       # (N,3,4)
+    on = (dx <= near_x_m) & high & active[:, :, None]
+    count = on.sum(-1)                                     # (N,3) 每面墙上的脚数
+    reward = foot_bonus * count.float().sum(-1)
+    self.lifted |= count > 0
+    try:
+      root_x = env.command_manager.get_term('twist').local_xy()[:, 0]
+    except Exception:
+      root_x = feet[:, :, 0].mean(-1)
+    crossed = ((root_x[:, None] - self.centres[None, :]) >= crest_m) & active
+    crest = crossed & self.lifted & ~self.paid
+    self.paid |= crest
+    reward = reward + crest_bonus * crest.float().sum(-1)
+    return reward
+
+
 class WallWaitingPenalty(WallGeometry):
   """Bounded time cost near the next uncleared wall, using record progress."""
   def __init__(self,cfg,env):
