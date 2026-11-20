@@ -46,7 +46,9 @@ def vector(element,name,default):
 
 @dataclass(kw_only=True)
 class UnifiedWallTerrainCfg(WallSkillTerrainCfg):
-  heights: tuple[float,...] = (.10,.12,.15,.18,.24,.30,.35,.40)
+  # 2026-11-20：第 1 档从 10 cm 降到 6 cm，给策略一个真正可学的起点
+  #（10 cm 时 3.8 万回合 0 成功、进度只有 0.23）；第 6 档仍是比赛 30 cm。
+  heights: tuple[float,...] = (.06,.08,.11,.15,.21,.30,.35,.40)
   skill_version: int = 4
 
 
