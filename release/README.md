@@ -72,3 +72,25 @@ python scripts/play.py LgDog1-Race-MGDP-WallTraining-D435i20 \
 - 训练数据全部来自仿真；**未在实机验证**。
 - 高墙课目 0% 成功率是已知问题，主干为此加了 `wall_climb` 三段式奖励、`progress_curriculum` 相对进展课程、教师-学生蒸馏脚本，见仓库 `doc/`。
 - 深度编码器的输入是 16×16，与主干当前的 32×24 不同，**不要混用**。
+
+## 媒体
+
+本目录下的 `media/` 包含这批策略的真实回放素材（约 22 MB）：
+
+| 文件 | 说明 |
+|---|---|
+| `media/preview_ten_terrain.png` | 十类地形回放总览 |
+| `media/videos/*.mp4` | 十段逐课目前视角回放（0.6 m/s） |
+| `media/model_12400_十类地形_0p6mps_同步前视.mp4` | 十段合成整片 |
+| `media/train_curve.png`、`media/level_distribution.png` | 训练曲线与环境分布 |
+| `media/results.json` | 每段实测用时/速度/进度/终止原因 |
+
+导出方法见 `media/README.md`，一键脚本是 `scripts/record_ten_terrain.py`：
+
+```bash
+git checkout policy-v1
+python scripts/record_ten_terrain.py \
+  --checkpoint release/policy/model_12400.pt \
+  --perception release/policy/perception_3cca6497b8e9f392ad5e47e61ea1a6e03e324d80979d8cca1a4518ad79e46e23.pt \
+  --output out/videos --max-seconds 20 --speed 0.6
+```
