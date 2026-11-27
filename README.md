@@ -63,16 +63,17 @@ bash scripts/deploy.sh --start --ui-port 8088  # 安装并启动工作台
 | `configure_lgdog.sh` | 建 conda 环境、装依赖、自检（被 `scripts/deploy.sh` 调用） |
 | `install_ubuntu.sh` | venv 版安装（不用 conda 时） |
 | `run_lgdog.sh` | 工作台/dashboard 的启动、停止、状态 |
-| `run_web.sh` · `run_web.cmd` | 本地浏览器工作台（Windows 用 .cmd） |
-| `tb.sh` · `kline.sh` | TensorBoard / K 线看板 |
-| `lgdog.py` | 训练入口封装（任务别名、常用参数） |
-| `deploy_server.sh` · `upload_server.ps1` · `server_env.sh` | 服务器部署与打包上传 |
+| `tools/run_web.sh` · `tools/run_web.cmd` | 本地浏览器工作台（Windows 用 .cmd） |
+| `tools/tb.sh` · `tools/kline.sh` | TensorBoard / K 线看板 |
+| `tools/` | 开发/运维脚本目录（见下） |
+| `tools/lgdog.py` | 训练入口封装（任务别名、常用参数） |
+| `deploy_server.sh` · `tools/upload_server.ps1` · `server_env.sh` | 服务器部署与打包上传 |
 
 > 媒体文件只保留汇总图与短视频，训练曲线原图在本地 TensorBoard。
 
 ## 快速开始
 
-`ash
+```bash
 # 安装（详见下方 Ubuntu 一键安装）
 bash configure_lgdog.sh
 
@@ -86,7 +87,7 @@ export LGDOG_WALL_LESSONS=start_flat,stepping_stones,balance_beam,gap_steps,high
 python -m scripts.train LgDog1-Race-MGDP-WallTraining-D435i20 \
   --env.scene.num-envs=6144 --agent.max-iterations=8000 --agent.logger=tensorboard \
   --enable-nan-guard True --agent.run-name=V19_seed42
-`
+```
 
 ---
 
@@ -132,7 +133,7 @@ bash configure_lgdog.sh --torch-index https://download.pytorch.org/whl/cu128
 在已安装训练依赖的 Python 环境中，进入这个目录：
 
 ```bash
-python lgdog.py
+python tools/lgdog.py
 ```
 
 浏览器打开 **http://127.0.0.1:8765**。选择任务后，可以启动训练、play 回放、sim2sim、查看奖励和真实日志。默认任务是 **HIM-PPO + 标准崎岖地形盲走**。
@@ -144,22 +145,22 @@ python scripts/pretrain_mgdp.py --num-envs 256 --steps 4000 --iterations 3000
 ```
 
 ```bash
-python lgdog.py tasks                      # 看全部任务的短名称（默认 standard）
-python lgdog.py web                        # 总览：环境/GPU/进程/轮次/日志一页看完（端口 8770）
-python lgdog.py kline                      # 曲线终端：把 TensorBoard 曲线当 K 线看（端口 8766）
-python lgdog.py train standard --envs 1024 --iterations 16000
-python lgdog.py play standard              # 自动选对应任务最新 checkpoint
-python lgdog.py sim standard --vx 0.4      # 自动选对应任务最新 ONNX
-python lgdog.py rewards standard --term foot_clearance
+python tools/lgdog.py tasks                      # 看全部任务的短名称（默认 standard）
+python tools/lgdog.py web                        # 总览：环境/GPU/进程/轮次/日志一页看完（端口 8770）
+python tools/lgdog.py kline                      # 曲线终端：把 TensorBoard 曲线当 K 线看（端口 8766）
+python tools/lgdog.py train standard --envs 1024 --iterations 16000
+python tools/lgdog.py play standard              # 自动选对应任务最新 checkpoint
+python tools/lgdog.py sim standard --vx 0.4      # 自动选对应任务最新 ONNX
+python tools/lgdog.py rewards standard --term foot_clearance
 
 # MGDP 深度感知（需先预训练）
-python lgdog.py train mgdp --envs 2048 --iterations 10000
+python tools/lgdog.py train mgdp --envs 2048 --iterations 10000
 # 定向越障 v2：入口→障碍→出口，按各类通过率门控扩速
-python lgdog.py train race_mgdp --envs 2048 --terrain-num-rows 8 --terrain-num-cols 20 --iterations 16000
-# 2027 比赛场地：python lgdog.py train race --envs 4096
+python tools/lgdog.py train race_mgdp --envs 2048 --terrain-num-rows 8 --terrain-num-cols 20 --iterations 16000
+# 2027 比赛场地：python tools/lgdog.py train race --envs 4096
 ```
 
-正式训练示例：`python lgdog.py train standard --envs 1024 --iterations 16000 --run-name V8_him_standard_seed42`。环境数应按显存调整。面板本身仅用 Python 标准库；训练仍需要原来的 mjlab / MuJoCo / PyTorch 环境。
+正式训练示例：`python tools/lgdog.py train standard --envs 1024 --iterations 16000 --run-name V8_him_standard_seed42`。环境数应按显存调整。面板本身仅用 Python 标准库；训练仍需要原来的 mjlab / MuJoCo / PyTorch 环境。
 
 MGDP v2 关闭抬腿高度奖励，启用 `feet_air_time`，区分机身与腿部擦碰；使用新的 `_v2` 实验目录。`race_mgdp` 的方向、低速起点和通过率门控由任务管理，不能直接完整续训旧 MGDP_V3。详见 [定向越障配置与验证](doc/MGDP_PASSAGE.md)。
 
@@ -172,7 +173,7 @@ MGDP v2 关闭抬腿高度奖励，启用 `feet_air_time`，区分机身与腿�
 python scripts/sim2sim.py LgDog1-Race-Blind-HIM --onnx=<policy.onnx> --map race --vx 0.4 --duration 5
 
 # 比赛地形课程：梅花桩 0.2×0.2×0.1、单木桥 0.4 宽、台阶 0.12/0.32、砖木坑、绕桩、0.3 m 高墙
-python lgdog.py train race --envs 4096 --iterations 16000
+python tools/lgdog.py train race --envs 4096 --iterations 16000
 ```
 
 训练地形是「按规则尺寸拼的近似」：轮胎阵和限高框架不是地面高度场，只在 sim2sim 的真场地里练。
@@ -181,9 +182,9 @@ python lgdog.py train race --envs 4096 --iterations 16000
 ## 一个网页看全部：mjlab 总览
 
 ```bash
-python lgdog.py web        # 浏览器打开 http://127.0.0.1:8770
-bash run_web.sh            # Linux 等价入口（Python 解释器沿用 run_lgdog.sh 的规则）
-run_web.cmd                # Windows 双击
+python tools/lgdog.py web        # 浏览器打开 http://127.0.0.1:8770
+bash tools/run_web.sh            # Linux 等价入口（Python 解释器沿用 run_lgdog.sh 的规则）
+tools/run_web.cmd                # Windows 双击
 ```
 
 **训练状态、显卡、磁盘、环境版本、相关进程、全部训练轮次、日志尾巴**收在一页，并且默认顺手带起
@@ -194,7 +195,7 @@ run_web.cmd                # Windows 双击
 ## 看曲线：曲线战士（TensorBoard 转 K 线）
 
 ```bash
-python lgdog.py kline            # 浏览器打开 http://127.0.0.1:8766
+python tools/lgdog.py kline            # 浏览器打开 http://127.0.0.1:8766
 ```
 
 把 `logs/rsl_rl` 下的标量曲线按训练步切成蜡烛图：分时曲线、短/中/长/全程 K、MA 均线、波动柱、
@@ -206,7 +207,7 @@ python lgdog.py kline            # 浏览器打开 http://127.0.0.1:8766
 
 | 位置 | 用途 |
 |---|---|
-| `lgdog.py` | 统一入口：浏览器面板与简短命令 |
+| `tools/lgdog.py` | 统一入口：浏览器面板与简短命令 |
 | [reward_cfg.py](src/tasks/velocity/config/lgdog1/reward_cfg.py) | 奖励权重、参数；新标准 HIM 修改 `him_standard` |
 | `src/tasks/velocity/config/lgdog1/` | 地形、观测、课程、任务注册与 PPO 配置 |
 | `logs/rsl_rl/` | 训练 checkpoint、ONNX、TorchScript 和配置快照 |

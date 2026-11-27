@@ -73,7 +73,7 @@ if [[ "${SMOKE}" -eq 1 ]]; then
     --terrain-curriculum=lp_acrl --velocity-min-abs=.3 --velocity-max-abs=.5 --enable-nan-guard True
 fi
 if [[ "${START}" -eq 1 ]]; then
-  "${PYTHON_BIN}" lgdog.py --python "${PYTHON_BIN}" server start \
+  "${PYTHON_BIN}" tools/lgdog.py --python "${PYTHON_BIN}" server start \
     --ui-port "${UI_PORT}" --kline-port "${KLINE_PORT}" --portal-port "${PORTAL_PORT}" --tb-port "${TB_PORT}"
 fi
 printf '\nReady. From your Windows machine (replace SSH_HOST and SSH_PORT):\n'

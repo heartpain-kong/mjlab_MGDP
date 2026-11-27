@@ -49,7 +49,7 @@ def port_open(port, host="127.0.0.1", timeout=0.25):
 
 
 SIGNATURE = {
-  "dashboard": "lgdog.py",
+  "dashboard": "tools/lgdog.py",
   "kline": "src.kline",
   "tensorboard": "tensorboard",
 }
@@ -131,7 +131,7 @@ class Services:
       raise ValueError(f"没有这个服务：{name}")
     port = str(definition["port"])
     if name == "dashboard":
-      return [self.python, "lgdog.py", "--python", self.python, "ui", "--port", port, "--no-browser"]
+      return [self.python, "tools/lgdog.py", "--python", self.python, "ui", "--port", port, "--no-browser"]
     if name == "kline":
       argv = [self.python, "-m", "src.kline", "--port", port, "--no-browser"]
       for path in self.logdirs:

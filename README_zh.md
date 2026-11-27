@@ -24,8 +24,8 @@ source /root/gpufree-data/lgdog-venv/bin/activate
 ## 常用入口
 
 ```bash
-python lgdog.py                 # 浏览器工作台
-python lgdog.py tasks            # 列出 LgDog 任务
+python tools/lgdog.py                 # 浏览器工作台
+python tools/lgdog.py tasks            # 列出 LgDog 任务
 python scripts/train.py LgDog1-Rough-Blind-HIM-Standard --env.scene.num-envs=1024
 ```
 

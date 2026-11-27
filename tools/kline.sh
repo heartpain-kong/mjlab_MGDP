@@ -11,7 +11,7 @@
 
 set -u
 
-PROJ="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PROJ="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 PY="${PYTHON:-python}"
 cd "$PROJ" || exit 1
 

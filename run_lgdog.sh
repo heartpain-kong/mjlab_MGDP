@@ -14,4 +14,4 @@ else
 fi
 [[ -x "${VENV_PYTHON}" ]] || { echo "未找到 ${VENV_PYTHON}，请先运行 bash install_ubuntu.sh" >&2; exit 1; }
 cd -- "${ROOT_DIR}"
-exec "${VENV_PYTHON}" "${ROOT_DIR}/lgdog.py" "$@"
+exec "${VENV_PYTHON}" "${ROOT_DIR}/tools/lgdog.py" "$@"

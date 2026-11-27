@@ -12,7 +12,7 @@
 
 set -u
 
-PROJ="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PROJ="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 LOGDIR="$PROJ/logs/rsl_rl"
 TBDIR="$PROJ/logs/tensorboard"
 PORT="${TB_PORT:-6006}"

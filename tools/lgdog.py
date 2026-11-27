@@ -8,10 +8,13 @@ import shutil
 import subprocess
 import sys
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+  sys.path.insert(0, str(ROOT))
+
 from src.dashboard.catalog import DEFAULT_TASK, TASKS
 from src.dashboard.commands import build_command, discover_models, display_command
 
-ROOT = Path(__file__).resolve().parent
 
 
 def main():

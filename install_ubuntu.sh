@@ -171,6 +171,6 @@ Activate:
   source "${ENV_DIR}/bin/activate"
 Run:
   cd "${ROOT_DIR}"
-  python lgdog.py tasks
+  python tools/lgdog.py tasks
   python scripts/train.py LgDog1-Rough-Blind-HIM-Standard --env.scene.num-envs=1024
 EOF

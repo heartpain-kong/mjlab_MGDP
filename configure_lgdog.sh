@@ -266,8 +266,8 @@ Workbench (optional):
   bash run_lgdog.sh server status
 
 Train:
-  python lgdog.py tasks
-  python -u lgdog.py train race_mgdp --envs 1024 --iterations 16000 \\
+  python tools/lgdog.py tasks
+  python -u tools/lgdog.py train race_mgdp --envs 1024 --iterations 16000 \\
     --terrain-num-rows 8 --terrain-num-cols 10 --ppo-mini-batches 8
 EOF
 

@@ -21,7 +21,7 @@ def specifications(root, python, *, ui_port=8765, kline_port=8766, portal_port=8
   ports=[ui_port,kline_port,portal_port,tb_port]
   if len(set(ports))!=4 or any(type(p) is not int or not 1024<=p<=65535 for p in ports):
     raise ValueError("Four distinct ports in 1024-65535 are required")
-  base=[python,str(root/'lgdog.py'),'--python',python]
+  base=[python,str(root/'tools'/'lgdog.py'),'--python',python]
   return {
     'dashboard':{'port':ui_port,'argv':[*base,'ui','--port',str(ui_port),'--no-browser']},
     'kline':{'port':kline_port,'argv':[python,'-m','src.kline','--port',str(kline_port),'--no-browser']},

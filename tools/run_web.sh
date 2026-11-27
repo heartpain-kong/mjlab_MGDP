@@ -7,5 +7,5 @@
 #
 # Python 解释器沿用 run_lgdog.sh 的规则（LGDOG_PYTHON > .venv > /root/gpufree-data/lgdog-venv）。
 set -Eeuo pipefail
-ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 exec "${ROOT_DIR}/run_lgdog.sh" web "$@"
