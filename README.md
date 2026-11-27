@@ -1,3 +1,56 @@
+# LgDog1 · mjlab + MGDP 深度感知四足运动
+
+基于 [mjlab](https://github.com/mujocolab/mjlab)（MuJoCo-Warp 上的 GPU 并行 RL 框架）搭建的
+四足机器人 LgDog1 深度感知训练工程，用于 **2027 年足式机器人挑战赛**的障碍赛道：
+10 类课目、8 档渐进课程、单目深度感知（MGDP 编码器）、终点判定与教学回放工作台。
+
+## 特性
+
+- **MGDP 深度感知**：32×24（当前主干）/ 16×16（历史）深度 → CNN+GRU 特征，冻结感知权重接入 PPO
+- **10 类比赛课目**：沟壑台阶、高墙、限高笼、轮胎阵、梅花桩、单木桥、绕桩接砖木坑、平地、起伏、粗糙
+- **多维课程**：地形难度、速度分组、指令带宽、相对进展（>progress_curriculum）、满级配额
+- **奖励工程**：墙前等待/越墙/摆腿清障/轮胎内孔/边缘落脚惩罚/二阶动作平滑/绕障作弊惩罚
+- **加速与诊断**：LGDOG_WALL_LESSONS / LGDOG_WALL_COLS 地形裁剪、地形分布快照、passage_diagnostics
+- **回放与工作台**：scripts/play.py 逐课目录像，
+un_lgdog.sh server start 起 Web 工作台（8088）
+
+## 开源策略
+
+
+elease/ 目录附带一份可直接回放的策略（第 12400 轮，十类地形 9/10）：
+
+`ash
+git checkout policy-v1          # 该策略匹配的代码版本
+bash release/play_policy.sh <策略目录>
+`
+
+详见 [
+elease/README.md](release/README.md) 与 [
+elease/eval_results.md](release/eval_results.md)。
+
+> **注意**：main 主干已经把深度改为 32×24 + stride 卷积编码器并调整了地形与奖励，
+> 与 policy-v1 时代的策略**不兼容**；回放旧策略请务必切到 policy-v1 标签。
+
+## 快速开始
+
+`ash
+# 安装（详见下方 Ubuntu 一键安装）
+bash configure_lgdog.sh
+
+# 感知预训练（主干当前为 32x24）
+python -m scripts.pretrain_mgdp --task LgDog1-Race-MGDP-WallTraining-D435i20 \
+  --depth-profile d435i_edge16_down20 --num-envs 64 --terrain-rows 8 --terrain-cols 10 \
+  --batch-size 64 --steps 4000 --iterations 3000
+
+# 训练（9 课目、6144 环境、8000 轮）
+export LGDOG_WALL_LESSONS=start_flat,stepping_stones,balance_beam,gap_steps,high_wall,clearance_frame,tire_array,mjlab_rough,slalom_brick
+python -m scripts.train LgDog1-Race-MGDP-WallTraining-D435i20 \
+  --env.scene.num-envs=6144 --agent.max-iterations=8000 --agent.logger=tensorboard \
+  --enable-nan-guard True --agent.run-name=V19_seed42
+`
+
+---
+
 # LgDog · mjlab 训练工作台
 
 ## Ubuntu 一键安装
