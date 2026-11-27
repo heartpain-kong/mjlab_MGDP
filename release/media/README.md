@@ -1,13 +1,13 @@
-# 媒体：回放视频与汇总图
+# 媒体：录制视频与汇总图
 
 本目录是 `release/policy/model_12400.pt` 的**实测回放素材**，全部由仓库脚本真实推理生成，无插帧、无瞬移、无合成成功。
 
 | 文件 | 说明 |
 |---|---|
-| `preview_ten_terrain.png` | 十类地形单次回放总览（每格：HUD + 第 1 视角缩略） |
+| `preview_ten_terrain.png` | 十类地形单次录制总览（每格：HUD + 第 1 视角缩略） |
 | `train_curve.png` | 第 12400 轮训练过程曲线 |
 | `level_distribution.png` | 训练环境在各课目/各难度档的分布 |
-| `videos/01_start_flat_cmd0p6mps_front.mp4` … `10_slalom_brick...` | 十段逐课目回放，前视角，0.6 m/s 指令 |
+| `videos/01_start_flat_cmd0p6mps_front.mp4` … `10_slalom_brick...` | 十段逐课目录制，前视角，0.6 m/s 指令 |
 | `model_12400_十类地形_0p6mps_同步前视.mp4` | 十段合成的整片（约 2 分钟） |
 | `results.json` | 每段实测数据：用时、平均速度、路线进度、终止原因 |
 | `视频实测说明.md` | 生成这批视频时的环境/参数记录 |

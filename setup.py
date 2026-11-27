@@ -1,4 +1,4 @@
-"""Installation script for the 'unitree_rl_mjlab' python package."""
+"""Installation script for the mjlab_MGDP python package."""
 
 from setuptools import setup, find_packages
 
@@ -10,8 +10,8 @@ INSTALL_REQUIRES = [
 
 # Installation operation
 setup(
-    name="unitree_rl_mjlab",
+    name="mjlab_mgdp",
     packages=find_packages(include=["src", "src.*"]),
-    version="0.0.1",
+    version="0.1.0",
     install_requires=INSTALL_REQUIRES,
 )

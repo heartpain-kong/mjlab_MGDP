@@ -1,4 +1,4 @@
-# LgDog1 · mjlab + MGDP 深度感知四足运动
+# mjlab_MGDP · LgDog1 深度感知四足运动
 
 基于 [mjlab](https://github.com/mujocolab/mjlab)（MuJoCo-Warp 上的 GPU 并行 RL 框架）搭建的
 四足机器人 LgDog1 深度感知训练工程，用于 **2027 年足式机器人挑战赛**的障碍赛道：
@@ -16,18 +16,59 @@ un_lgdog.sh server start 起 Web 工作台（8088）
 
 ## 开源策略
 
-`release/` 目录附带一份可直接回放的策略（第 12400 轮，十类地形 9/10）：
+`release/` 目录附带一份可直接部署运行的策略（第 12400 轮，十类地形 9/10）：
 
 ```bash
 git checkout policy-v1          # 该策略匹配的代码版本
 bash release/play_policy.sh <策略目录>
 ```
 
-回放素材（十段视频 + 合成整片 + 总览图 + 训练曲线）在 `release/media/`，
-导出方法与脚本见 `release/media/README.md`；成绩记录见 `release/eval_results.md`。
+录制素材（十段实测评测录像 + 合成整片 + 总览图 + 训练曲线）在 `release/media/`，
+录制导出方法与脚本见 `release/media/README.md`；成绩记录见 `release/eval_results.md`。
 
 > **注意**：`main` 主干已经把深度改为 32×24 + stride 卷积编码器，并调整了地形与奖励，
 > 与 `policy-v1` 时代的策略**不兼容**；回放旧策略请务必切到 `policy-v1` 标签。
+
+## 一键部署
+
+```bash
+git clone https://github.com/heartpain-kong/mjlab_MGDP.git
+cd mjlab_MGDP
+bash scripts/deploy.sh                       # 创建 conda 环境 lgdog + 安装依赖 + 自检
+bash scripts/deploy.sh --start --ui-port 8088  # 安装并启动工作台
+```
+
+- 无 sudo 权限：`bash scripts/deploy.sh --skip-system-deps`
+- 只跑自检：`python scripts/verify_install.py`
+- 环境已存在时可跳过安装，直接 `bash run_lgdog.sh server start --ui-port 8088`
+
+### 仓库结构
+
+| 路径 | 内容 |
+|---|---|
+| `src/tasks/velocity/` | 任务、地形、奖励、课程、命令、感知（核心代码） |
+| `src/config/` | LgDog1 关节/感知/技能引导与阶段配置 |
+| `src/assets/` | 机器人 XML/URDF、地形资源 |
+| `src/dashboard/` · `src/portal/` | Web 工作台与本地门户（8088 / 8770） |
+| `scripts/` | 训练、回放、预训练、录制、诊断、部署脚本 |
+| `tests/` | 回归测试（`python -m pytest -q tests/`） |
+| `release/` | **开源策略 + 录制素材 + 评测记录** |
+| `doc/` | 设计文档（含 WMP/SSR 迁移调研） |
+| `deploy/` | 服务器部署与系统环境脚本 |
+
+根目录脚本一览：
+
+| 脚本 | 用途 |
+|---|---|
+| `configure_lgdog.sh` | 建 conda 环境、装依赖、自检（被 `scripts/deploy.sh` 调用） |
+| `install_ubuntu.sh` | venv 版安装（不用 conda 时） |
+| `run_lgdog.sh` | 工作台/dashboard 的启动、停止、状态 |
+| `run_web.sh` · `run_web.cmd` | 本地浏览器工作台（Windows 用 .cmd） |
+| `tb.sh` · `kline.sh` | TensorBoard / K 线看板 |
+| `lgdog.py` | 训练入口封装（任务别名、常用参数） |
+| `deploy_server.sh` · `upload_server.ps1` · `server_env.sh` | 服务器部署与打包上传 |
+
+> 媒体文件只保留汇总图与短视频，训练曲线原图在本地 TensorBoard。
 
 ## 快速开始
 

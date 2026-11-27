@@ -1,6 +1,6 @@
-# 开源策略：LgDog1 MGDP 比赛课程策略（第 12400 轮）
+# 开源策略：mjlab_MGDP · LgDog1 比赛课程策略（第 12400 轮）
 
-本目录附带一份**可直接回放**的深度感知策略与它配套的感知权重。
+本目录附带一份**可直接运行**的深度感知策略与它配套的感知权重。
 
 | 文件 | SHA-256 | 大小 |
 |---|---|---|
@@ -24,13 +24,13 @@
 
 主干（`main`）已经把深度改成 **32×24** + stride 卷积编码器、地形与奖励也做了多轮修改，**与这份策略不兼容**。
 
-为此仓库打了标签 **`policy-v1`**（提交 `46d4d0b`），它就是这份策略训练/回放时代的代码：
+为此仓库打了标签 **`policy-v1`**（提交 `46d4d0b`），它就是这份策略训练/运行时代的代码：
 
 ```bash
 git checkout policy-v1
 ```
 
-## 回放
+## 运行
 
 ```bash
 # 1. 切到匹配的代码版本
@@ -40,7 +40,7 @@ python -m pip install -e .
 # 2. 复制策略文件到仓库外任意位置（示例用 /tmp/lgdog_policy）
 cp -r <本目录>/policy /tmp/lgdog_policy
 
-# 3. 回放（十类地形各跑一次，自动录视频）
+# 3. 运行（十类地形各跑一次，自动录视频）
 python scripts/play.py LgDog1-Race-MGDP-WallTraining-D435i20 \
   --checkpoint-file /tmp/lgdog_policy/model_12400.pt \
   --perception-checkpoint /tmp/lgdog_policy/perception_3cca6497b8e9f392ad5e47e61ea1a6e03e324d80979d8cca1a4518ad79e46e23.pt
@@ -50,7 +50,7 @@ python scripts/play.py LgDog1-Race-MGDP-WallTraining-D435i20 \
 
 ## 已测到的效果（0.6 m/s 巡航）
 
-十类地形单次回放（详见 `eval_results.md`）：
+十类地形单次录制（详见 `eval_results.md`）：
 
 | 地形 | 结果 | 用时 |
 |---|---|---|
@@ -75,11 +75,11 @@ python scripts/play.py LgDog1-Race-MGDP-WallTraining-D435i20 \
 
 ## 媒体
 
-本目录下的 `media/` 包含这批策略的真实回放素材（约 22 MB）：
+本目录下的 `media/` 包含这批策略的真实录制素材（约 22 MB）：
 
 | 文件 | 说明 |
 |---|---|
-| `media/preview_ten_terrain.png` | 十类地形回放总览 |
+| `media/preview_ten_terrain.png` | 十类地形录制总览 |
 | `media/videos/*.mp4` | 十段逐课目前视角回放（0.6 m/s） |
 | `media/model_12400_十类地形_0p6mps_同步前视.mp4` | 十段合成整片 |
 | `media/train_curve.png`、`media/level_distribution.png` | 训练曲线与环境分布 |
