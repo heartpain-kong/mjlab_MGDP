@@ -3,7 +3,7 @@
 ## Ubuntu 算力平台一键部署
 
 ```bash
-cd unitree_rl_mjlab_lgdog
+cd mjlab_MGDP
 bash install_ubuntu.sh
 source .venv/bin/activate
 python scripts/verify_install.py
@@ -16,7 +16,7 @@ python scripts/verify_install.py
 ```bash
 cd /root/gpufree-data
 git clone https://github.com/heartpain-kong/unitree_rl_mjlab_lgdog.git
-cd unitree_rl_mjlab_lgdog
+cd mjlab_MGDP
 bash install_ubuntu.sh --env-dir /root/gpufree-data/lgdog-venv
 source /root/gpufree-data/lgdog-venv/bin/activate
 ```

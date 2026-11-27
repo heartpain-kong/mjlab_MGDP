@@ -6,6 +6,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/heartpain-kong/mjlab_MGDP"><img alt="GitHub" src="https://img.shields.io/badge/GitHub-mjlab__MGDP-black?logo=github"></a>
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green">
   <img alt="mjlab 1.2.0" src="https://img.shields.io/badge/mjlab-1.2.0-blue">
   <img alt="MuJoCo-Warp 3.5.0" src="https://img.shields.io/badge/MuJoCo--Warp-3.5.0-orange">
@@ -115,7 +116,7 @@ python -m scripts.train LgDog1-Race-MGDP-WallTraining-D435i20 \
 推荐用 Conda（环境名 **`lgdog`**，会写入 CUDA 驱动激活钩子并做 GPU 自检）：
 
 ```bash
-cd unitree_rl_mjlab_lgdog
+cd mjlab_MGDP
 bash configure_lgdog.sh          # 可选 --skip-system-deps / --torch-index / --start --ui-port 8088
 conda activate /root/gpufree-data/conda/envs/lgdog
 ```
@@ -123,7 +124,7 @@ conda activate /root/gpufree-data/conda/envs/lgdog
 不装 Conda 时，用 venv 版本：
 
 ```bash
-cd unitree_rl_mjlab_lgdog
+cd mjlab_MGDP
 bash install_ubuntu.sh
 source .venv/bin/activate
 python scripts/verify_install.py

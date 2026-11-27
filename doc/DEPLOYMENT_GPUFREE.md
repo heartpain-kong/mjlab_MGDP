@@ -1,3 +1,5 @@
+> 注：仓库已更名为 **mjlab_MGDP**；下文的 `unitree_rl_mjlab_lgdog` 是当时的目录名，按新名替换即可。
+
 # GPUFree Ubuntu 22.04 部署记录
 
 这份记录整理了在 GPUFree Ubuntu 22.04 GPU 容器中部署和运行 LgDog 的实测步骤。训练环境放在数据盘 `/root/gpufree-data`，避免占满 30GB 系统盘。GPUFree 实例支持 Jupyter 网页终端和 SSH；Docker 在平台容器中不可用。
