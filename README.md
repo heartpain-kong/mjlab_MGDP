@@ -16,20 +16,18 @@ un_lgdog.sh server start 起 Web 工作台（8088）
 
 ## 开源策略
 
+`release/` 目录附带一份可直接回放的策略（第 12400 轮，十类地形 9/10）：
 
-elease/ 目录附带一份可直接回放的策略（第 12400 轮，十类地形 9/10）：
-
-`ash
+```bash
 git checkout policy-v1          # 该策略匹配的代码版本
 bash release/play_policy.sh <策略目录>
-`
+```
 
-详见 [
-elease/README.md](release/README.md) 与 [
-elease/eval_results.md](release/eval_results.md)。
+回放素材（十段视频 + 合成整片 + 总览图 + 训练曲线）在 `release/media/`，
+导出方法与脚本见 `release/media/README.md`；成绩记录见 `release/eval_results.md`。
 
-> **注意**：main 主干已经把深度改为 32×24 + stride 卷积编码器并调整了地形与奖励，
-> 与 policy-v1 时代的策略**不兼容**；回放旧策略请务必切到 policy-v1 标签。
+> **注意**：`main` 主干已经把深度改为 32×24 + stride 卷积编码器，并调整了地形与奖励，
+> 与 `policy-v1` 时代的策略**不兼容**；回放旧策略请务必切到 `policy-v1` 标签。
 
 ## 快速开始
 
