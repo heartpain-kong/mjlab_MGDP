@@ -1,5 +1,16 @@
 # mjlab_MGDP · LgDog1 深度感知四足运动
 
+<p align="center">
+  <img src="doc/media/lgdog_training_scene.png" alt="LgDog1 训练场景" width="46%">
+  <img src="doc/media/lgdog_obstacles_three_view.png" alt="沟壑台阶三视图" width="46%">
+</p>
+
+<p align="center">
+  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green">
+  <img alt="mjlab 1.2.0" src="https://img.shields.io/badge/mjlab-1.2.0-blue">
+  <img alt="MuJoCo-Warp 3.5.0" src="https://img.shields.io/badge/MuJoCo--Warp-3.5.0-orange">
+</p>
+
 基于 [mjlab](https://github.com/mujocolab/mjlab)（MuJoCo-Warp 上的 GPU 并行 RL 框架）搭建的
 四足机器人 LgDog1 深度感知训练工程，用于 **2027 年足式机器人挑战赛**的障碍赛道：
 10 类课目、8 档渐进课程、单目深度感知（MGDP 编码器）、终点判定与教学回放工作台。
@@ -13,6 +24,12 @@
 - **加速与诊断**：LGDOG_WALL_LESSONS / LGDOG_WALL_COLS 地形裁剪、地形分布快照、passage_diagnostics
 - **回放与工作台**：scripts/play.py 逐课目录像，
 un_lgdog.sh server start 起 Web 工作台（8088）
+
+## 与官方 MGDP 的差异
+
+本仓库沿用官方 MGDP 的深度感知骨架，但改了**感知训练方式、控制器输入和越障课程**：
+官方在运动训练中继续在线更新感知，本仓库**先离线预训练感知、再冻结训练 PPO**。
+逐项对比（平台、深度输入、网络、观测维度、课程）见 [doc/MGDP_COMPARISON.md](doc/MGDP_COMPARISON.md)。
 
 ## 开源策略
 
@@ -234,3 +251,11 @@ python tools/lgdog.py kline            # 浏览器打开 http://127.0.0.1:8766
 - [GPUFree Ubuntu 部署记录](doc/DEPLOYMENT_GPUFREE.md)
 
 目录已从 `unitree_rl_mjlab_lgdog/unitree_rl_mjlab_lgdog/` 合并为一层，训练日志和模型随工程一起保留。原有 `scripts/train.py`、`play.py`、`sim2sim.py` 仍可直接运行。上游中英文 README 保存在 `doc/UPSTREAM_README*.md`。
+
+## 许可证
+
+本仓库以 **MIT** 协议开源，见 [LICENSE](LICENSE)。
+
+上游组件仍按其原协议使用：mjlab / MuJoCo（Apache-2.0）、rsl-rl-lib / legged_gym（BSD-3-Clause）、
+MGDP 感知骨架（以原仓库为准）。完整声明见 [NOTICE](NOTICE)，Apache-2.0 全文见
+[LICENSES/Apache-2.0.txt](LICENSES/Apache-2.0.txt)。

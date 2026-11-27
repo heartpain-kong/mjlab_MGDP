@@ -1,0 +1,17 @@
+# 第三方组件与许可声明
+
+本仓库整体以 **MIT** 协议发布（见根目录 `LICENSE`），但下列上游组件/骨架仍按其原协议使用，
+相关代码与资源的版权归原作者所有：
+
+| 组件 | 来源 | 协议 | 说明 |
+|---|---|---|---|
+| mjlab | https://github.com/mujocolab/mjlab | Apache-2.0 | 训练框架、env/manager 抽象、地形生成骨架 |
+| MuJoCo / mujoco-warp | https://github.com/google-deepmind/mujoco | Apache-2.0 | 物理仿真与 GPU 后端 |
+| rsl-rl-lib | https://github.com/leggedrobotics/rsl_rl | BSD-3-Clause | PPO 实现 |
+| legged_gym | https://github.com/leggedrobotics/legged_gym | BSD-3-Clause | 地形/奖励设计参考 |
+| MGDP | https://github.com/arclab-hku/MGDP | 以原仓库为准 | 深度感知（U-Net 双分支）骨架与论文方法 |
+
+本仓库在此基础上做的改动：MJLAB 任务化改造、LgDog1 机器人接入、离线感知预训练 + 冻结策略训练、
+比赛课目课程与奖励工程、工作台与录制工具（详见 `docs/MGDP_COMPARISON.md`）。
+
+完整的 Apache-2.0 文本见 `LICENSES/Apache-2.0.txt`。

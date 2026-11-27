@@ -54,8 +54,11 @@ def pattern_contract(pattern):
             'projection': 'optical_z', 'pixels': 'upright_row_major_centres',
             'reduction': 'nearest_valid', 'mount': 'mgdp_depth_v1'}
     if pattern.profile == D435I20_PROFILE:
-        contract.update(version=2, mount='mgdp_depth_down20_v1',
-                        pitch_down_deg=20., extrinsics=mount_pose(20.))
+        # 2026-11-27：俯角以 profile 为准（当前 22°），避免“仿真装 22°、元数据写 20°”
+        # 导致回放/部署加载旧权重时相机参数校验失败。
+        pitch = float(spec.get('pitch_down_deg', 20.))
+        contract.update(version=2, mount=f'mgdp_depth_down{int(round(pitch))}_v1',
+                        pitch_down_deg=pitch, extrinsics=mount_pose(pitch))
     return contract
 
 
